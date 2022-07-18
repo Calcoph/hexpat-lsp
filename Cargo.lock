@@ -250,6 +250,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "hexpat-language-server"
+version = "0.1.0"
+dependencies = [
+ "chumsky",
+ "dashmap",
+ "env_logger",
+ "im-rc",
+ "log",
+ "ropey",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tower-lsp",
+]
+
+[[package]]
 name = "httparse"
 version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -367,22 +383,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9f1c5b025cda876f66ef43a113f91ebc9f4ccef34843000e0adf6ebbab84e21"
 dependencies = [
  "winapi",
-]
-
-[[package]]
-name = "nrs-language-server"
-version = "0.1.0"
-dependencies = [
- "chumsky",
- "dashmap",
- "env_logger",
- "im-rc",
- "log",
- "ropey",
- "serde",
- "serde_json",
- "tokio",
- "tower-lsp",
 ]
 
 [[package]]

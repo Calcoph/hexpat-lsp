@@ -1,11 +1,11 @@
 use std::collections::{HashMap, HashSet};
 
 use dashmap::DashMap;
-use nrs_language_server::chumsky::{parse, type_inference, Func, ImCompleteSemanticToken, Spanned};
-use nrs_language_server::completion::completion;
-use nrs_language_server::jump_definition::{get_definition, get_definition_of_expr};
-use nrs_language_server::reference::get_reference;
-use nrs_language_server::semantic_token::{self, semantic_token_from_ast, LEGEND_TYPE};
+use hexpat_language_server::chumsky::{parse, type_inference, Func, ImCompleteSemanticToken, Spanned};
+use hexpat_language_server::completion::completion;
+use hexpat_language_server::jump_definition::{get_definition, get_definition_of_expr};
+use hexpat_language_server::reference::get_reference;
+use hexpat_language_server::semantic_token::{self, semantic_token_from_ast, LEGEND_TYPE};
 use ropey::Rope;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -54,7 +54,7 @@ impl LanguageServer for Backend {
                             text_document_registration_options: {
                                 TextDocumentRegistrationOptions {
                                     document_selector: Some(vec![DocumentFilter {
-                                        language: Some("nrs".to_string()),
+                                        language: Some("hexpat".to_string()),
                                         scheme: Some("file".to_string()),
                                         pattern: None,
                                     }]),
@@ -347,7 +347,7 @@ impl LanguageServer for Backend {
             let mut ret = Vec::with_capacity(completions.len());
             for (_, item) in completions {
                 match item {
-                    nrs_language_server::completion::ImCompleteCompletionItem::Variable(var) => {
+                    hexpat_language_server::completion::ImCompleteCompletionItem::Variable(var) => {
                         ret.push(CompletionItem {
                             label: var.clone(),
                             insert_text: Some(var.clone()),
@@ -356,7 +356,7 @@ impl LanguageServer for Backend {
                             ..Default::default()
                         });
                     }
-                    nrs_language_server::completion::ImCompleteCompletionItem::Function(
+                    hexpat_language_server::completion::ImCompleteCompletionItem::Function(
                         name,
                         args,
                     ) => {
@@ -415,12 +415,12 @@ impl Backend {
                     k.start,
                     k.end,
                     match v {
-                        nrs_language_server::chumsky::Value::Null => "null".to_string(),
-                        nrs_language_server::chumsky::Value::Bool(_) => "bool".to_string(),
-                        nrs_language_server::chumsky::Value::Num(_) => "number".to_string(),
-                        nrs_language_server::chumsky::Value::Str(_) => "string".to_string(),
-                        nrs_language_server::chumsky::Value::List(_) => "[]".to_string(),
-                        nrs_language_server::chumsky::Value::Func(_) => v.to_string(),
+                        hexpat_language_server::chumsky::Value::Null => "null".to_string(),
+                        hexpat_language_server::chumsky::Value::Bool(_) => "bool".to_string(),
+                        hexpat_language_server::chumsky::Value::Num(_) => "number".to_string(),
+                        hexpat_language_server::chumsky::Value::Str(_) => "string".to_string(),
+                        hexpat_language_server::chumsky::Value::List(_) => "[]".to_string(),
+                        hexpat_language_server::chumsky::Value::Func(_) => v.to_string(),
                     },
                 )
             })

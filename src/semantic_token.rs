@@ -13,6 +13,7 @@ pub const LEGEND_TYPE: &[SemanticTokenType] = &[
     SemanticTokenType::KEYWORD,
     SemanticTokenType::OPERATOR,
     SemanticTokenType::PARAMETER,
+    SemanticTokenType::new("directive"),
 ];
 
 pub fn semantic_token_from_ast(ast: &HashMap<String, Func>) -> Vec<ImCompleteSemanticToken> {

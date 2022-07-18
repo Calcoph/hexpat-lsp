@@ -1,33 +1,36 @@
 {
-  "name": "nrs-language-server",
-  "description": "nano rust language server",
+  "name": "hexpat-language-server",
+  "description": "hexpat language server",
   "license": "MIT",
   "version": "1.5.0",
   "categories": [],
   "keywords": [
     "language-server",
-    "tower-lsp"
+    "tower-lsp",
+    "hexpat",
+    "imhex"
   ],
   "engines": {
     "vscode": "^1.65.0"
   },
   "enabledApiProposals": [],
   "activationEvents": [
-    "onLanguage:nrs"
+    "onLanguage:hexpat"
   ],
   "main": "./client/out/extension.js",
+  "editor.semanticHighlighting.enabled": true,
   "contributes": {
     "languages": [
       {
-        "id": "nrs",
-        "extensions": [".nrs"]
+        "id": "hexpat",
+        "extensions": [".hexpat", ".pat"]
       }
     ],
     "configuration": {
       "type": "object",
-      "title": "nrs-language-server",
+      "title": "hexpat-language-server",
       "properties": {
-        "nrs-language-server.trace.server": {
+        "hexpat-language-server.trace.server": {
           "type": "string",
           "scope": "window",
           "enum": [
@@ -44,7 +47,13 @@
           "description": "Traces the communication between VS Code and the language server."
         }
       }
-    }
+    },
+    "semanticTokenTypes": [
+        {
+            "id": "directive",
+            "description": "A preprocessor directive"
+        }
+    ]
   },
   "scripts": {
     "postinstall": "cd client && pnpm i",

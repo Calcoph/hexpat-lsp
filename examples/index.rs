@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use im_rc::Vector;
-use nrs_language_server::chumsky::{parse, type_inference};
+use hexpat_language_server::chumsky::{parse, type_inference};
 
 fn main() {
     let source = include_str!("./test.nrs");
