@@ -19,6 +19,7 @@ pub enum Expression {
     Bool(bool),
     Num(String),
     Str(String),
+    Char(String),
     Op(String),
     Ctrl(char),
     Ident(String),
@@ -42,6 +43,8 @@ pub enum Expression {
     Addressof,
     Sizeof,
     Directive(String),
+    Parent,
+    This,
 }
 
 impl fmt::Display for Expression {
@@ -50,6 +53,7 @@ impl fmt::Display for Expression {
             Expression::Bool(x) => write!(f, "{}", x),
             Expression::Num(n) => write!(f, "{}", n),
             Expression::Str(s) => write!(f, "{}", s),
+            Expression::Char(s) => write!(f, "{}", s),
             Expression::Op(s) => write!(f, "{}", s),
             Expression::Ctrl(c) => write!(f, "{}", c),
             Expression::Ident(s) => write!(f, "{}", s),
@@ -69,7 +73,9 @@ impl fmt::Display for Expression {
             Expression::Out => write!(f, "out"),
             Expression::Return => write!(f, "return"),
             Expression::Using => write!(f, "using"),
-            Expression::Dollar => write!(f, "dollar"),
+            Expression::Parent => write!(f, "parent"),
+            Expression::This => write!(f, "this"),
+            Expression::Dollar => write!(f, "$"),
             Expression::Addressof => write!(f, "addressof"),
             Expression::Sizeof => write!(f, "sizeof"),
             Expression::Directive(s) => write!(f, "#{}", s),
@@ -105,13 +111,20 @@ fn lexer() -> impl Parser<char, Vec<(Expression, Span)>, Error = Simple<char>> {
         .or(bin_num)
         .or(dec_num);
 
+    // A parser for chars
+    let char = just('\'')
+        .ignore_then(filter(|c| *c != '\'').repeated())
+        .then_ignore(just('\''))
+        .collect::<String>()
+        .map(Expression::Char);
+
     // A parser for strings
     let str_ = just('"')
         .ignore_then(filter(|c| *c != '"').repeated())
         .then_ignore(just('"'))
         .collect::<String>()
         .map(Expression::Str);
-    
+
     // A parser for directives
     let directive = just('#')
         .ignore_then(filter(|c| *c != '\n').repeated())
@@ -119,7 +132,7 @@ fn lexer() -> impl Parser<char, Vec<(Expression, Span)>, Error = Simple<char>> {
         .map(Expression::Directive);
 
     // A parser for operators
-    let op = one_of("+-*/!=")
+    let op = one_of("+-*/!=<>^&%|@")
         .repeated()
         .at_least(1)
         .collect::<String>()
@@ -146,6 +159,8 @@ fn lexer() -> impl Parser<char, Vec<(Expression, Span)>, Error = Simple<char>> {
         "out" => Expression::Out,
         "return" => Expression::Return,
         "using" => Expression::Using,
+        "parent" => Expression::Parent,
+        "this" => Expression::This,
         "$" => Expression::Dollar,
         "addressof" => Expression::Addressof,
         "sizeof" => Expression::Sizeof,
@@ -156,6 +171,7 @@ fn lexer() -> impl Parser<char, Vec<(Expression, Span)>, Error = Simple<char>> {
 
     // A single token can be one of the above
     let token = num
+        .or(char)
         .or(str_)
         .or(directive)
         .or(op)
@@ -804,7 +820,6 @@ pub fn parse(
             .iter()
             .filter_map(|(token, span)| match token {
                 Expression::Bool(_) => None,
-
                 Expression::Num(_) => Some(ImCompleteSemanticToken {
                     start: span.start,
                     length: span.len(),
@@ -814,6 +829,14 @@ pub fn parse(
                         .unwrap(),
                 }),
                 Expression::Str(_) => Some(ImCompleteSemanticToken {
+                    start: span.start,
+                    length: span.len(),
+                    token_type: LEGEND_TYPE
+                        .iter()
+                        .position(|item| item == &SemanticTokenType::STRING)
+                        .unwrap(),
+                }),
+                Expression::Char(_) => Some(ImCompleteSemanticToken {
                     start: span.start,
                     length: span.len(),
                     token_type: LEGEND_TYPE
@@ -952,6 +975,22 @@ pub fn parse(
                         .unwrap(),
                 }),
                 Expression::Using => Some(ImCompleteSemanticToken {
+                    start: span.start,
+                    length: span.len(),
+                    token_type: LEGEND_TYPE
+                        .iter()
+                        .position(|item| item == &SemanticTokenType::KEYWORD)
+                        .unwrap(),
+                }),
+                Expression::Parent => Some(ImCompleteSemanticToken {
+                    start: span.start,
+                    length: span.len(),
+                    token_type: LEGEND_TYPE
+                        .iter()
+                        .position(|item| item == &SemanticTokenType::KEYWORD)
+                        .unwrap(),
+                }),
+                Expression::This => Some(ImCompleteSemanticToken {
                     start: span.start,
                     length: span.len(),
                     token_type: LEGEND_TYPE
