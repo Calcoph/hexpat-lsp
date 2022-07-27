@@ -15,7 +15,7 @@ pub struct ImCompleteSemanticToken {
     pub token_type: usize,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum Expression {
+pub enum Token {
     Bool(bool),
     Num(String),
     Str(String),
@@ -47,64 +47,64 @@ pub enum Expression {
     This,
 }
 
-impl fmt::Display for Expression {
+impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Expression::Bool(x) => write!(f, "{}", x),
-            Expression::Num(n) => write!(f, "{}", n),
-            Expression::Str(s) => write!(f, "{}", s),
-            Expression::Char(s) => write!(f, "{}", s),
-            Expression::Op(s) => write!(f, "{}", s),
-            Expression::Ctrl(c) => write!(f, "{}", c),
-            Expression::Ident(s) => write!(f, "{}", s),
-            Expression::Struct => write!(f, "struct"),
-            Expression::Bitfield => write!(f, "bitfield"),
-            Expression::Union => write!(f, "union"),
-            Expression::Enum => write!(f, "enum"),
-            Expression::Namespace => write!(f, "namespace"),
-            Expression::Fn => write!(f, "fn"),
-            Expression::If => write!(f, "if"),
-            Expression::Else => write!(f, "else"),
-            Expression::While => write!(f, "while"),
-            Expression::For => write!(f, "for"),
-            Expression::Break => write!(f, "break"),
-            Expression::Continue => write!(f, "continue"),
-            Expression::In => write!(f, "in"),
-            Expression::Out => write!(f, "out"),
-            Expression::Return => write!(f, "return"),
-            Expression::Using => write!(f, "using"),
-            Expression::Parent => write!(f, "parent"),
-            Expression::This => write!(f, "this"),
-            Expression::Dollar => write!(f, "$"),
-            Expression::Addressof => write!(f, "addressof"),
-            Expression::Sizeof => write!(f, "sizeof"),
-            Expression::Directive(s) => write!(f, "#{}", s),
+            Token::Bool(x) => write!(f, "{}", x),
+            Token::Num(n) => write!(f, "{}", n),
+            Token::Str(s) => write!(f, "{}", s),
+            Token::Char(s) => write!(f, "{}", s),
+            Token::Op(s) => write!(f, "{}", s),
+            Token::Ctrl(c) => write!(f, "{}", c),
+            Token::Ident(s) => write!(f, "{}", s),
+            Token::Struct => write!(f, "struct"),
+            Token::Bitfield => write!(f, "bitfield"),
+            Token::Union => write!(f, "union"),
+            Token::Enum => write!(f, "enum"),
+            Token::Namespace => write!(f, "namespace"),
+            Token::Fn => write!(f, "fn"),
+            Token::If => write!(f, "if"),
+            Token::Else => write!(f, "else"),
+            Token::While => write!(f, "while"),
+            Token::For => write!(f, "for"),
+            Token::Break => write!(f, "break"),
+            Token::Continue => write!(f, "continue"),
+            Token::In => write!(f, "in"),
+            Token::Out => write!(f, "out"),
+            Token::Return => write!(f, "return"),
+            Token::Using => write!(f, "using"),
+            Token::Parent => write!(f, "parent"),
+            Token::This => write!(f, "this"),
+            Token::Dollar => write!(f, "$"),
+            Token::Addressof => write!(f, "addressof"),
+            Token::Sizeof => write!(f, "sizeof"),
+            Token::Directive(s) => write!(f, "#{}", s),
         }
     }
 }
 
-fn lexer() -> impl Parser<char, Vec<(Expression, Span)>, Error = Simple<char>> {
+fn lexer() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
     // Integer parsers
     let hex_num = just('0')
         .ignore_then(just('x').or(just('X')))
         .ignore_then(text::int(16))
-        .map(Expression::Num);
+        .map(Token::Num);
     
     let oct_num = just('0')
         .ignore_then(just('o').or(just('O')))
         .ignore_then(text::int(8))
-        .map(Expression::Num);
+        .map(Token::Num);
 
     let bin_num = just('0')
         .ignore_then(just('b').or(just('B')))
         .ignore_then(text::int(2))
-        .map(Expression::Num);
+        .map(Token::Num);
 
     let dec_num = text::int(10) // TODO: differentiate between ints and floats
         .chain::<char, _, _>(just('.').chain(text::digits(10)).or_not().flatten())
         .then_ignore(just('U').or_not())
         .collect::<String>()
-        .map(Expression::Num);
+        .map(Token::Num);
     
     let num = hex_num
         .or(oct_num)
@@ -112,66 +112,66 @@ fn lexer() -> impl Parser<char, Vec<(Expression, Span)>, Error = Simple<char>> {
         .or(dec_num);
 
     // A parser for chars
-    let char = just('\'')
+    let char_ = just('\'')
         .ignore_then(filter(|c| *c != '\'').repeated())
         .then_ignore(just('\''))
         .collect::<String>()
-        .map(Expression::Char);
+        .map(Token::Char);
 
     // A parser for strings
     let str_ = just('"')
         .ignore_then(filter(|c| *c != '"').repeated())
         .then_ignore(just('"'))
         .collect::<String>()
-        .map(Expression::Str);
+        .map(Token::Str);
 
     // A parser for directives
     let directive = just('#')
         .ignore_then(filter(|c| *c != '\n').repeated())
         .collect::<String>()
-        .map(Expression::Directive);
+        .map(Token::Directive);
 
     // A parser for operators
     let op = one_of("+-*/!=<>^&%|@")
         .repeated()
         .at_least(1)
         .collect::<String>()
-        .map(Expression::Op);
+        .map(Token::Op);
 
     // A parser for control characters (delimiters, semicolons, etc.)
-    let ctrl = one_of("()[]{};,").map(|c| Expression::Ctrl(c));
+    let ctrl = one_of("()[]{};,").map(|c| Token::Ctrl(c));
 
     // A parser for identifiers and keywords
     let ident = text::ident().map(|ident: String| match ident.as_str() {
-        "struct" => Expression::Struct,
-        "bitfield" => Expression::Bitfield,
-        "union" => Expression::Union,
-        "enum" => Expression::Enum,
-        "namespace" => Expression::Namespace,
-        "fn" => Expression::Fn,
-        "if" => Expression::If,
-        "else" => Expression::Else,
-        "while" => Expression::While,
-        "for" => Expression::For,
-        "break" => Expression::Break,
-        "continue" => Expression::Continue,
-        "in" => Expression::In,
-        "out" => Expression::Out,
-        "return" => Expression::Return,
-        "using" => Expression::Using,
-        "parent" => Expression::Parent,
-        "this" => Expression::This,
-        "$" => Expression::Dollar,
-        "addressof" => Expression::Addressof,
-        "sizeof" => Expression::Sizeof,
-        "true" => Expression::Bool(true),
-        "false" => Expression::Bool(false),
-        _ => Expression::Ident(ident),
+        "struct" => Token::Struct,
+        "bitfield" => Token::Bitfield,
+        "union" => Token::Union,
+        "enum" => Token::Enum,
+        "namespace" => Token::Namespace,
+        "fn" => Token::Fn,
+        "if" => Token::If,
+        "else" => Token::Else,
+        "while" => Token::While,
+        "for" => Token::For,
+        "break" => Token::Break,
+        "continue" => Token::Continue,
+        "in" => Token::In,
+        "out" => Token::Out,
+        "return" => Token::Return,
+        "using" => Token::Using,
+        "parent" => Token::Parent,
+        "this" => Token::This,
+        "$" => Token::Dollar,
+        "addressof" => Token::Addressof,
+        "sizeof" => Token::Sizeof,
+        "true" => Token::Bool(true),
+        "false" => Token::Bool(false),
+        _ => Token::Ident(ident),
     });
 
     // A single token can be one of the above
     let token = num
-        .or(char)
+        .or(char_)
         .or(str_)
         .or(directive)
         .or(op)
@@ -306,19 +306,19 @@ pub struct Func {
     pub span: Span,
 }
 
-fn expr_parser() -> impl Parser<Expression, Spanned<Expr>, Error = Simple<Expression>> + Clone {
+fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone {
     recursive(|expr| {
         let raw_expr = recursive(|raw_expr| {
             let val = filter_map(|span, tok| match tok {
-                Expression::Bool(x) => Ok(Expr::Value(Value::Bool(x))),
-                Expression::Num(n) => Ok(Expr::Value(Value::Num(n.parse().unwrap()))),
-                Expression::Str(s) => Ok(Expr::Value(Value::Str(s))),
+                Token::Bool(x) => Ok(Expr::Value(Value::Bool(x))),
+                Token::Num(n) => Ok(Expr::Value(Value::Num(n.parse().unwrap()))),
+                Token::Str(s) => Ok(Expr::Value(Value::Str(s))),
                 _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
             })
             .labelled("value");
 
             let ident = filter_map(|span, tok| match tok {
-                Expression::Ident(ident) => Ok((ident.clone(), span)),
+                Token::Ident(ident) => Ok((ident.clone(), span)),
                 _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
             })
             .labelled("identifier");
@@ -326,8 +326,8 @@ fn expr_parser() -> impl Parser<Expression, Spanned<Expr>, Error = Simple<Expres
             // A list of expressions
             let items = expr
                 .clone()
-                .chain(just(Expression::Ctrl(',')).ignore_then(expr.clone()).repeated())
-                .then_ignore(just(Expression::Ctrl(',')).or_not())
+                .chain(just(Token::Ctrl(',')).ignore_then(expr.clone()).repeated())
+                .then_ignore(just(Token::Ctrl(',')).or_not())
                 .or_not()
                 .map(|item| item.unwrap_or_else(Vec::new));
 
@@ -344,7 +344,7 @@ fn expr_parser() -> impl Parser<Expression, Spanned<Expr>, Error = Simple<Expres
 
             let list = items
                 .clone()
-                .delimited_by(just(Expression::Ctrl('[')), just(Expression::Ctrl(']')))
+                .delimited_by(just(Token::Ctrl('[')), just(Token::Ctrl(']')))
                 .map(Expr::List);
 
             // 'Atoms' are expressions that contain no ambiguity
@@ -355,24 +355,24 @@ fn expr_parser() -> impl Parser<Expression, Spanned<Expr>, Error = Simple<Expres
                 // Atoms can also just be normal expressions, but surrounded with parentheses
                 .or(expr
                     .clone()
-                    .delimited_by(just(Expression::Ctrl('(')), just(Expression::Ctrl(')'))))
+                    .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')'))))
                 // Attempt to recover anything that looks like a parenthesised expression but contains errors
                 .recover_with(nested_delimiters(
-                    Expression::Ctrl('('),
-                    Expression::Ctrl(')'),
+                    Token::Ctrl('('),
+                    Token::Ctrl(')'),
                     [
-                        (Expression::Ctrl('['), Expression::Ctrl(']')),
-                        (Expression::Ctrl('{'), Expression::Ctrl('}')),
+                        (Token::Ctrl('['), Token::Ctrl(']')),
+                        (Token::Ctrl('{'), Token::Ctrl('}')),
                     ],
                     |span| (Expr::Error, span),
                 ))
                 // Attempt to recover anything that looks like a list but contains errors
                 .recover_with(nested_delimiters(
-                    Expression::Ctrl('['),
-                    Expression::Ctrl(']'),
+                    Token::Ctrl('['),
+                    Token::Ctrl(']'),
                     [
-                        (Expression::Ctrl('('), Expression::Ctrl(')')),
-                        (Expression::Ctrl('{'), Expression::Ctrl('}')),
+                        (Token::Ctrl('('), Token::Ctrl(')')),
+                        (Token::Ctrl('{'), Token::Ctrl('}')),
                     ],
                     |span| (Expr::Error, span),
                 ));
@@ -381,7 +381,7 @@ fn expr_parser() -> impl Parser<Expression, Spanned<Expr>, Error = Simple<Expres
             let call = atom
                 .then(
                     items
-                        .delimited_by(just(Expression::Ctrl('(')), just(Expression::Ctrl(')')))
+                        .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')))
                         .map_with_span(|args, span| (args, span))
                         .repeated(),
                 )
@@ -391,9 +391,9 @@ fn expr_parser() -> impl Parser<Expression, Spanned<Expr>, Error = Simple<Expres
                 });
 
             // Product ops (multiply and divide) have equal precedence
-            let op = just(Expression::Op("*".to_string()))
+            let op = just(Token::Op("*".to_string()))
                 .to(BinaryOp::Mul)
-                .or(just(Expression::Op("/".to_string())).to(BinaryOp::Div));
+                .or(just(Token::Op("/".to_string())).to(BinaryOp::Div));
             let product = call
                 .clone()
                 .then(op.then(call).repeated())
@@ -403,9 +403,9 @@ fn expr_parser() -> impl Parser<Expression, Spanned<Expr>, Error = Simple<Expres
                 });
 
             // Sum ops (add and subtract) have equal precedence
-            let op = just(Expression::Op("+".to_string()))
+            let op = just(Token::Op("+".to_string()))
                 .to(BinaryOp::Add)
-                .or(just(Expression::Op("-".to_string())).to(BinaryOp::Sub));
+                .or(just(Token::Op("-".to_string())).to(BinaryOp::Sub));
             let sum = product
                 .clone()
                 .then(op.then(product).repeated())
@@ -415,9 +415,9 @@ fn expr_parser() -> impl Parser<Expression, Spanned<Expr>, Error = Simple<Expres
                 });
 
             // Comparison ops (equal, not-equal) have equal precedence
-            let op = just(Expression::Op("==".to_string()))
+            let op = just(Token::Op("==".to_string()))
                 .to(BinaryOp::Eq)
-                .or(just(Expression::Op("!=".to_string())).to(BinaryOp::NotEq));
+                .or(just(Token::Op("!=".to_string())).to(BinaryOp::NotEq));
             let compare = sum
                 .clone()
                 .then(op.then(sum).repeated())
@@ -432,24 +432,24 @@ fn expr_parser() -> impl Parser<Expression, Spanned<Expr>, Error = Simple<Expres
         // Blocks are expressions but delimited with braces
         let block = expr
             .clone()
-            .delimited_by(just(Expression::Ctrl('{')), just(Expression::Ctrl('}')))
+            .delimited_by(just(Token::Ctrl('{')), just(Token::Ctrl('}')))
             // Attempt to recover anything that looks like a block but contains errors
             .recover_with(nested_delimiters(
-                Expression::Ctrl('{'),
-                Expression::Ctrl('}'),
+                Token::Ctrl('{'),
+                Token::Ctrl('}'),
                 [
-                    (Expression::Ctrl('('), Expression::Ctrl(')')),
-                    (Expression::Ctrl('['), Expression::Ctrl(']')),
+                    (Token::Ctrl('('), Token::Ctrl(')')),
+                    (Token::Ctrl('['), Token::Ctrl(']')),
                 ],
                 |span| (Expr::Error, span),
             ));
 
         let if_ = recursive(|if_| {
-            just(Expression::If)
+            just(Token::If)
                 .ignore_then(expr.clone())
                 .then(block.clone())
                 .then(
-                    just(Expression::Else)
+                    just(Token::Else)
                         .ignore_then(block.clone().or(if_))
                         .or_not(),
                 )
@@ -483,7 +483,7 @@ fn expr_parser() -> impl Parser<Expression, Spanned<Expr>, Error = Simple<Expres
         block_chain
             // Expressions, chained by semicolons, are statements
             .or(raw_expr.clone())
-            .then(just(Expression::Ctrl(';')).ignore_then(expr.or_not()).repeated())
+            .then(just(Token::Ctrl(';')).ignore_then(expr.or_not()).repeated())
             .foldl(|a, b| {
                 let span = a.1.clone(); // TODO: Not correct
                 (
@@ -500,9 +500,9 @@ fn expr_parser() -> impl Parser<Expression, Spanned<Expr>, Error = Simple<Expres
     })
 }
 
-pub fn funcs_parser() -> impl Parser<Expression, HashMap<String, Func>, Error = Simple<Expression>> + Clone {
+pub fn funcs_parser() -> impl Parser<Token, HashMap<String, Func>, Error = Simple<Token>> + Clone {
     let ident = filter_map(|span, tok| match tok {
-        Expression::Ident(ident) => Ok(ident.clone()),
+        Token::Ident(ident) => Ok(ident.clone()),
         _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
     });
 
@@ -510,12 +510,12 @@ pub fn funcs_parser() -> impl Parser<Expression, HashMap<String, Func>, Error = 
     let args = ident
         .map_with_span(|name, span| (name, span))
         .clone()
-        .separated_by(just(Expression::Ctrl(',')))
+        .separated_by(just(Token::Ctrl(',')))
         .allow_trailing()
-        .delimited_by(just(Expression::Ctrl('(')), just(Expression::Ctrl(')')))
+        .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')))
         .labelled("function args");
 
-    let func = just(Expression::Fn)
+    let func = just(Token::Fn)
         .ignore_then(
             ident
                 .map_with_span(|name, span| (name, span))
@@ -524,14 +524,14 @@ pub fn funcs_parser() -> impl Parser<Expression, HashMap<String, Func>, Error = 
         .then(args)
         .then(
             expr_parser()
-                .delimited_by(just(Expression::Ctrl('{')), just(Expression::Ctrl('}')))
+                .delimited_by(just(Token::Ctrl('{')), just(Token::Ctrl('}')))
                 // Attempt to recover anything that looks like a function body but contains errors
                 .recover_with(nested_delimiters(
-                    Expression::Ctrl('{'),
-                    Expression::Ctrl('}'),
+                    Token::Ctrl('{'),
+                    Token::Ctrl('}'),
                     [
-                        (Expression::Ctrl('('), Expression::Ctrl(')')),
-                        (Expression::Ctrl('['), Expression::Ctrl(']')),
+                        (Token::Ctrl('('), Token::Ctrl(')')),
+                        (Token::Ctrl('['), Token::Ctrl(']')),
                     ],
                     |span| (Expr::Error, span),
                 )),
@@ -563,6 +563,18 @@ pub fn funcs_parser() -> impl Parser<Expression, HashMap<String, Func>, Error = 
             Ok(funcs)
         })
         .then_ignore(end())
+}
+
+fn struct_parser() {
+    todo!()
+}
+
+fn enum_parser() {
+    todo!()
+}
+
+fn namespace_parser() {
+    todo!()
 }
 
 struct Error {
@@ -819,8 +831,8 @@ pub fn parse(
         let semantic_tokens = tokens
             .iter()
             .filter_map(|(token, span)| match token {
-                Expression::Bool(_) => None,
-                Expression::Num(_) => Some(ImCompleteSemanticToken {
+                Token::Bool(_) => None,
+                Token::Num(_) => Some(ImCompleteSemanticToken {
                     start: span.start,
                     length: span.len(),
                     token_type: LEGEND_TYPE
@@ -828,7 +840,7 @@ pub fn parse(
                         .position(|item| item == &SemanticTokenType::NUMBER)
                         .unwrap(),
                 }),
-                Expression::Str(_) => Some(ImCompleteSemanticToken {
+                Token::Str(_) => Some(ImCompleteSemanticToken {
                     start: span.start,
                     length: span.len(),
                     token_type: LEGEND_TYPE
@@ -836,7 +848,7 @@ pub fn parse(
                         .position(|item| item == &SemanticTokenType::STRING)
                         .unwrap(),
                 }),
-                Expression::Char(_) => Some(ImCompleteSemanticToken {
+                Token::Char(_) => Some(ImCompleteSemanticToken {
                     start: span.start,
                     length: span.len(),
                     token_type: LEGEND_TYPE
@@ -844,7 +856,7 @@ pub fn parse(
                         .position(|item| item == &SemanticTokenType::STRING)
                         .unwrap(),
                 }),
-                Expression::Op(_) => Some(ImCompleteSemanticToken {
+                Token::Op(_) => Some(ImCompleteSemanticToken {
                     start: span.start,
                     length: span.len(),
                     token_type: LEGEND_TYPE
@@ -852,9 +864,9 @@ pub fn parse(
                         .position(|item| item == &SemanticTokenType::OPERATOR)
                         .unwrap(),
                 }),
-                Expression::Ctrl(_) => None,
-                Expression::Ident(_) => None,
-                Expression::Struct => Some(ImCompleteSemanticToken {
+                Token::Ctrl(_) => None,
+                Token::Ident(_) => None,
+                Token::Struct => Some(ImCompleteSemanticToken {
                     start: span.start,
                     length: span.len(),
                     token_type: LEGEND_TYPE
@@ -862,7 +874,7 @@ pub fn parse(
                         .position(|item| item == &SemanticTokenType::KEYWORD)
                         .unwrap(),
                 }),
-                Expression::Bitfield => Some(ImCompleteSemanticToken {
+                Token::Bitfield => Some(ImCompleteSemanticToken {
                     start: span.start,
                     length: span.len(),
                     token_type: LEGEND_TYPE
@@ -870,7 +882,7 @@ pub fn parse(
                         .position(|item| item == &SemanticTokenType::KEYWORD)
                         .unwrap(),
                 }),
-                Expression::Union => Some(ImCompleteSemanticToken {
+                Token::Union => Some(ImCompleteSemanticToken {
                     start: span.start,
                     length: span.len(),
                     token_type: LEGEND_TYPE
@@ -878,7 +890,7 @@ pub fn parse(
                         .position(|item| item == &SemanticTokenType::KEYWORD)
                         .unwrap(),
                 }),
-                Expression::Enum => Some(ImCompleteSemanticToken {
+                Token::Enum => Some(ImCompleteSemanticToken {
                     start: span.start,
                     length: span.len(),
                     token_type: LEGEND_TYPE
@@ -886,7 +898,7 @@ pub fn parse(
                         .position(|item| item == &SemanticTokenType::KEYWORD)
                         .unwrap(),
                 }),
-                Expression::Namespace => Some(ImCompleteSemanticToken {
+                Token::Namespace => Some(ImCompleteSemanticToken {
                     start: span.start,
                     length: span.len(),
                     token_type: LEGEND_TYPE
@@ -894,7 +906,7 @@ pub fn parse(
                         .position(|item| item == &SemanticTokenType::KEYWORD)
                         .unwrap(),
                 }),
-                Expression::Fn => Some(ImCompleteSemanticToken {
+                Token::Fn => Some(ImCompleteSemanticToken {
                     start: span.start,
                     length: span.len(),
                     token_type: LEGEND_TYPE
@@ -902,7 +914,7 @@ pub fn parse(
                         .position(|item| item == &SemanticTokenType::KEYWORD)
                         .unwrap(),
                 }),
-                Expression::If => Some(ImCompleteSemanticToken {
+                Token::If => Some(ImCompleteSemanticToken {
                     start: span.start,
                     length: span.len(),
                     token_type: LEGEND_TYPE
@@ -910,7 +922,7 @@ pub fn parse(
                         .position(|item| item == &SemanticTokenType::KEYWORD)
                         .unwrap(),
                 }),
-                Expression::Else => Some(ImCompleteSemanticToken {
+                Token::Else => Some(ImCompleteSemanticToken {
                     start: span.start,
                     length: span.len(),
                     token_type: LEGEND_TYPE
@@ -918,7 +930,7 @@ pub fn parse(
                         .position(|item| item == &SemanticTokenType::KEYWORD)
                         .unwrap(),
                 }),
-                Expression::While => Some(ImCompleteSemanticToken {
+                Token::While => Some(ImCompleteSemanticToken {
                     start: span.start,
                     length: span.len(),
                     token_type: LEGEND_TYPE
@@ -926,7 +938,7 @@ pub fn parse(
                         .position(|item| item == &SemanticTokenType::KEYWORD)
                         .unwrap(),
                 }),
-                Expression::For => Some(ImCompleteSemanticToken {
+                Token::For => Some(ImCompleteSemanticToken {
                     start: span.start,
                     length: span.len(),
                     token_type: LEGEND_TYPE
@@ -934,7 +946,7 @@ pub fn parse(
                         .position(|item| item == &SemanticTokenType::KEYWORD)
                         .unwrap(),
                 }),
-                Expression::Break => Some(ImCompleteSemanticToken {
+                Token::Break => Some(ImCompleteSemanticToken {
                     start: span.start,
                     length: span.len(),
                     token_type: LEGEND_TYPE
@@ -942,7 +954,7 @@ pub fn parse(
                         .position(|item| item == &SemanticTokenType::KEYWORD)
                         .unwrap(),
                 }),
-                Expression::Continue => Some(ImCompleteSemanticToken {
+                Token::Continue => Some(ImCompleteSemanticToken {
                     start: span.start,
                     length: span.len(),
                     token_type: LEGEND_TYPE
@@ -950,7 +962,7 @@ pub fn parse(
                         .position(|item| item == &SemanticTokenType::KEYWORD)
                         .unwrap(),
                 }),
-                Expression::In => Some(ImCompleteSemanticToken {
+                Token::In => Some(ImCompleteSemanticToken {
                     start: span.start,
                     length: span.len(),
                     token_type: LEGEND_TYPE
@@ -958,7 +970,7 @@ pub fn parse(
                         .position(|item| item == &SemanticTokenType::KEYWORD)
                         .unwrap(),
                 }),
-                Expression::Out => Some(ImCompleteSemanticToken {
+                Token::Out => Some(ImCompleteSemanticToken {
                     start: span.start,
                     length: span.len(),
                     token_type: LEGEND_TYPE
@@ -966,7 +978,7 @@ pub fn parse(
                         .position(|item| item == &SemanticTokenType::KEYWORD)
                         .unwrap(),
                 }),
-                Expression::Return => Some(ImCompleteSemanticToken {
+                Token::Return => Some(ImCompleteSemanticToken {
                     start: span.start,
                     length: span.len(),
                     token_type: LEGEND_TYPE
@@ -974,7 +986,7 @@ pub fn parse(
                         .position(|item| item == &SemanticTokenType::KEYWORD)
                         .unwrap(),
                 }),
-                Expression::Using => Some(ImCompleteSemanticToken {
+                Token::Using => Some(ImCompleteSemanticToken {
                     start: span.start,
                     length: span.len(),
                     token_type: LEGEND_TYPE
@@ -982,7 +994,7 @@ pub fn parse(
                         .position(|item| item == &SemanticTokenType::KEYWORD)
                         .unwrap(),
                 }),
-                Expression::Parent => Some(ImCompleteSemanticToken {
+                Token::Parent => Some(ImCompleteSemanticToken {
                     start: span.start,
                     length: span.len(),
                     token_type: LEGEND_TYPE
@@ -990,7 +1002,7 @@ pub fn parse(
                         .position(|item| item == &SemanticTokenType::KEYWORD)
                         .unwrap(),
                 }),
-                Expression::This => Some(ImCompleteSemanticToken {
+                Token::This => Some(ImCompleteSemanticToken {
                     start: span.start,
                     length: span.len(),
                     token_type: LEGEND_TYPE
@@ -998,7 +1010,7 @@ pub fn parse(
                         .position(|item| item == &SemanticTokenType::KEYWORD)
                         .unwrap(),
                 }),
-                Expression::Dollar => Some(ImCompleteSemanticToken {
+                Token::Dollar => Some(ImCompleteSemanticToken {
                     start: span.start,
                     length: span.len(),
                     token_type: LEGEND_TYPE
@@ -1006,7 +1018,7 @@ pub fn parse(
                         .position(|item| item == &SemanticTokenType::KEYWORD)
                         .unwrap(),
                 }),
-                Expression::Addressof => Some(ImCompleteSemanticToken {
+                Token::Addressof => Some(ImCompleteSemanticToken {
                     start: span.start,
                     length: span.len(),
                     token_type: LEGEND_TYPE
@@ -1014,7 +1026,7 @@ pub fn parse(
                         .position(|item| item == &SemanticTokenType::KEYWORD)
                         .unwrap(),
                 }),
-                Expression::Sizeof => Some(ImCompleteSemanticToken {
+                Token::Sizeof => Some(ImCompleteSemanticToken {
                     start: span.start,
                     length: span.len(),
                     token_type: LEGEND_TYPE
@@ -1022,7 +1034,7 @@ pub fn parse(
                         .position(|item| item == &SemanticTokenType::KEYWORD)
                         .unwrap(),
                 }),
-                Expression::Directive(_) => Some(ImCompleteSemanticToken {
+                Token::Directive(_) => Some(ImCompleteSemanticToken {
                     start: span.start,
                     length: span.len(),
                     token_type: LEGEND_TYPE
