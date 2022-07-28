@@ -2,7 +2,8 @@ use std::collections::HashMap;
 
 use im_rc::Vector;
 
-use crate::chumsky::{Expr, Func, Spanned};
+use crate::chumsky::parser::{func::Func, Spanned, Expr};
+
 /// return (need_to_continue_search, founded reference)
 pub fn get_definition(ast: &HashMap<String, Func>, ident_offset: usize) -> Option<Spanned<String>> {
     let mut vector = Vector::new();
@@ -115,7 +116,6 @@ pub fn get_definition_of_expr(
                 (false, Some(value)) => return (false, Some(value)),
             }
         }
-        Expr::Print(expr) => get_definition_of_expr(expr, definition_ass_list, ident_offset),
         Expr::List(lst) => {
             for expr in lst {
                 match get_definition_of_expr(expr, definition_ass_list.clone(), ident_offset) {

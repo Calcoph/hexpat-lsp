@@ -2,15 +2,16 @@ use std::collections::HashMap;
 
 use chumsky::Span;
 use im_rc::Vector;
-use log::info;
+use crate::chumsky::parser::{Spanned, func::Func, Expr};
 
-use crate::chumsky::{Expr, Func, Spanned};
 #[derive(Debug, Clone)]
 pub enum ReferenceSymbol {
     Founded(Spanned<String>),
     Founding(usize),
 }
+
 use ReferenceSymbol::*;
+
 pub fn get_reference(
     ast: &HashMap<String, Func>,
     ident_offset: usize,
@@ -197,13 +198,6 @@ pub fn get_reference_of_expr(
                 include_self,
             );
         }
-        Expr::Print(expr) => get_reference_of_expr(
-            expr,
-            definition_ass_list,
-            reference_symbol,
-            reference_list,
-            include_self,
-        ),
         Expr::List(lst) => {
             for expr in lst {
                 get_reference_of_expr(

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
-use crate::chumsky::{Expr, Func, Spanned};
+use crate::chumsky::parser::{func::Func, Spanned, Expr};
+
 pub enum ImCompleteCompletionItem {
     Variable(String),
     Function(String, Vec<String>),
@@ -99,7 +100,6 @@ pub fn get_completion_of(
             }
             get_completion_of(alternative, definition_map, ident_offset)
         }
-        Expr::Print(expr) => get_completion_of(expr, definition_map, ident_offset),
         Expr::List(lst) => {
             for expr in lst {
                 match get_completion_of(expr, definition_map, ident_offset) {

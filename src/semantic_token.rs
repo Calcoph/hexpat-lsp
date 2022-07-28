@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use tower_lsp::lsp_types::{SemanticToken, SemanticTokenType};
 
-use crate::chumsky::{Expr, Func, ImCompleteSemanticToken, Spanned};
+use crate::chumsky::{ImCompleteSemanticToken, parser::{func::Func, Spanned, Expr}};
 
 pub const LEGEND_TYPE: &[SemanticTokenType] = &[
     SemanticTokenType::FUNCTION,
@@ -93,9 +93,6 @@ pub fn semantic_token_from_expr(
             semantic_token_from_expr(test, semantic_tokens);
             semantic_token_from_expr(consequent, semantic_tokens);
             semantic_token_from_expr(alternative, semantic_tokens);
-        }
-        Expr::Print(expr) => {
-            semantic_token_from_expr(expr, semantic_tokens);
         }
     }
 }

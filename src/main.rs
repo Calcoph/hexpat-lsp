@@ -1,15 +1,16 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use dashmap::DashMap;
-use hexpat_language_server::chumsky::{parse, type_inference, Func, ImCompleteSemanticToken, Spanned};
+use hexpat_language_server::chumsky::parser::func::Func;
+use hexpat_language_server::chumsky::{parse, type_inference, ImCompleteSemanticToken, Value};
 use hexpat_language_server::completion::completion;
-use hexpat_language_server::jump_definition::{get_definition, get_definition_of_expr};
+use hexpat_language_server::jump_definition::get_definition;
 use hexpat_language_server::reference::get_reference;
-use hexpat_language_server::semantic_token::{self, semantic_token_from_ast, LEGEND_TYPE};
+use hexpat_language_server::semantic_token::{semantic_token_from_ast, LEGEND_TYPE};
 use ropey::Rope;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
-use tower_lsp::jsonrpc::{ErrorCode, Result};
+use serde_json::Value as jValue;
+use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::notification::Notification;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
@@ -254,7 +255,7 @@ impl LanguageServer for Backend {
             .await;
     }
 
-    async fn execute_command(&self, _: ExecuteCommandParams) -> Result<Option<Value>> {
+    async fn execute_command(&self, _: ExecuteCommandParams) -> Result<Option<jValue>> {
         self.client
             .log_message(MessageType::INFO, "command executed!")
             .await;
@@ -415,12 +416,12 @@ impl Backend {
                     k.start,
                     k.end,
                     match v {
-                        hexpat_language_server::chumsky::Value::Null => "null".to_string(),
-                        hexpat_language_server::chumsky::Value::Bool(_) => "bool".to_string(),
-                        hexpat_language_server::chumsky::Value::Num(_) => "number".to_string(),
-                        hexpat_language_server::chumsky::Value::Str(_) => "string".to_string(),
-                        hexpat_language_server::chumsky::Value::List(_) => "[]".to_string(),
-                        hexpat_language_server::chumsky::Value::Func(_) => v.to_string(),
+                        Value::Null => "null".to_string(),
+                        Value::Bool(_) => "bool".to_string(),
+                        Value::Num(_) => "number".to_string(),
+                        Value::Str(_) => "string".to_string(),
+                        Value::List(_) => "[]".to_string(),
+                        Value::Func(_) => v.to_string(),
                     },
                 )
             })
