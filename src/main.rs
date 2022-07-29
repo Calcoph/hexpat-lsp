@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use dashmap::DashMap;
-use hexpat_language_server::chumsky::parser::func::Func;
+use hexpat_language_server::chumsky::m_parser::{NamedASTNode, NormalASTNode};
 use hexpat_language_server::chumsky::{parse, type_inference, ImCompleteSemanticToken, Value};
 use hexpat_language_server::completion::completion;
 use hexpat_language_server::jump_definition::get_definition;
@@ -17,7 +17,7 @@ use tower_lsp::{Client, LanguageServer, LspService, Server};
 #[derive(Debug)]
 struct Backend {
     client: Client,
-    ast_map: DashMap<String, HashMap<String, Func>>,
+    ast_map: DashMap<String, (HashMap<String, NamedASTNode>, Vec<NormalASTNode>)>,
     document_map: DashMap<String, Rope>,
     semantic_token_map: DashMap<String, Vec<ImCompleteSemanticToken>>,
 }
@@ -404,8 +404,8 @@ impl Backend {
     async fn inlay_hint(&self, params: InlayHintParams) -> Result<Vec<(usize, usize, String)>> {
         let mut hashmap = HashMap::new();
         if let Some(ast) = self.ast_map.get(&params.path) {
-            ast.iter().for_each(|(_, v)| {
-                type_inference(&v.body, &mut hashmap);
+            ast.0.iter().for_each(|(_, v)| {
+                type_inference(&v.getbody(), &mut hashmap);
             });
         }
 
@@ -420,7 +420,7 @@ impl Backend {
                         Value::Bool(_) => "bool".to_string(),
                         Value::Num(_) => "number".to_string(),
                         Value::Str(_) => "string".to_string(),
-                        Value::List(_) => "[]".to_string(),
+                        Value::Char(_) => "char".to_string(),
                         Value::Func(_) => v.to_string(),
                     },
                 )

@@ -1,31 +1,40 @@
-use std::collections::HashMap;
-
 use chumsky::{prelude::*,Parser};
 
-use crate::chumsky::{lexer::Keyword, Span};
+use crate::chumsky::{Span, m_lexer::Keyword};
 
-use super::{Token, expr_parser, Expr, Spanned};
+use super::{Token, Expr, expr_parser, Spanned, SpanASTNode};
 
-// A namespace node in the AST.
-#[derive(Debug)]
-pub struct NameSpace {
+// A function node in the AST.
+#[derive(Debug, Clone)]
+pub struct Func {
+    pub args: Vec<Spanned<String>>,
     pub body: Spanned<Expr>,
     pub name: Spanned<String>,
     pub span: Span,
 }
 
-fn namespace_parser() -> impl Parser<Token, HashMap<String, NameSpace>, Error = Simple<Token>> + Clone {
+pub fn funcs_parser() -> impl Parser<Token, SpanASTNode, Error = Simple<Token>> + Clone {
     let ident = filter_map(|span, tok| match tok {
         Token::Ident(ident) => Ok(ident.clone()),
         _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
     });
 
-    let nspace = just(Token::K(Keyword::Namespace))
+    // Argument lists are just identifiers separated by commas, surrounded by parentheses
+    let args = ident
+        .map_with_span(|name, span| (name, span))
+        .clone()
+        .separated_by(just(Token::Separator(',')))
+        .allow_trailing()
+        .delimited_by(just(Token::Separator('(')), just(Token::Separator(')')))
+        .labelled("function args");
+
+    let func = just(Token::K(Keyword::Fn))
         .ignore_then(
             ident
                 .map_with_span(|name, span| (name, span))
-                .labelled("namespace name"),
+                .labelled("function name"),
         )
+        .then(args)
         .then(
             expr_parser()
                 .delimited_by(just(Token::Separator('{')), just(Token::Separator('}')))
@@ -40,19 +49,20 @@ fn namespace_parser() -> impl Parser<Token, HashMap<String, NameSpace>, Error = 
                     |span| (Expr::Error, span),
                 )),
         ).then_ignore(just(Token::Separator(';')))
-        .map_with_span(|(name, body), span| {
-            (
+        .map_with_span(|((name, args), body), span| {
+            SpanASTNode::Func(
                 name.clone(),
-                NameSpace {
+                Func {
+                    args,
                     body,
                     name,
                     span,
                 },
             )
         })
-        .labelled("namespace");
+        .labelled("function");
 
-    nspace.repeated()
+    func/*.repeated()
         .try_map(|fs, _| {
             let mut funcs = HashMap::new();
             for ((name, name_span), f) in fs {
@@ -65,5 +75,5 @@ fn namespace_parser() -> impl Parser<Token, HashMap<String, NameSpace>, Error = 
             }
             Ok(funcs)
         })
-        .then_ignore(end())
+        .then_ignore(end())*/
 }

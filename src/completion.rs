@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::chumsky::parser::{func::Func, Spanned, Expr};
+use crate::chumsky::m_parser::{func::Func, Spanned, Expr, NormalASTNode, NamedASTNode};
 
 pub enum ImCompleteCompletionItem {
     Variable(String),
@@ -8,33 +8,49 @@ pub enum ImCompleteCompletionItem {
 }
 /// return (need_to_continue_search, founded reference)
 pub fn completion(
-    ast: &HashMap<String, Func>,
+    ast: &(HashMap<String, NamedASTNode>, Vec<NormalASTNode>),
     ident_offset: usize,
 ) -> HashMap<String, ImCompleteCompletionItem> {
     let mut map = HashMap::new();
-    for (_, v) in ast.iter() {
-        if v.name.1.end < ident_offset {
-            map.insert(
-                v.name.0.clone(),
-                ImCompleteCompletionItem::Function(
-                    v.name.0.clone(),
-                    v.args.clone().into_iter().map(|(name, _)| name).collect(),
-                ),
-            );
+    for (_, v) in ast.0.iter() {
+        match v {
+            NamedASTNode::Func(v) => {
+                if v.name.1.end < ident_offset {
+                    map.insert(
+                        v.name.0.clone(),
+                        ImCompleteCompletionItem::Function(
+                            v.name.0.clone(),
+                            v.args.clone().into_iter().map(|(name, _)| name).collect(),
+                        ),
+                    );
+                }
+            },
+            NamedASTNode::Struct(v) => todo!(),
+            NamedASTNode::Enum(v) => todo!(),
+            NamedASTNode::Namespace(v) => todo!(),
+            NamedASTNode::Bitfield(v) => todo!(),
         }
     }
 
     // collect params variable
-    for (_, v) in ast.iter() {
-        if v.span.end > ident_offset && v.span.start < ident_offset {
-            // log::debug!("this is completion from body {}", name);
-            v.args.iter().for_each(|(item, _)| {
-                map.insert(
-                    item.clone(),
-                    ImCompleteCompletionItem::Variable(item.clone()),
-                );
-            });
-            get_completion_of(&v.body, &mut map, ident_offset);
+    for (_, v) in ast.0.iter() {
+        match v {
+            NamedASTNode::Func(v) => {
+                if v.span.end > ident_offset && v.span.start < ident_offset {
+                    // log::debug!("this is completion from body {}", name);
+                    v.args.iter().for_each(|(item, _)| {
+                        map.insert(
+                            item.clone(),
+                            ImCompleteCompletionItem::Variable(item.clone()),
+                        );
+                    });
+                    get_completion_of(&v.body, &mut map, ident_offset);
+                }
+            },
+            NamedASTNode::Struct(v) => todo!(),
+            NamedASTNode::Enum(v) => todo!(),
+            NamedASTNode::Namespace(v) => todo!(),
+            NamedASTNode::Bitfield(v) => todo!(),
         }
     }
     map
@@ -58,21 +74,11 @@ pub fn get_completion_of(
                 true
             }
         }
-        Expr::Let(name, lhs, rest, name_span) => {
-            definition_map.insert(
-                name.clone(),
-                ImCompleteCompletionItem::Variable(name.clone()),
-            );
-            match get_completion_of(lhs, definition_map, ident_offset) {
-                true => get_completion_of(rest, definition_map, ident_offset),
-                false => return false,
-            }
-        }
         Expr::Then(first, second) => match get_completion_of(first, definition_map, ident_offset) {
             true => get_completion_of(second, definition_map, ident_offset),
             false => false,
         },
-        Expr::Binary(lhs, op, rhs) => match get_completion_of(lhs, definition_map, ident_offset) {
+        Expr::Binary(lhs, _op, rhs) => match get_completion_of(lhs, definition_map, ident_offset) {
             true => get_completion_of(rhs, definition_map, ident_offset),
             false => false,
         },
@@ -100,14 +106,6 @@ pub fn get_completion_of(
             }
             get_completion_of(alternative, definition_map, ident_offset)
         }
-        Expr::List(lst) => {
-            for expr in lst {
-                match get_completion_of(expr, definition_map, ident_offset) {
-                    true => continue,
-                    false => return false,
-                }
-            }
-            true
-        }
+        Expr::Definition(_, _, _, _, _) => todo!(),
     }
 }

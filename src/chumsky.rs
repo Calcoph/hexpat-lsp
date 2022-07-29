@@ -5,13 +5,13 @@ use tower_lsp::lsp_types::SemanticTokenType;
 
 use crate::semantic_token::LEGEND_TYPE;
 
-use self::lexer::{Token, Keyword, BuiltFunc};
-use self::parser::func::{Func, funcs_parser};
-pub use self::parser::{Spanned, Expr, Value};
-pub mod lexer;
-pub mod parser;
+use self::m_lexer::{Token, Keyword, BuiltFunc};
+use self::m_parser::{parser, SpanASTNode, NormalASTNode, NamedASTNode};
+pub use self::m_parser::{Spanned, Expr, Value};
+pub mod m_lexer;
+pub mod m_parser;
 
-use lexer::lexer as lex;
+use m_lexer::lexer;
 
 
 pub type Span = std::ops::Range<usize>;
@@ -36,26 +36,18 @@ pub fn type_inference(expr: &Spanned<Expr>, symbol_type_table: &mut HashMap<Span
     match &expr.0 {
         Expr::Error => {}
         Expr::Value(_) => {}
-        Expr::List(exprs) => exprs
-            .iter()
-            .for_each(|expr| type_inference(expr, symbol_type_table)),
         Expr::Local(_) => {}
-        Expr::Let(name, lhs, rest, name_span) => {
-            if let Some(value) = lhs.0.as_value() {
-                symbol_type_table.insert(name_span.clone(), value.clone());
-            }
-            type_inference(rest, symbol_type_table);
-        }
         Expr::Then(first, second) => {
             type_inference(first, symbol_type_table);
             type_inference(second, symbol_type_table);
         }
         Expr::Binary(_, _, _) => {}
         Expr::Call(_, _) => {}
-        Expr::If(test, consequent, alternative) => {
+        Expr::If(_test, consequent, alternative) => {
             type_inference(consequent, symbol_type_table);
             type_inference(alternative, symbol_type_table);
         }
+        Expr::Definition(_, _, _, _, _) => todo!(),
     }
 }
 // fn eval_expr(
@@ -267,11 +259,11 @@ pub fn type_inference(expr: &Spanned<Expr>, symbol_type_table: &mut HashMap<Span
 pub fn parse(
     src: &str,
 ) -> (
-    Option<HashMap<String, Func>>,
+    Option<(HashMap<String, NamedASTNode>, Vec<NormalASTNode>)>,
     Vec<Simple<String>>,
     Vec<ImCompleteSemanticToken>,
 ) {
-    let (tokens, errs) = lex().parse_recovery(src);
+    let (tokens, errs) = lexer().parse_recovery(src);
 
     let (ast, tokenize_errors, semantic_tokens) = if let Some(tokens) = tokens {
         // info!("Tokens = {:?}", tokens);
@@ -480,11 +472,13 @@ pub fn parse(
                             .unwrap(),
                     }),
                 },
+                //Token::PreprocStart(_) => todo!(),
+                //Token::PreprocStr(_) => todo!(),
             })
             .collect::<Vec<_>>();
         let len = src.chars().count();
-        let (ast, parse_errs) =
-            funcs_parser().parse_recovery(Stream::from_iter(len..len + 1, tokens.into_iter()));
+        let (ast, parse_errs) = parser()
+            .parse_recovery(Stream::from_iter(len..len + 1, tokens.into_iter()));
 
         // println!("{:#?}", ast);
         // if let Some(funcs) = ast.filter(|_| errs.len() + parse_errs.len() == 0) {

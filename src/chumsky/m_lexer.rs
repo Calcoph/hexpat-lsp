@@ -15,7 +15,9 @@ pub enum Token {
     B(BuiltFunc),
     Ident(String),
     Separator(char),
-    Bool(bool)
+    Bool(bool),
+    //PreprocStart(String),
+    //PreprocStr(String),
 }
 
 impl fmt::Display for Token {
@@ -56,6 +58,8 @@ impl fmt::Display for Token {
 
             }
             Token::V(_) => todo!(),
+            //Token::PreprocStart(s) => write!(f, "{}", s),
+            //Token::PreprocStr(s) => write!(f, "{}", s),
         }
     }
 }
@@ -150,6 +154,18 @@ pub fn lexer() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
     let ctrl = one_of("()[]{};,")
         .map(|c| Token::Separator(c));
 
+/*     // A parser for preproccessor directives start
+    let preproc = just("#include")
+        .or(just("#pragma"))
+        .or(just("#define"))
+        .map(|s| Token::PreprocStart(s.to_string()));
+    
+    let preproc_str = just('<')
+        .ignore_then(filter(|c| *c != '>' && *c != '\n').repeated())
+        .then_ignore(just('>'))
+        .collect::<String>()
+        .map(Token::PreprocStr);*/
+
     // A parser for identifiers and keywords
     let ident = text::ident().map(|ident: String| match ident.as_str() {
         "struct" => Token::K(Keyword::Struct),
@@ -181,15 +197,18 @@ pub fn lexer() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
     let token = num
         .or(char_)
         .or(str_)
+        //.or(preproc_str)
         .or(op)
         .or(ctrl)
         .or(ident)
+        //.or(preproc)
         .recover_with(skip_then_retry_until([]));
 
     let comment = just("//").then(take_until(just('\n'))).padded();
+    let directive = just("#").then(take_until(just('\n'))).padded();
 
     token
-        .padded_by(comment.repeated())
+        .padded_by(comment.or(directive).repeated())
         .map_with_span(|tok, span| (tok, span))
         .padded()
         .repeated()
