@@ -6,7 +6,7 @@ use tower_lsp::lsp_types::SemanticTokenType;
 use crate::semantic_token::LEGEND_TYPE;
 
 use self::m_lexer::{Token, Keyword, BuiltFunc};
-use self::m_parser::{parser, SpanASTNode, NormalASTNode, NamedASTNode};
+use self::m_parser::{parser, NormalASTNode, NamedASTNode};
 pub use self::m_parser::{Spanned, Expr, Value};
 pub mod m_lexer;
 pub mod m_parser;
@@ -47,7 +47,7 @@ pub fn type_inference(expr: &Spanned<Expr>, symbol_type_table: &mut HashMap<Span
             type_inference(consequent, symbol_type_table);
             type_inference(alternative, symbol_type_table);
         }
-        Expr::Definition(_, _, _, _, _) => todo!(),
+        Expr::Definition(_, _, _, _, _) => (), // TODO
     }
 }
 // fn eval_expr(
@@ -450,10 +450,31 @@ pub fn parse(
                             .position(|item| item == &SemanticTokenType::KEYWORD)
                             .unwrap(),
                     }),
-                    Keyword::LittleEndian => todo!(),
-                    Keyword::BigEndian => todo!(),
+                    Keyword::LittleEndian => Some(ImCompleteSemanticToken {
+                        start: span.start,
+                        length: span.len(),
+                        token_type: LEGEND_TYPE
+                            .iter()
+                            .position(|item| item == &SemanticTokenType::KEYWORD)
+                            .unwrap(),
+                    }),
+                    Keyword::BigEndian => Some(ImCompleteSemanticToken {
+                        start: span.start,
+                        length: span.len(),
+                        token_type: LEGEND_TYPE
+                            .iter()
+                            .position(|item| item == &SemanticTokenType::KEYWORD)
+                            .unwrap(),
+                    }),
                 }
-                Token::V(_) => todo!(),
+                Token::V(_) => Some(ImCompleteSemanticToken { // TODO: use the ValueType
+                    start: span.start,
+                    length: span.len(),
+                    token_type: LEGEND_TYPE
+                        .iter()
+                        .position(|item| item == &SemanticTokenType::KEYWORD)
+                        .unwrap(),
+                }),
                 Token::B(b) => match b {
                     BuiltFunc::AddressOf => Some(ImCompleteSemanticToken {
                         start: span.start,
@@ -472,8 +493,6 @@ pub fn parse(
                             .unwrap(),
                     }),
                 },
-                //Token::PreprocStart(_) => todo!(),
-                //Token::PreprocStr(_) => todo!(),
             })
             .collect::<Vec<_>>();
         let len = src.chars().count();

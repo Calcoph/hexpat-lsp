@@ -55,9 +55,8 @@ impl fmt::Display for Token {
             Token::B(b) => match b {
                 BuiltFunc::AddressOf => write!(f, "addressof"),
                 BuiltFunc::SizeOf => write!(f, "sizeof"),
-
             }
-            Token::V(_) => todo!(),
+            Token::V(_) => write!(f, "V"), // TODO
             //Token::PreprocStart(s) => write!(f, "{}", s),
             //Token::PreprocStr(s) => write!(f, "{}", s),
         }
@@ -106,17 +105,17 @@ pub fn lexer() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
     // Integer parsers
     let hex_num = just('0')
         .ignore_then(just('x').or(just('X')))
-        .ignore_then(text::int(16))
+        .ignore_then(one_of("0123456789ABCDEFabcdef").repeated().at_least(1).collect())
         .map(Token::Num);
     
     let oct_num = just('0')
         .ignore_then(just('o').or(just('O')))
-        .ignore_then(text::int(8))
+        .ignore_then(one_of("01234567").repeated().at_least(1).collect())
         .map(Token::Num);
 
     let bin_num = just('0')
         .ignore_then(just('b').or(just('B')))
-        .ignore_then(text::int(2))
+        .ignore_then(one_of("01").repeated().at_least(1).collect())
         .map(Token::Num);
 
     let dec_num = text::int(10) // TODO: differentiate between ints and floats

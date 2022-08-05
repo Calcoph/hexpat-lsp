@@ -2,14 +2,21 @@ use std::collections::HashMap;
 
 use im_rc::Vector;
 
-use crate::chumsky::m_parser::{func::Func, Spanned, Expr, NamedASTNode, NormalASTNode};
+use crate::chumsky::m_parser::{Spanned, Expr, NamedASTNode, NormalASTNode};
 
 /// return (need_to_continue_search, founded reference)
 pub fn get_definition(ast: &(HashMap<String, NamedASTNode>, Vec<NormalASTNode>), ident_offset: usize) -> Option<Spanned<String>> {
     let mut vector = Vector::new();
     for (_, v) in ast.0.iter() {
-        if v.getname().1.end < ident_offset {
-            vector.push_back(v.getname().clone());
+        match v {
+            NamedASTNode::Expr(Expr::Definition(_, name, _, _, span)) => {
+                if span.end < ident_offset {
+                    vector.push_back((name.clone(), span.clone()));
+                }
+            },
+            v => if v.getname().1.end < ident_offset {
+                vector.push_back(v.getname().clone());
+            }
         }
     }
 
@@ -106,6 +113,22 @@ pub fn get_definition_of_expr(
                 (false, Some(value)) => return (false, Some(value)),
             }
         }
-        Expr::Definition(_, _, _, _, _) => todo!(),
+        Expr::Definition(_, name, lhs, rest, name_span) => {
+            let new_decl = Vector::unit((name.clone(), name_span.clone()));
+
+            match lhs {
+                Some(lhs) => {
+                    match get_definition_of_expr(lhs, definition_ass_list.clone(), ident_offset) {
+                        (true, None) => {
+                            get_definition_of_expr(rest, new_decl + definition_ass_list, ident_offset)
+                        }
+                        (true, Some(value)) => return (false, Some(value)),
+                        (false, None) => return (false, None),
+                        (false, Some(value)) => return (false, Some(value)),
+                    }
+                },
+                None => get_definition_of_expr(rest, new_decl + definition_ass_list, ident_offset),
+            }
+        },
     }
 }

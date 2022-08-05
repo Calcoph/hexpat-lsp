@@ -18,7 +18,7 @@ pub fn bitfield_parser() -> impl Parser<Token, SpanASTNode, Error = Simple<Token
         _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
     });
 
-    let strct = just(Token::K(Keyword::Bitfield))
+    let bitfield = just(Token::K(Keyword::Bitfield))
         .ignore_then(
             ident
                 .map_with_span(|name, span| (name, span))
@@ -50,5 +50,5 @@ pub fn bitfield_parser() -> impl Parser<Token, SpanASTNode, Error = Simple<Token
         })
         .labelled("bitfield");
 
-    strct
+    bitfield
 }

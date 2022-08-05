@@ -50,8 +50,8 @@
     },
     "semanticTokenTypes": [
         {
-            "id": "directive",
-            "description": "A preprocessor directive"
+            "id": "bitfield",
+            "description": "A field of bits"
         }
     ]
   },

@@ -346,9 +346,10 @@ impl LanguageServer for Backend {
             let offset = char + position.character as usize;
             let completions = completion(&ast, offset);
             let mut ret = Vec::with_capacity(completions.len());
+            use hexpat_language_server::completion::ImCompleteCompletionItem as ImComp;
             for (_, item) in completions {
                 match item {
-                    hexpat_language_server::completion::ImCompleteCompletionItem::Variable(var) => {
+                    ImComp::Variable(var) => {
                         ret.push(CompletionItem {
                             label: var.clone(),
                             insert_text: Some(var.clone()),
@@ -356,11 +357,8 @@ impl LanguageServer for Backend {
                             detail: Some(var),
                             ..Default::default()
                         });
-                    }
-                    hexpat_language_server::completion::ImCompleteCompletionItem::Function(
-                        name,
-                        args,
-                    ) => {
+                    },
+                    ImComp::Function(name,args) => {
                         ret.push(CompletionItem {
                             label: name.clone(),
                             kind: Some(CompletionItemKind::FUNCTION),
@@ -375,6 +373,42 @@ impl LanguageServer for Backend {
                                     .join(",")
                             )),
                             insert_text_format: Some(InsertTextFormat::SNIPPET),
+                            ..Default::default()
+                        });
+                    },
+                    ImComp::Struct(name) => {
+                        ret.push(CompletionItem {
+                            label: name.clone(),
+                            insert_text: Some(name.clone()),
+                            kind: Some(CompletionItemKind::CLASS),
+                            detail: Some(name),
+                            ..Default::default()
+                        });
+                    },
+                    ImComp::BitField(name) => {
+                        ret.push(CompletionItem {
+                            label: name.clone(),
+                            insert_text: Some(name.clone()),
+                            kind: Some(CompletionItemKind::STRUCT),
+                            detail: Some(name),
+                            ..Default::default()
+                        });
+                    },
+                    ImComp::NameSpace(name) => {
+                        ret.push(CompletionItem {
+                            label: name.clone(),
+                            insert_text: Some(name.clone()),
+                            kind: Some(CompletionItemKind::MODULE),
+                            detail: Some(name),
+                            ..Default::default()
+                        });
+                    },
+                    ImComp::Enum(name) => {
+                        ret.push(CompletionItem {
+                            label: name.clone(),
+                            insert_text: Some(name.clone()),
+                            kind: Some(CompletionItemKind::ENUM),
+                            detail: Some(name),
                             ..Default::default()
                         });
                     }
@@ -405,7 +439,10 @@ impl Backend {
         let mut hashmap = HashMap::new();
         if let Some(ast) = self.ast_map.get(&params.path) {
             ast.0.iter().for_each(|(_, v)| {
-                type_inference(&v.getbody(), &mut hashmap);
+                match v {
+                    NamedASTNode::Expr(_) => (),
+                    v => type_inference(&v.getbody(), &mut hashmap)
+                }
             });
         }
 

@@ -67,7 +67,7 @@ pub enum Expr {
     Binary(Box<Spanned<Self>>, BinaryOp, Box<Spanned<Self>>),
     Call(Box<Spanned<Self>>, Spanned<Vec<Spanned<Self>>>),
     If(Box<Spanned<Self>>, Box<Spanned<Self>>, Box<Spanned<Self>>),
-    Definition(String, String, Box<Option<Spanned<Self>>>, Box<Spanned<Self>>, Span)
+    Definition(String, String, Option<Box<Spanned<Self>>>, Box<Spanned<Self>>, Span)
 }
 
 impl Expr {
@@ -183,14 +183,19 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
                 (Expr::Binary(Box::new(a), op, Box::new(b)), span)
             });
         
-        let definition = ident
+        let definition = ident.clone()
             .then(ident)
-            .then(just(Token::Op("@".to_string())).ignore_then(raw_expr.clone()).then_ignore(just(Token::Separator(';'))).or_not())
+            .then(just(Token::Op("@".to_string())).ignore_then(raw_expr.clone()).or_not())
+            .then_ignore(just(Token::Separator(';')))
             .then(expr.clone())
             //.map(|((name, val), body)| {
             .map_with_span(|(((type_, name), val), body), span| {
+                let val = match val {
+                    Some(val) => Some(Box::new(val)),
+                    None => None
+                };
                 (
-                    Expr::Definition(type_.0, name.0, Box::new(val), Box::new(body), name.1),
+                    Expr::Definition(type_.0, name.0, val, Box::new(body), name.1),
                     span
                 )
             });
@@ -246,10 +251,11 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
                 (Expr::Then(Box::new(a), Box::new(b)), span)
             });
 
-        block_chain
+        definition
             // Expressions, chained by semicolons, are statements
+            .or(block_chain.clone())
+        //block_chain
             .or(raw_expr.clone())
-            .or(definition.clone())
             .then(just(Token::Separator(';')).ignore_then(expr.or_not()).repeated())
             .foldl(|a, b| {
                 let span = a.1.clone(); // TODO: Not correct
@@ -263,7 +269,7 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
                     ),
                     span,
                 )
-            })
+            }).labelled("Expr")
     })
 }
 
@@ -278,6 +284,7 @@ pub enum SpanASTNode {
 
 #[derive(Debug, Clone)]
 pub enum NamedASTNode {
+    Expr(Expr),
     Func(Func),
     Struct(Struct),
     Enum(Enum),
@@ -293,6 +300,7 @@ impl NamedASTNode {
             NamedASTNode::Enum(e) => &e.name,
             NamedASTNode::Namespace(n) => &n.name,
             NamedASTNode::Bitfield(b) => &b.name,
+            NamedASTNode::Expr(_) => panic!("Can't get name out of expr")
         }
     }
 
@@ -303,6 +311,7 @@ impl NamedASTNode {
             NamedASTNode::Enum(e) => &e.body,
             NamedASTNode::Namespace(n) => &n.body,
             NamedASTNode::Bitfield(b) => &b.body,
+            NamedASTNode::Expr(_) => panic!("No body on expr"),
         }
     }
 }
@@ -327,7 +336,18 @@ pub fn parser() -> impl Parser<Token, (HashMap<String, NamedASTNode>, Vec<Normal
             let mut normal_nodes = Vec::new();
             for node in nodes {
                 match node {
-                    SpanASTNode::Expr(e) => normal_nodes.push(NormalASTNode::Expr(e)),
+                    SpanASTNode::Expr((e, span)) => match e {
+                        Expr::Definition(a, name, c, d, name_span) => {
+                            let e = NamedASTNode::Expr(Expr::Definition(a, name.clone(), c, d, name_span.clone()));
+                            if named_nodes.insert(name.clone(), e).is_some() {
+                                return Err(Simple::custom(
+                                    name_span.clone(),
+                                    format!("Variable '{}' already exists", name),
+                                ));
+                            }
+                        },
+                        _ => normal_nodes.push(NormalASTNode::Expr((e, span)))
+                    },
                     SpanASTNode::Func((name, name_span), f) => {
                         let f = NamedASTNode::Func(f);
                         if named_nodes.insert(name.clone(), f).is_some() {

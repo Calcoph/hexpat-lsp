@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use chumsky::Span;
 use im_rc::Vector;
-use crate::chumsky::m_parser::{Spanned, func::Func, Expr, NamedASTNode, NormalASTNode};
+use crate::chumsky::m_parser::{Spanned, Expr, NamedASTNode, NormalASTNode};
 
 #[derive(Debug, Clone)]
 pub enum ReferenceSymbol {
@@ -60,10 +60,107 @@ pub fn get_reference(
                     include_self,
                 );
             },
-            NamedASTNode::Struct(_) => todo!(),
-            NamedASTNode::Enum(_) => todo!(),
-            NamedASTNode::Namespace(_) => todo!(),
-            NamedASTNode::Bitfield(_) => todo!(),
+            NamedASTNode::Struct(v) => {
+                let (_, range) = &v.name;
+                if ident_offset >= range.start && ident_offset < range.end {
+                    reference_symbol = ReferenceSymbol::Founded(v.name.clone());
+                    if include_self {
+                        reference_list.push(v.name.clone());
+                    }
+                };
+                vector.push_back(v.name.clone());
+                get_reference_of_expr(
+                    &v.body,
+                    vector.clone(),
+                    reference_symbol.clone(),
+                    &mut reference_list,
+                    include_self,
+                );
+            },
+            NamedASTNode::Enum(v) => {
+                let (_, range) = &v.name;
+                if ident_offset >= range.start && ident_offset < range.end {
+                    reference_symbol = ReferenceSymbol::Founded(v.name.clone());
+                    if include_self {
+                        reference_list.push(v.name.clone());
+                    }
+                };
+                vector.push_back(v.name.clone());
+                get_reference_of_expr(
+                    &v.body,
+                    vector.clone(),
+                    reference_symbol.clone(),
+                    &mut reference_list,
+                    include_self,
+                );
+            },
+            NamedASTNode::Namespace(v) => {
+                let (_, range) = &v.name;
+                if ident_offset >= range.start && ident_offset < range.end {
+                    reference_symbol = ReferenceSymbol::Founded(v.name.clone());
+                    if include_self {
+                        reference_list.push(v.name.clone());
+                    }
+                };
+                vector.push_back(v.name.clone());
+                get_reference_of_expr(
+                    &v.body,
+                    vector.clone(),
+                    reference_symbol.clone(),
+                    &mut reference_list,
+                    include_self,
+                );
+            },
+            NamedASTNode::Bitfield(v) => {
+                let (_, range) = &v.name;
+                if ident_offset >= range.start && ident_offset < range.end {
+                    reference_symbol = ReferenceSymbol::Founded(v.name.clone());
+                    if include_self {
+                        reference_list.push(v.name.clone());
+                    }
+                };
+                vector.push_back(v.name.clone());
+                get_reference_of_expr(
+                    &v.body,
+                    vector.clone(),
+                    reference_symbol.clone(),
+                    &mut reference_list,
+                    include_self,
+                );
+            },
+            NamedASTNode::Expr(v) => {
+                match v {
+                    Expr::Definition(_, name, lhs, rest, range) => {
+                        if ident_offset >= range.start && ident_offset < range.end {
+                            reference_symbol = ReferenceSymbol::Founded((name.clone(), range.clone()));
+                            if include_self {
+                                reference_list.push((name.clone(), range.clone()));
+                            }
+                        };
+                        vector.push_back((name.clone(), range.clone()));
+                        match lhs {
+                            Some(lhs) => {
+                                get_reference_of_expr(
+                                    lhs,
+                                    vector.clone(),
+                                    reference_symbol.clone(),
+                                    &mut reference_list,
+                                    include_self,
+                                );
+                            },
+                            None => (),
+                        }
+                        get_reference_of_expr(
+                            rest,
+                            vector.clone(),
+                            reference_symbol.clone(),
+                            &mut reference_list,
+                            include_self,
+                        );
+                    },
+                    _ => panic!("Impossible")
+                }
+            },
         }
     }
     reference_list
@@ -178,6 +275,35 @@ pub fn get_reference_of_expr(
                 include_self,
             );
         }
-        Expr::Definition(_, _, _, _, _) => todo!(),
+        Expr::Definition(_, name, lhs, rest, name_span) => {
+            let new_decl = Vector::unit((name.clone(), name_span.clone()));
+            let next_symbol = match reference_symbol {
+                Founding(ident) if ident >= name_span.start && ident < name_span.end => {
+                    let spanned_name = (name.clone(), name_span.clone());
+                    if include_self {
+                        reference_list.push(spanned_name.clone());
+                    }
+                    ReferenceSymbol::Founded(spanned_name)
+                }
+                _ => reference_symbol,
+            };
+
+            if let Some(lhs) = lhs {
+                get_reference_of_expr(
+                    lhs,
+                    definition_ass_list.clone(),
+                    next_symbol.clone(),
+                    reference_list,
+                    include_self,
+                );
+            }
+            get_reference_of_expr(
+                rest,
+                new_decl + definition_ass_list.clone(),
+                next_symbol,
+                reference_list,
+                include_self,
+            );
+        },
     }
 }

@@ -1,10 +1,14 @@
 use std::collections::HashMap;
 
-use crate::chumsky::m_parser::{func::Func, Spanned, Expr, NormalASTNode, NamedASTNode};
+use crate::chumsky::m_parser::{Spanned, Expr, NormalASTNode, NamedASTNode};
 
 pub enum ImCompleteCompletionItem {
     Variable(String),
     Function(String, Vec<String>),
+    Struct(String),
+    Enum(String),
+    NameSpace(String),
+    BitField(String)
 }
 /// return (need_to_continue_search, founded reference)
 pub fn completion(
@@ -25,10 +29,47 @@ pub fn completion(
                     );
                 }
             },
-            NamedASTNode::Struct(v) => todo!(),
-            NamedASTNode::Enum(v) => todo!(),
-            NamedASTNode::Namespace(v) => todo!(),
-            NamedASTNode::Bitfield(v) => todo!(),
+            NamedASTNode::Expr(_) => (), // TODO: expr completion todo!()
+            NamedASTNode::Struct(v) => {
+                if v.name.1.end < ident_offset {
+                    map.insert(
+                        v.name.0.clone(),
+                        ImCompleteCompletionItem::Struct(
+                            v.name.0.clone(),
+                        ),
+                    );
+                }
+            },
+            NamedASTNode::Enum(v) => {
+                if v.name.1.end < ident_offset {
+                    map.insert(
+                        v.name.0.clone(),
+                        ImCompleteCompletionItem::Enum(
+                            v.name.0.clone(),
+                        ),
+                    );
+                }
+            },
+            NamedASTNode::Namespace(v) => {
+                if v.name.1.end < ident_offset {
+                    map.insert(
+                        v.name.0.clone(),
+                        ImCompleteCompletionItem::NameSpace(
+                            v.name.0.clone(),
+                        ),
+                    );
+                }
+            },
+            NamedASTNode::Bitfield(v) => {
+                if v.name.1.end < ident_offset {
+                    map.insert(
+                        v.name.0.clone(),
+                        ImCompleteCompletionItem::BitField(
+                            v.name.0.clone(),
+                        ),
+                    );
+                }
+            },
         }
     }
 
@@ -47,10 +88,7 @@ pub fn completion(
                     get_completion_of(&v.body, &mut map, ident_offset);
                 }
             },
-            NamedASTNode::Struct(v) => todo!(),
-            NamedASTNode::Enum(v) => todo!(),
-            NamedASTNode::Namespace(v) => todo!(),
-            NamedASTNode::Bitfield(v) => todo!(),
+            _ => (),
         }
     }
     map
@@ -74,13 +112,17 @@ pub fn get_completion_of(
                 true
             }
         }
-        Expr::Then(first, second) => match get_completion_of(first, definition_map, ident_offset) {
-            true => get_completion_of(second, definition_map, ident_offset),
-            false => false,
+        Expr::Then(first, second) => {
+            match get_completion_of(first, definition_map, ident_offset) {
+                true => get_completion_of(second, definition_map, ident_offset),
+                false => false,
+            }
         },
-        Expr::Binary(lhs, _op, rhs) => match get_completion_of(lhs, definition_map, ident_offset) {
-            true => get_completion_of(rhs, definition_map, ident_offset),
-            false => false,
+        Expr::Binary(lhs, _op, rhs) => {
+            match get_completion_of(lhs, definition_map, ident_offset) {
+                true => get_completion_of(rhs, definition_map, ident_offset),
+                false => false,
+            }
         },
         Expr::Call(callee, args) => {
             match get_completion_of(callee, definition_map, ident_offset) {
@@ -106,6 +148,18 @@ pub fn get_completion_of(
             }
             get_completion_of(alternative, definition_map, ident_offset)
         }
-        Expr::Definition(_, _, _, _, _) => todo!(),
+        Expr::Definition(_, name, lhs, rest, span) => {
+            definition_map.insert(
+                name.clone(),
+                ImCompleteCompletionItem::Variable(name.clone()),
+            );
+            match match lhs {
+                Some(lhs) => get_completion_of(lhs, definition_map, ident_offset),
+                None => get_completion_of(rest, definition_map, ident_offset),
+            } {
+                true => get_completion_of(rest, definition_map, ident_offset),
+                false => return false
+            }
+        },
     }
 }
