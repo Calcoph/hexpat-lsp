@@ -163,5 +163,6 @@ pub fn semantic_token_from_expr(
                 None => (),
             };
         },
+        Expr::Empty => (),
     }
 }

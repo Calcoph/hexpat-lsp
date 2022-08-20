@@ -27,6 +27,7 @@ pub fn struct_parser() -> impl Parser<Token, SpanASTNode, Error = Simple<Token>>
         .then(
             expr_parser()
                 .delimited_by(just(Token::Separator('{')), just(Token::Separator('}')))
+                .or(just(Token::Separator('{')).ignore_then(just(Token::Separator('}'))).ignored().map_with_span(|_, span| (Expr::Empty, span)))
                 // Attempt to recover anything that looks like a function body but contains errors
                 .recover_with(nested_delimiters(
                     Token::Separator('{'),

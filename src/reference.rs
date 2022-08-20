@@ -286,5 +286,6 @@ pub fn get_reference_of_expr(
                 );
             }
         },
+        Expr::Empty => (),
     }
 }

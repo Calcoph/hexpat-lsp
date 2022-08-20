@@ -67,7 +67,8 @@ pub enum Expr {
     Binary(Box<Spanned<Self>>, BinaryOp, Box<Spanned<Self>>), // something something_else
     Call(Box<Spanned<Self>>, Spanned<Vec<Spanned<Self>>>), // name arguments
     If(Box<Spanned<Self>>, Box<Spanned<Self>>, Box<Spanned<Self>>), // if condition body
-    Definition(Spanned<String>, Spanned<String>, Option<Box<Spanned<Self>>>) // type name everything_else
+    Definition(Spanned<String>, Spanned<String>, Option<Box<Spanned<Self>>>), // type name everything_else
+    Empty, // Body of an empty block
 }
 
 impl Expr {

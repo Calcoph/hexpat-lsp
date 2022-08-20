@@ -158,5 +158,6 @@ pub fn get_completion_of(
                 None => return false,
             }
         },
+        Expr::Empty => false,
     }
 }

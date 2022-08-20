@@ -133,5 +133,6 @@ pub fn get_definition_of_expr(
                 },
             }
         },
+        Expr::Empty => (false, None),
     }
 }
