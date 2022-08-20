@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::chumsky::m_parser::{Spanned, Expr, NormalASTNode, NamedASTNode};
+use hexparser::m_parser::{Spanned, Expr, NormalASTNode, NamedASTNode};
 
 pub enum ImCompleteCompletionItem {
     Variable(String),
@@ -29,7 +29,7 @@ pub fn completion(
                     );
                 }
             },
-            NamedASTNode::Expr(_) => (), // TODO: expr completion todo!()
+            NamedASTNode::Expr(_,_,_) => (), // TODO: expr completion todo!()
             NamedASTNode::Struct(v) => {
                 if v.name.1.end < ident_offset {
                     map.insert(
@@ -148,17 +148,14 @@ pub fn get_completion_of(
             }
             get_completion_of(alternative, definition_map, ident_offset)
         }
-        Expr::Definition(_, name, lhs, rest, span) => {
+        Expr::Definition(_, name, lhs) => {
             definition_map.insert(
-                name.clone(),
-                ImCompleteCompletionItem::Variable(name.clone()),
+                name.0.clone(),
+                ImCompleteCompletionItem::Variable(name.0.clone()),
             );
-            match match lhs {
+            match lhs {
                 Some(lhs) => get_completion_of(lhs, definition_map, ident_offset),
-                None => get_completion_of(rest, definition_map, ident_offset),
-            } {
-                true => get_completion_of(rest, definition_map, ident_offset),
-                false => return false
+                None => return false,
             }
         },
     }

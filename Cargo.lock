@@ -250,14 +250,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "hexparser"
+version = "0.1.0"
+dependencies = [
+ "chumsky",
+ "parserlib",
+ "serde",
+ "tower-lsp",
+]
+
+[[package]]
 name = "hexpat-language-server"
 version = "0.1.0"
 dependencies = [
  "chumsky",
  "dashmap",
  "env_logger",
+ "hexparser",
  "im-rc",
  "log",
+ "parserlib",
  "ropey",
  "serde",
  "serde_json",
@@ -431,6 +443,13 @@ dependencies = [
  "redox_syscall",
  "smallvec",
  "windows-sys",
+]
+
+[[package]]
+name = "parserlib"
+version = "0.1.0"
+dependencies = [
+ "tower-lsp",
 ]
 
 [[package]]

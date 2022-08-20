@@ -3,13 +3,14 @@ use chumsky::{prelude::*, stream::Stream};
 use std::collections::HashMap;
 use tower_lsp::lsp_types::SemanticTokenType;
 
-use crate::semantic_token::LEGEND_TYPE;
+use parserlib::LEGEND_TYPE;
 
 use self::m_lexer::{Token, Keyword, BuiltFunc};
 use self::m_parser::{parser, NormalASTNode, NamedASTNode};
 pub use self::m_parser::{Spanned, Expr, Value};
 pub mod m_lexer;
 pub mod m_parser;
+//pub mod cpp_parser;
 
 use m_lexer::lexer;
 
@@ -47,7 +48,7 @@ pub fn type_inference(expr: &Spanned<Expr>, symbol_type_table: &mut HashMap<Span
             type_inference(consequent, symbol_type_table);
             type_inference(alternative, symbol_type_table);
         }
-        Expr::Definition(_, _, _, _, _) => (), // TODO
+        Expr::Definition(_, _, _) => (), // TODO
     }
 }
 // fn eval_expr(

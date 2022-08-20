@@ -1,28 +1,28 @@
 use chumsky::{prelude::*,Parser};
 
-use crate::chumsky::{m_lexer::Keyword, Span};
+use crate::{m_lexer::Keyword, Span};
 
 use super::{Token, expr_parser, Expr, Spanned, SpanASTNode};
 
 // A namespace node in the AST.
 #[derive(Debug, Clone)]
-pub struct Enum {
+pub struct NameSpace {
     pub body: Spanned<Expr>,
     pub name: Spanned<String>,
     pub span: Span,
 }
 
-pub fn enum_parser() -> impl Parser<Token, SpanASTNode, Error = Simple<Token>> + Clone {
+pub fn namespace_parser() -> impl Parser<Token, SpanASTNode, Error = Simple<Token>> + Clone {
     let ident = filter_map(|span, tok| match tok {
         Token::Ident(ident) => Ok(ident.clone()),
         _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
     });
 
-    let enm = just(Token::K(Keyword::Enum))
+    let nspace = just(Token::K(Keyword::Namespace))
         .ignore_then(
             ident
                 .map_with_span(|name, span| (name, span))
-                .labelled("enum name"),
+                .labelled("namespace name"),
         )
         .then(
             expr_parser()
@@ -39,16 +39,16 @@ pub fn enum_parser() -> impl Parser<Token, SpanASTNode, Error = Simple<Token>> +
                 )),
         ).then_ignore(just(Token::Separator(';')))
         .map_with_span(|(name, body), span| {
-            SpanASTNode::Enum(
+            SpanASTNode::Namespace(
                 name.clone(),
-                Enum {
+                NameSpace {
                     body,
                     name,
                     span,
                 },
             )
         })
-        .labelled("enum");
+        .labelled("namespace");
 
-    enm
+    nspace
 }

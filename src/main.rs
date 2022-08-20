@@ -1,12 +1,13 @@
 use std::collections::HashMap;
 
 use dashmap::DashMap;
-use hexpat_language_server::chumsky::m_parser::{NamedASTNode, NormalASTNode};
-use hexpat_language_server::chumsky::{parse, type_inference, ImCompleteSemanticToken, Value};
+use hexparser::m_parser::{NamedASTNode, NormalASTNode};
+use hexparser::{parse, type_inference, ImCompleteSemanticToken, Value};
 use hexpat_language_server::completion::completion;
 use hexpat_language_server::jump_definition::get_definition;
 use hexpat_language_server::reference::get_reference;
-use hexpat_language_server::semantic_token::{semantic_token_from_ast, LEGEND_TYPE};
+use hexpat_language_server::semantic_token::semantic_token_from_ast;
+use parserlib::LEGEND_TYPE;
 use ropey::Rope;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as jValue;
@@ -440,8 +441,8 @@ impl Backend {
         if let Some(ast) = self.ast_map.get(&params.path) {
             ast.0.iter().for_each(|(_, v)| {
                 match v {
-                    NamedASTNode::Expr(_) => (),
-                    v => type_inference(&v.getbody(), &mut hashmap)
+                    NamedASTNode::Expr(_, _, _) => (),
+                    v => type_inference(&v.getbody().unwrap(), &mut hashmap)
                 }
             });
         }

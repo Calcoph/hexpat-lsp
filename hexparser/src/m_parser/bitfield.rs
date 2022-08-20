@@ -1,6 +1,6 @@
 use chumsky::{prelude::*,Parser};
 
-use crate::chumsky::{m_lexer::Keyword, Span};
+use crate::{m_lexer::Keyword, Span};
 
 use super::{Token, expr_parser, Expr, Spanned, SpanASTNode};
 

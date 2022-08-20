@@ -4,3 +4,4 @@ out/
 .pnpm-debug.log
 *.ast 
 *.nrs
+hexparser/src/cpp_parser.rs

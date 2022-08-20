@@ -1,22 +1,9 @@
-use core::panic;
 use std::collections::HashMap;
 
+use parserlib::LEGEND_TYPE;
 use tower_lsp::lsp_types::SemanticTokenType;
 
-use crate::chumsky::{ImCompleteSemanticToken, m_parser::{Spanned, Expr, NormalASTNode, NamedASTNode}};
-
-pub const LEGEND_TYPE: &[SemanticTokenType] = &[
-    SemanticTokenType::FUNCTION,
-    SemanticTokenType::VARIABLE,
-    SemanticTokenType::STRING,
-    SemanticTokenType::COMMENT,
-    SemanticTokenType::NUMBER,
-    SemanticTokenType::KEYWORD,
-    SemanticTokenType::OPERATOR,
-    SemanticTokenType::PARAMETER,
-    SemanticTokenType::STRUCT,
-    SemanticTokenType::new("bitfield"),
-];
+use hexparser::{ImCompleteSemanticToken, m_parser::{Spanned, Expr, NormalASTNode, NamedASTNode}};
 
 pub fn semantic_token_from_ast(ast: &(HashMap<String, NamedASTNode>, Vec<NormalASTNode>)) -> Vec<ImCompleteSemanticToken> {
     let mut semantic_tokens = vec![];
@@ -94,22 +81,17 @@ pub fn semantic_token_from_ast(ast: &(HashMap<String, NamedASTNode>, Vec<NormalA
                 });
                 semantic_token_from_expr(&v.body, &mut semantic_tokens);
             },
-            NamedASTNode::Expr(v) => {
-                if let Expr::Definition(_, _, lhs, rest, span) = v {
-                    semantic_tokens.push(ImCompleteSemanticToken {
-                        start: span.start,
-                        length: span.len(),
-                        token_type: LEGEND_TYPE
-                            .iter()
-                            .position(|item| item == &SemanticTokenType::VARIABLE)
-                            .unwrap(),
-                    });
-                    if let Some(lhs) = lhs {
-                        semantic_token_from_expr(lhs, &mut semantic_tokens);
-                    }
-                    semantic_token_from_expr(rest, &mut semantic_tokens);
-                } else {
-                    panic!("Impossible")
+            NamedASTNode::Expr(_, (_, span), lhs) => {
+                semantic_tokens.push(ImCompleteSemanticToken {
+                    start: span.start,
+                    length: span.len(),
+                    token_type: LEGEND_TYPE
+                        .iter()
+                        .position(|item| item == &SemanticTokenType::VARIABLE)
+                        .unwrap(),
+                });
+                if let Some(lhs) = lhs {
+                    semantic_token_from_expr(lhs, &mut semantic_tokens);
                 }
             },
         }
@@ -167,7 +149,7 @@ pub fn semantic_token_from_expr(
             semantic_token_from_expr(consequent, semantic_tokens);
             semantic_token_from_expr(alternative, semantic_tokens);
         }
-        Expr::Definition(type_, _, rhs, rest, name_span) => { // TODO: The type
+        Expr::Definition(type_, (_, name_span), rhs) => { // TODO: The type
             semantic_tokens.push(ImCompleteSemanticToken {
                 start: name_span.start,
                 length: name_span.len(),
@@ -180,7 +162,6 @@ pub fn semantic_token_from_expr(
                 Some(rhs) => semantic_token_from_expr(rhs, semantic_tokens),
                 None => (),
             };
-            semantic_token_from_expr(rest, semantic_tokens);
         },
     }
 }

@@ -64,10 +64,10 @@ pub enum Expr {
     Value(Value),
     Local(Spanned<String>),
     Then(Box<Spanned<Self>>, Box<Spanned<Self>>),
-    Binary(Box<Spanned<Self>>, BinaryOp, Box<Spanned<Self>>),
-    Call(Box<Spanned<Self>>, Spanned<Vec<Spanned<Self>>>),
-    If(Box<Spanned<Self>>, Box<Spanned<Self>>, Box<Spanned<Self>>),
-    Definition(String, String, Option<Box<Spanned<Self>>>, Box<Spanned<Self>>, Span)
+    Binary(Box<Spanned<Self>>, BinaryOp, Box<Spanned<Self>>), // something something_else
+    Call(Box<Spanned<Self>>, Spanned<Vec<Spanned<Self>>>), // name arguments
+    If(Box<Spanned<Self>>, Box<Spanned<Self>>, Box<Spanned<Self>>), // if condition body
+    Definition(Spanned<String>, Spanned<String>, Option<Box<Spanned<Self>>>) // type name everything_else
 }
 
 impl Expr {
@@ -187,15 +187,14 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
             .then(ident)
             .then(just(Token::Op("@".to_string())).ignore_then(raw_expr.clone()).or_not())
             .then_ignore(just(Token::Separator(';')))
-            .then(expr.clone())
             //.map(|((name, val), body)| {
-            .map_with_span(|(((type_, name), val), body), span| {
+            .map_with_span(|((type_, name), val), span| {
                 let val = match val {
                     Some(val) => Some(Box::new(val)),
                     None => None
                 };
                 (
-                    Expr::Definition(type_.0, name.0, val, Box::new(body), name.1),
+                    Expr::Definition(type_, name, val),
                     span
                 )
             });
@@ -284,7 +283,7 @@ pub enum SpanASTNode {
 
 #[derive(Debug, Clone)]
 pub enum NamedASTNode {
-    Expr(Expr),
+    Expr(Spanned<String>, Spanned<String>, Option<Spanned<Expr>>), // type name everything_else
     Func(Func),
     Struct(Struct),
     Enum(Enum),
@@ -300,18 +299,18 @@ impl NamedASTNode {
             NamedASTNode::Enum(e) => &e.name,
             NamedASTNode::Namespace(n) => &n.name,
             NamedASTNode::Bitfield(b) => &b.name,
-            NamedASTNode::Expr(_) => panic!("Can't get name out of expr")
+            NamedASTNode::Expr(_, name, _) => name
         }
     }
 
-    pub fn getbody(&self) -> &Spanned<Expr> {
+    pub fn getbody(&self) -> Option<&Spanned<Expr>> {
         match self {
-            NamedASTNode::Func(f) => &f.body,
-            NamedASTNode::Struct(s) => &s.body,
-            NamedASTNode::Enum(e) => &e.body,
-            NamedASTNode::Namespace(n) => &n.body,
-            NamedASTNode::Bitfield(b) => &b.body,
-            NamedASTNode::Expr(_) => panic!("No body on expr"),
+            NamedASTNode::Func(f) => Some(&f.body),
+            NamedASTNode::Struct(s) => Some(&s.body),
+            NamedASTNode::Enum(e) => Some(&e.body),
+            NamedASTNode::Namespace(n) => Some(&n.body),
+            NamedASTNode::Bitfield(b) => Some(&b.body),
+            NamedASTNode::Expr(_, _, body) => body.as_ref(),
         }
     }
 }
@@ -337,8 +336,11 @@ pub fn parser() -> impl Parser<Token, (HashMap<String, NamedASTNode>, Vec<Normal
             for node in nodes {
                 match node {
                     SpanASTNode::Expr((e, span)) => match e {
-                        Expr::Definition(a, name, c, d, name_span) => {
-                            let e = NamedASTNode::Expr(Expr::Definition(a, name.clone(), c, d, name_span.clone()));
+                        Expr::Definition(a, (name, name_span), c) => {
+                            let e = match c {
+                                Some(exp) => NamedASTNode::Expr(a, (name.clone(), name_span.clone()), Some(*exp)),
+                                None => NamedASTNode::Expr(a, (name.clone(), name_span.clone()), None)
+                            };
                             if named_nodes.insert(name.clone(), e).is_some() {
                                 return Err(Simple::custom(
                                     name_span.clone(),

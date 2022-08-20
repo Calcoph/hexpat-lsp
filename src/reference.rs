@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use chumsky::Span;
 use im_rc::Vector;
-use crate::chumsky::m_parser::{Spanned, Expr, NamedASTNode, NormalASTNode};
+use hexparser::m_parser::{Spanned, Expr, NamedASTNode, NormalASTNode};
 
 #[derive(Debug, Clone)]
 pub enum ReferenceSymbol {
@@ -128,39 +128,27 @@ pub fn get_reference(
                     include_self,
                 );
             },
-            NamedASTNode::Expr(v) => {
-                match v {
-                    Expr::Definition(_, name, lhs, rest, range) => {
-                        if ident_offset >= range.start && ident_offset < range.end {
-                            reference_symbol = ReferenceSymbol::Founded((name.clone(), range.clone()));
-                            if include_self {
-                                reference_list.push((name.clone(), range.clone()));
-                            }
-                        };
-                        vector.push_back((name.clone(), range.clone()));
-                        match lhs {
-                            Some(lhs) => {
-                                get_reference_of_expr(
-                                    lhs,
-                                    vector.clone(),
-                                    reference_symbol.clone(),
-                                    &mut reference_list,
-                                    include_self,
-                                );
-                            },
-                            None => (),
+            NamedASTNode::Expr(_, (name, range), lhs) => {
+                    if ident_offset >= range.start && ident_offset < range.end {
+                        reference_symbol = ReferenceSymbol::Founded((name.clone(), range.clone()));
+                        if include_self {
+                            reference_list.push((name.clone(), range.clone()));
                         }
-                        get_reference_of_expr(
-                            rest,
-                            vector.clone(),
-                            reference_symbol.clone(),
-                            &mut reference_list,
-                            include_self,
-                        );
-                    },
-                    _ => panic!("Impossible")
-                }
-            },
+                    };
+                    vector.push_back((name.clone(), range.clone()));
+                    match lhs {
+                        Some(lhs) => {
+                            get_reference_of_expr(
+                                lhs,
+                                vector.clone(),
+                                reference_symbol.clone(),
+                                &mut reference_list,
+                                include_self,
+                            );
+                        },
+                        None => (),
+                    }
+            }
         }
     }
     reference_list
@@ -275,7 +263,7 @@ pub fn get_reference_of_expr(
                 include_self,
             );
         }
-        Expr::Definition(_, name, lhs, rest, name_span) => {
+        Expr::Definition(_, (name, name_span), lhs) => {
             let new_decl = Vector::unit((name.clone(), name_span.clone()));
             let next_symbol = match reference_symbol {
                 Founding(ident) if ident >= name_span.start && ident < name_span.end => {
@@ -297,13 +285,6 @@ pub fn get_reference_of_expr(
                     include_self,
                 );
             }
-            get_reference_of_expr(
-                rest,
-                new_decl + definition_ass_list.clone(),
-                next_symbol,
-                reference_list,
-                include_self,
-            );
         },
     }
 }
