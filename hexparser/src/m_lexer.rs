@@ -164,7 +164,16 @@ pub fn lexer() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
 
     // A parser for strings
     let str_ = just('"')
-        .ignore_then(filter(|c| *c != '"').repeated())
+        .ignore_then(
+            just('\\')
+            .then(just('\\'))
+            .map(|(_,_)| "\\\\".to_string())
+            .or(just('\\')
+                .then(just('"'))
+                .map(|(_,_)| "\\\"".to_string())
+            )
+            .or(filter(|c: &char| *c != '"').map(|c| c.to_string()))
+            .repeated())
         .then_ignore(just('"'))
         .collect::<String>()
         .map(Token::Str);
