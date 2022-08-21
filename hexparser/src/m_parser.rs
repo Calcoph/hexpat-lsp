@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, ops::Range};
 
 use chumsky::{prelude::*,Parser};
 use serde::{Deserialize, Serialize};
@@ -69,7 +69,8 @@ pub enum Expr {
     If(Box<Spanned<Self>>, Box<Spanned<Self>>, Box<Spanned<Self>>), // if condition body
     Definition(Spanned<String>, Spanned<String>, Box<Spanned<Self>>), // type name everything_else
     BitFieldEntry(Spanned<String>, Box<Spanned<Self>>, Box<Spanned<Self>>), // name length next_entry
-    EnumEntry(Spanned<String>, Box<Spanned<Self>>, Box<Spanned<Self>>) // name value next_entry
+    EnumEntry(Spanned<String>, Box<Spanned<Self>>, Box<Spanned<Self>>), // name value next_entry
+    Access(Box<Spanned<Self>>, Spanned<String>),
 }
 
 impl Expr {
@@ -103,7 +104,7 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
         })
         .labelled("value");
 
-        let ident = filter_map(|span, tok| match tok {
+        let ident = filter_map(|span: Range<usize>, tok| match tok {
             Token::Ident(ident) => Ok((ident.clone(), span)),
             _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
         })
@@ -123,10 +124,21 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
             .or_not()
             .map(|item| item.unwrap_or_else(Vec::new));
 
+        let member_access = ident.clone()
+            .map_with_span(|a, span| (Expr::Local(a), span))
+            .then(
+                just(Token::Separator('.'))
+                .ignore_then(ident)
+                .repeated()
+            ).foldl(|a, b| {
+                let span = a.1.clone(); // TODO: Not correct
+                (Expr::Access(Box::new(a), b), span)
+            });
+
         // 'Atoms' are expressions that contain no ambiguity
-        let atom = val
-            .or(ident.map(Expr::Local))
-            .map_with_span(|expr, span| (expr, span))
+        let atom = val.map_with_span(|expr, span| (expr, span))
+            .or(member_access)
+            .or(ident.map(Expr::Local).map_with_span(|expr, span| (expr, span)))
             .or(builtin_func
                 .map_with_span(|a, span| (Expr::Local((a.0.to_string(), a.1)), span))
             )
@@ -162,8 +174,7 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
         let op = just(Token::Op("*".to_string()))
             .to(BinaryOp::Mul)
             .or(just(Token::Op("/".to_string())).to(BinaryOp::Div));
-        let product = call
-            .clone()
+        let product = call.clone()
             .then(op.then(call).repeated())
             .foldl(|a, (op, b)| {
                 let span = a.1.start..b.1.end;
@@ -194,8 +205,22 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
                 (Expr::Binary(Box::new(a), op, Box::new(b)), span)
             });
         
+        let array_definition = expr.clone()
+            .delimited_by(just(Token::Separator('[')), just(Token::Separator(']')))
+            .recover_with(nested_delimiters(
+                Token::Separator('['),
+                Token::Separator(']'),
+                [
+                    (Token::Separator('('), Token::Separator(')')),
+                    (Token::Separator('{'), Token::Separator('}')),
+                ],
+                |span| (Expr::Error, span),
+            ));
+            
+        
         let definition = ident.clone()
             .then(ident)
+            .then_ignore(array_definition.or_not())
             .then(just(Token::Op("@".to_string())).ignore_then(raw_expr.clone()).or_not())
             //.map(|((name, val), body)| {
             .map_with_span(|((type_, name), val), span| {
@@ -210,8 +235,7 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
             });
 
         // Blocks are expressions but delimited with braces
-        let block = expr
-            .clone()
+        let block = expr.clone()
             .delimited_by(just(Token::Separator('{')), just(Token::Separator('}')))
             // Attempt to recover anything that looks like a block but contains errors
             .recover_with(nested_delimiters(
@@ -387,6 +411,7 @@ fn register_defined_names(named_nodes: &mut HashMap<String, NamedASTNode>, e: &E
         },
         Expr::BitFieldEntry(_, _, _) => Ok(()), // This should never happen
         Expr::EnumEntry(_, _, _) => Ok(()), // This should never happen
+        Expr::Access(e, _) => register_defined_names(named_nodes, &e.0),
     }
 }
 

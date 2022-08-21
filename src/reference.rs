@@ -282,5 +282,6 @@ pub fn get_reference_of_expr(
         },
         Expr::BitFieldEntry(_, _, _) => (), // TODO
         Expr::EnumEntry(_, _, _) => (), // TODO
+        Expr::Access(_, _) => (), // TODO
     }
 }

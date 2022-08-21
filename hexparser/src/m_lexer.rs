@@ -159,7 +159,7 @@ pub fn lexer() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
         .map(Token::Op);
 
     // A parser for control characters (delimiters, semicolons, etc.)
-    let ctrl = one_of("()[]{};,")
+    let ctrl = one_of("()[]{};,.")
         .map(|c| Token::Separator(c));
 
 /*     // A parser for preproccessor directives start
