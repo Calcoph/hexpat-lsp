@@ -1,14 +1,15 @@
 use tower_lsp::lsp_types::SemanticTokenType;
 
 pub const LEGEND_TYPE: &[SemanticTokenType] = &[
-    SemanticTokenType::FUNCTION,
-    SemanticTokenType::VARIABLE,
-    SemanticTokenType::STRING,
-    SemanticTokenType::COMMENT,
-    SemanticTokenType::NUMBER,
-    SemanticTokenType::KEYWORD,
-    SemanticTokenType::OPERATOR,
-    SemanticTokenType::PARAMETER,
-    SemanticTokenType::STRUCT,
-    SemanticTokenType::new("bitfield"),
+    SemanticTokenType::FUNCTION, // 0
+    SemanticTokenType::VARIABLE, // 1
+    SemanticTokenType::STRING, // 2
+    SemanticTokenType::COMMENT, // 3
+    SemanticTokenType::NUMBER, // 4
+    SemanticTokenType::KEYWORD, // 5
+    SemanticTokenType::OPERATOR, // 6
+    SemanticTokenType::PARAMETER, // 7
+    SemanticTokenType::STRUCT, // 8
+    SemanticTokenType::new("bitfield"), // 9
+    SemanticTokenType::ENUM, // 10
 ];

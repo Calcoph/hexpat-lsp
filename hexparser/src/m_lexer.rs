@@ -101,6 +101,15 @@ pub enum BuiltFunc {
     SizeOf,
 }
 
+impl ToString for BuiltFunc {
+    fn to_string(&self) -> String {
+        match self {
+            BuiltFunc::AddressOf => "addressof".to_string(),
+            BuiltFunc::SizeOf => "sizeof".to_string(),
+        }
+    }
+}
+
 pub fn lexer() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
     // Integer parsers
     let hex_num = just('0')

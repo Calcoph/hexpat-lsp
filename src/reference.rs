@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use chumsky::Span;
 use im_rc::Vector;
-use hexparser::m_parser::{Spanned, Expr, NamedASTNode, NormalASTNode};
+use hexparser::m_parser::{Spanned, Expr, NamedASTNode, NormalASTNode, Declaration};
 
 #[derive(Debug, Clone)]
 pub enum ReferenceSymbol {
@@ -128,7 +128,7 @@ pub fn get_reference(
                     include_self,
                 );
             },
-            NamedASTNode::Expr(_, (name, range), lhs) => {
+            NamedASTNode::Expr(Declaration {type_: _, name: (name, range), body: lhs}) => {
                     if ident_offset >= range.start && ident_offset < range.end {
                         reference_symbol = ReferenceSymbol::Founded((name.clone(), range.clone()));
                         if include_self {
@@ -136,18 +136,14 @@ pub fn get_reference(
                         }
                     };
                     vector.push_back((name.clone(), range.clone()));
-                    match lhs {
-                        Some(lhs) => {
-                            get_reference_of_expr(
-                                lhs,
-                                vector.clone(),
-                                reference_symbol.clone(),
-                                &mut reference_list,
-                                include_self,
-                            );
-                        },
-                        None => (),
-                    }
+
+                    get_reference_of_expr(
+                        lhs,
+                        vector.clone(),
+                        reference_symbol.clone(),
+                        &mut reference_list,
+                        include_self,
+                    );
             }
         }
     }
@@ -276,16 +272,15 @@ pub fn get_reference_of_expr(
                 _ => reference_symbol,
             };
 
-            if let Some(lhs) = lhs {
-                get_reference_of_expr(
-                    lhs,
-                    definition_ass_list.clone(),
-                    next_symbol.clone(),
-                    reference_list,
-                    include_self,
-                );
-            }
+            get_reference_of_expr(
+                lhs,
+                definition_ass_list.clone(),
+                next_symbol.clone(),
+                reference_list,
+                include_self,
+            );
         },
-        Expr::Empty => (),
+        Expr::BitFieldEntry(_, _, _) => (), // TODO
+        Expr::EnumEntry(_, _, _) => (), // TODO
     }
 }

@@ -441,7 +441,7 @@ impl Backend {
         if let Some(ast) = self.ast_map.get(&params.path) {
             ast.0.iter().for_each(|(_, v)| {
                 match v {
-                    NamedASTNode::Expr(_, _, _) => (),
+                    NamedASTNode::Expr(_) => (),
                     v => type_inference(&v.getbody().unwrap(), &mut hashmap)
                 }
             });

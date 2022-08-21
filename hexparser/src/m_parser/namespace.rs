@@ -1,6 +1,6 @@
 use chumsky::{prelude::*,Parser};
 
-use crate::{m_lexer::Keyword, Span};
+use crate::{m_lexer::Keyword, Span, Value};
 
 use super::{Token, expr_parser, Expr, Spanned, SpanASTNode};
 
@@ -26,8 +26,8 @@ pub fn namespace_parser() -> impl Parser<Token, SpanASTNode, Error = Simple<Toke
         )
         .then(
             expr_parser()
-                .or(just(Token::Separator('{')).ignore_then(just(Token::Separator('}'))).ignored().map_with_span(|_, span| (Expr::Empty, span)))
                 .delimited_by(just(Token::Separator('{')), just(Token::Separator('}')))
+                .or(just(Token::Separator('{')).ignore_then(just(Token::Separator('}'))).ignored().map_with_span(|_, span| (Expr::Value(Value::Null), span)))
                 // Attempt to recover anything that looks like a function body but contains errors
                 .recover_with(nested_delimiters(
                     Token::Separator('{'),

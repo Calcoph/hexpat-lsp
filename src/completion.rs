@@ -29,7 +29,7 @@ pub fn completion(
                     );
                 }
             },
-            NamedASTNode::Expr(_,_,_) => (), // TODO: expr completion todo!()
+            NamedASTNode::Expr(_) => (), // TODO: expr completion todo!()
             NamedASTNode::Struct(v) => {
                 if v.name.1.end < ident_offset {
                     map.insert(
@@ -153,11 +153,9 @@ pub fn get_completion_of(
                 name.0.clone(),
                 ImCompleteCompletionItem::Variable(name.0.clone()),
             );
-            match lhs {
-                Some(lhs) => get_completion_of(lhs, definition_map, ident_offset),
-                None => return false,
-            }
+            get_completion_of(lhs, definition_map, ident_offset)
         },
-        Expr::Empty => false,
+        Expr::BitFieldEntry(_, _, _) => false, // TODO
+        Expr::EnumEntry(_, _, _) => false, // TODO
     }
 }

@@ -2,14 +2,14 @@ use std::collections::HashMap;
 
 use im_rc::Vector;
 
-use hexparser::m_parser::{Spanned, Expr, NamedASTNode, NormalASTNode};
+use hexparser::m_parser::{Spanned, Expr, NamedASTNode, NormalASTNode, Declaration};
 
 /// return (need_to_continue_search, founded reference)
 pub fn get_definition(ast: &(HashMap<String, NamedASTNode>, Vec<NormalASTNode>), ident_offset: usize) -> Option<Spanned<String>> {
     let mut vector = Vector::new();
     for (_, v) in ast.0.iter() {
         match v {
-            NamedASTNode::Expr(_, (name, span), _) => {
+            NamedASTNode::Expr(Declaration {type_: _, name: (name, span), body: _}) => {
                 if span.end < ident_offset {
                     vector.push_back((name.clone(), span.clone()));
                 }
@@ -116,23 +116,9 @@ pub fn get_definition_of_expr(
         Expr::Definition(_, (name, name_span), lhs) => {
             let new_decl = Vector::unit((name.clone(), name_span.clone()));
 
-            match lhs {
-                Some(lhs) => get_definition_of_expr(lhs, definition_ass_list.clone(), ident_offset),
-                None => {
-                    if ident_offset >= name_span.start && ident_offset < name_span.end {
-                        let index = definition_ass_list
-                            .iter()
-                            .position(|decl| decl.0 == *name);
-                        (
-                            false,
-                            index.map(|i| definition_ass_list.get(i).unwrap().clone()),
-                        )
-                    } else {
-                        (true, None)
-                    }
-                },
-            }
+            get_definition_of_expr(lhs, definition_ass_list.clone(), ident_offset)
         },
-        Expr::Empty => (false, None),
+        Expr::BitFieldEntry(_, _, _) => (false, None), // TODO
+        Expr::EnumEntry(_, _, _) => (false, None), // TODO
     }
 }

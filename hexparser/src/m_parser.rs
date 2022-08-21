@@ -67,8 +67,9 @@ pub enum Expr {
     Binary(Box<Spanned<Self>>, BinaryOp, Box<Spanned<Self>>), // something something_else
     Call(Box<Spanned<Self>>, Spanned<Vec<Spanned<Self>>>), // name arguments
     If(Box<Spanned<Self>>, Box<Spanned<Self>>, Box<Spanned<Self>>), // if condition body
-    Definition(Spanned<String>, Spanned<String>, Option<Box<Spanned<Self>>>), // type name everything_else
-    Empty, // Body of an empty block
+    Definition(Spanned<String>, Spanned<String>, Box<Spanned<Self>>), // type name everything_else
+    BitFieldEntry(Spanned<String>, Box<Spanned<Self>>, Box<Spanned<Self>>), // name length next_entry
+    EnumEntry(Spanned<String>, Box<Spanned<Self>>, Box<Spanned<Self>>) // name value next_entry
 }
 
 impl Expr {
@@ -95,7 +96,7 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
     recursive(|expr| {
         let val = filter_map(|span, tok| match tok {
             Token::Bool(x) => Ok(Expr::Value(Value::Bool(x))),
-            Token::Num(n) => Ok(Expr::Value(Value::Num(n.parse().unwrap()))),
+            Token::Num(_) => Ok(Expr::Value(Value::Num(42342.0))),// TODO: change 42342.0 to a proper (hex, bin, oct, dec) str->f64
             Token::Str(s) => Ok(Expr::Value(Value::Str(s))),
             Token::Char(c) => Ok(Expr::Value(Value::Char(c))),
             _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
@@ -107,6 +108,12 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
             _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
         })
         .labelled("identifier");
+
+        let builtin_func = filter_map(|span, tok| match tok {
+            Token::B(func) => Ok((func.clone(), span)),
+            _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
+        })
+        .labelled("built in function");
 
         // A list of expressions
         let items = expr
@@ -120,6 +127,9 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
         let atom = val
             .or(ident.map(Expr::Local))
             .map_with_span(|expr, span| (expr, span))
+            .or(builtin_func
+                .map_with_span(|a, span| (Expr::Local((a.0.to_string(), a.1)), span))
+            )
             // Atoms can also just be normal expressions, but surrounded with parentheses
             .or(expr
                 .clone()
@@ -187,12 +197,11 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
         let definition = ident.clone()
             .then(ident)
             .then(just(Token::Op("@".to_string())).ignore_then(raw_expr.clone()).or_not())
-            .then_ignore(just(Token::Separator(';')))
             //.map(|((name, val), body)| {
             .map_with_span(|((type_, name), val), span| {
                 let val = match val {
-                    Some(val) => Some(Box::new(val)),
-                    None => None
+                    Some(val) => Box::new(val),
+                    None => Box::new((Expr::Value(Value::Null), span.clone()))
                 };
                 (
                     Expr::Definition(type_, name, val),
@@ -283,8 +292,15 @@ pub enum SpanASTNode {
 }
 
 #[derive(Debug, Clone)]
+pub struct Declaration {
+    pub type_: Spanned<String>,
+    pub name: Spanned<String>,
+    pub body: Spanned<Expr>,
+}
+
+#[derive(Debug, Clone)]
 pub enum NamedASTNode {
-    Expr(Spanned<String>, Spanned<String>, Option<Spanned<Expr>>), // type name everything_else
+    Expr(Declaration), // type name everything_else
     Func(Func),
     Struct(Struct),
     Enum(Enum),
@@ -292,26 +308,26 @@ pub enum NamedASTNode {
     Bitfield(BitField)
 }
 
-impl NamedASTNode {
-    pub fn getname(&self) -> &Spanned<String> {
+impl NamedASTNode {// TODO: remove this impl
+    pub fn getname(&self) -> &Spanned<String> {// TODO: remove this func
         match self {
             NamedASTNode::Func(f) => &f.name,
             NamedASTNode::Struct(s) => &s.name,
             NamedASTNode::Enum(e) => &e.name,
             NamedASTNode::Namespace(n) => &n.name,
             NamedASTNode::Bitfield(b) => &b.name,
-            NamedASTNode::Expr(_, name, _) => name
+            NamedASTNode::Expr(d) => &d.name
         }
     }
 
-    pub fn getbody(&self) -> Option<&Spanned<Expr>> {
+    pub fn getbody(&self) -> Option<&Spanned<Expr>> { // TODO: remove this func
         match self {
             NamedASTNode::Func(f) => Some(&f.body),
             NamedASTNode::Struct(s) => Some(&s.body),
             NamedASTNode::Enum(e) => Some(&e.body),
             NamedASTNode::Namespace(n) => Some(&n.body),
             NamedASTNode::Bitfield(b) => Some(&b.body),
-            NamedASTNode::Expr(_, _, body) => body.as_ref(),
+            NamedASTNode::Expr(d) => Some(&d.body),
         }
     }
 }
@@ -319,6 +335,59 @@ impl NamedASTNode {
 #[derive(Debug)]
 pub enum NormalASTNode {
     Expr(Spanned<Expr>)
+}
+
+fn register_defined_names(named_nodes: &mut HashMap<String, NamedASTNode>, e: &Expr) -> Result<(), Simple<Token>> {
+    match e {
+        Expr::Error => Ok(()),
+        Expr::Value(_) => Ok(()),
+        Expr::Local(_) => Ok(()),
+        Expr::Then(e1, e2) => {
+            match register_defined_names(named_nodes, &e1.0) {
+                Ok(_) => register_defined_names(named_nodes, &e2.0),
+                Err(e) => Err(e),
+            }
+        },
+        Expr::Binary(e1, _, e2) => match register_defined_names(named_nodes, &e1.0) {
+            Ok(_) => register_defined_names(named_nodes, &e2.0),
+            Err(e) => Err(e),
+        },
+        Expr::Call(e1, e2) => match register_defined_names(named_nodes, &e1.0) {
+            Ok(_) => {
+                for e in &e2.0 {
+                    match register_defined_names(named_nodes, &e.0) {
+                        Ok(_) => (),
+                        Err(e) => return Err(e),
+                    };    
+                };
+                Ok(())
+            },
+            Err(e) => Err(e),
+        },
+        Expr::If(e1, e2, e3) => match register_defined_names(named_nodes, &e1.0) {
+            Ok(_) => match register_defined_names(named_nodes, &e2.0) {
+                Ok(_) => register_defined_names(named_nodes, &e3.0),
+                Err(e) => Err(e),
+            },
+            Err(e) => Err(e),
+        },
+        Expr::Definition(type_, (name, name_span), body) => {
+            let expr = NamedASTNode::Expr(Declaration {
+                type_: type_.clone(),
+                name: (name.clone(), name_span.clone()),
+                body: *body.clone(),
+            });
+            if named_nodes.insert(name.clone(), expr).is_some() {
+                return Err(Simple::custom(
+                    name_span.clone(),
+                    format!("Variable '{}' already exists", name),
+                ));
+            }
+            register_defined_names(named_nodes, &body.0)
+        },
+        Expr::BitFieldEntry(_, _, _) => Ok(()), // This should never happen
+        Expr::EnumEntry(_, _, _) => Ok(()), // This should never happen
+    }
 }
 
 // Hashmap is for named nodes: Structs, namespaces, funcs, etc.
@@ -336,20 +405,12 @@ pub fn parser() -> impl Parser<Token, (HashMap<String, NamedASTNode>, Vec<Normal
             let mut normal_nodes = Vec::new();
             for node in nodes {
                 match node {
-                    SpanASTNode::Expr((e, span)) => match e {
-                        Expr::Definition(a, (name, name_span), c) => {
-                            let e = match c {
-                                Some(exp) => NamedASTNode::Expr(a, (name.clone(), name_span.clone()), Some(*exp)),
-                                None => NamedASTNode::Expr(a, (name.clone(), name_span.clone()), None)
-                            };
-                            if named_nodes.insert(name.clone(), e).is_some() {
-                                return Err(Simple::custom(
-                                    name_span.clone(),
-                                    format!("Variable '{}' already exists", name),
-                                ));
-                            }
-                        },
-                        _ => normal_nodes.push(NormalASTNode::Expr((e, span)))
+                    SpanASTNode::Expr((e, span)) => {
+                        normal_nodes.push(NormalASTNode::Expr((e.clone(), span.clone())));
+                        match register_defined_names(&mut named_nodes, &e) {
+                            Ok(_) => (),
+                            Err(e) => return Err(e),
+                        };
                     },
                     SpanASTNode::Func((name, name_span), f) => {
                         let f = NamedASTNode::Func(f);

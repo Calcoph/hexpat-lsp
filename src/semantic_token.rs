@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use parserlib::LEGEND_TYPE;
 use tower_lsp::lsp_types::SemanticTokenType;
 
-use hexparser::{ImCompleteSemanticToken, m_parser::{Spanned, Expr, NormalASTNode, NamedASTNode}};
+use hexparser::{ImCompleteSemanticToken, m_parser::{Spanned, Expr, NormalASTNode, NamedASTNode, Declaration}};
 
 pub fn semantic_token_from_ast(ast: &(HashMap<String, NamedASTNode>, Vec<NormalASTNode>)) -> Vec<ImCompleteSemanticToken> {
     let mut semantic_tokens = vec![];
@@ -81,7 +81,7 @@ pub fn semantic_token_from_ast(ast: &(HashMap<String, NamedASTNode>, Vec<NormalA
                 });
                 semantic_token_from_expr(&v.body, &mut semantic_tokens);
             },
-            NamedASTNode::Expr(_, (_, span), lhs) => {
+            NamedASTNode::Expr(Declaration { type_: _, name: (_, span), body: lhs }) => {
                 semantic_tokens.push(ImCompleteSemanticToken {
                     start: span.start,
                     length: span.len(),
@@ -90,9 +90,7 @@ pub fn semantic_token_from_ast(ast: &(HashMap<String, NamedASTNode>, Vec<NormalA
                         .position(|item| item == &SemanticTokenType::VARIABLE)
                         .unwrap(),
                 });
-                if let Some(lhs) = lhs {
-                    semantic_token_from_expr(lhs, &mut semantic_tokens);
-                }
+                semantic_token_from_expr(lhs, &mut semantic_tokens);
             },
         }
     });
@@ -149,7 +147,7 @@ pub fn semantic_token_from_expr(
             semantic_token_from_expr(consequent, semantic_tokens);
             semantic_token_from_expr(alternative, semantic_tokens);
         }
-        Expr::Definition(type_, (_, name_span), rhs) => { // TODO: The type
+        Expr::Definition(_, (_, name_span), rhs) => { // TODO: The type
             semantic_tokens.push(ImCompleteSemanticToken {
                 start: name_span.start,
                 length: name_span.len(),
@@ -158,11 +156,9 @@ pub fn semantic_token_from_expr(
                     .position(|item| item == &SemanticTokenType::VARIABLE)
                     .unwrap(),
             });
-            match rhs {
-                Some(rhs) => semantic_token_from_expr(rhs, semantic_tokens),
-                None => (),
-            };
+            semantic_token_from_expr(rhs, semantic_tokens)
         },
-        Expr::Empty => (),
+        Expr::BitFieldEntry(_, _, _) => (),// TODO
+        Expr::EnumEntry(_, _, _) => (), // TODO
     }
 }

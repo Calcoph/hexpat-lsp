@@ -51,8 +51,25 @@
     "semanticTokenTypes": [
         {
             "id": "bitfield",
-            "description": "A field of bits"
+            "description": "A field of bits",
+            "superType": "struct"
         }
+    ],
+    "semanticTokenScopes": [
+      {
+        "scopes": {
+          "bitfield": ["entity.name.type.bitfield",
+          "entity.name.type.result",
+          "entity.name.type",
+          "entity.name.type.numeric",
+          "entity.name.type.primitive",
+          "support.class",
+          "support.type",
+          "storage.type.primitive",
+          "storage.type"
+          ]
+        }
+      }
     ]
   },
   "scripts": {
