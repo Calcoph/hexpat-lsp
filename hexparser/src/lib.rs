@@ -268,7 +268,17 @@ pub fn parse(
     Vec<Simple<String>>,
     Vec<ImCompleteSemanticToken>,
 ) {
-    let (tokens, errs) = lexer().parse_recovery(src);
+    let mut cur_start = 0;
+    let mut last_indx = 0;
+    let len = src.as_bytes().len();
+    let (tokens, errs) = lexer().parse_recovery(
+        Stream::from_iter(len..len + 1, src.char_indices()
+        .map(|(index, chr)| {
+            let res = (chr, cur_start..index+1);
+            cur_start += index - last_indx;
+            last_indx = index;
+            res
+        })));
 
     let (ast, tokenize_errors, semantic_tokens) = if let Some(tokens) = tokens {
         // info!("Tokens = {:?}", tokens);
