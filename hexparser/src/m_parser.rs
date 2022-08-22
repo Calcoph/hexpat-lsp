@@ -76,6 +76,7 @@ pub enum Expr {
     MemberAccess(Box<Spanned<Self>>, Spanned<String>),
     ArrayAccess(Box<Spanned<Self>>, Box<Spanned<Self>>),
     NamespaceAccess(Box<Spanned<Self>>, Spanned<String>),
+    Using(Box<Spanned<Self>>, Box<Spanned<Self>>), // new_name old_name
 }
 
 impl Expr {
@@ -493,9 +494,25 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
                 let span = a.1.start..b.1.end;
                 (Expr::Then(Box::new(a), Box::new(b)), span)
             });
+        
+        let using = just(Token::K(Keyword::Using))
+            .ignore_then(ident.map_with_span(|a, span| (Expr::Local(a), span)))
+            .then(
+                just(Token::Op("=".to_string()))
+                    .ignore_then(ident.map_with_span(|a, span| (Expr::Local(a), span))).or_not()
+            ).map_with_span(|(new_type, old_type), span| {
+                (Expr::Using(
+                    Box::new(new_type),
+                    Box::new(match old_type {
+                        Some(a) => a,
+                        None => (Expr::Value(Value::Null), span),
+                    })
+                ), span)
+            });
 
         definition
             .or(assignment)
+            .or(using)
             // Expressions, chained by semicolons, are statements
             .or(block_chain)
         //block_chain
@@ -637,6 +654,10 @@ fn register_defined_names(named_nodes: &mut HashMap<String, NamedASTNode>, e: &E
         Expr::NamespaceAccess(e, _) => register_defined_names(named_nodes, &e.0),
         Expr::Dollar => Ok(()),
         Expr::Unary(_, e) => register_defined_names(named_nodes, &e.0),
+        Expr::Using(e1, e2) => match register_defined_names(named_nodes, &e1.0) {
+            Ok(_) => register_defined_names(named_nodes, &e2.0),
+            Err(e) => Err(e),
+        },
     }
 }
 

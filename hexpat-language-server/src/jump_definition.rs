@@ -124,5 +124,6 @@ pub fn get_definition_of_expr(
         Expr::NamespaceAccess(_, _) => (false, None), // TODO
         Expr::Dollar => (false, None), // TODO
         Expr::Unary(_, _) => (false, None), // TODO
+        Expr::Using(_, _) => (false, None), // TODO
     }
 }
