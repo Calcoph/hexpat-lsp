@@ -58,6 +58,8 @@ pub fn type_inference(expr: &Spanned<Expr>, symbol_type_table: &mut HashMap<Span
         Expr::Dollar => (),
         Expr::Unary(_, _) => (),
         Expr::Using(_, _) => (),
+        Expr::Continue => (),
+        Expr::Break => (),
     }
 }
 // fn eval_expr(

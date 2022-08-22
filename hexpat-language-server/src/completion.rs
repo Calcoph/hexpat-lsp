@@ -164,5 +164,7 @@ pub fn get_completion_of(
         Expr::Dollar => false, // TODO
         Expr::Unary(_, _) => false, // TODO
         Expr::Using(_, _) => false, // TODO
+        Expr::Continue => false, // TODO
+        Expr::Break => false, // TODO
     }
 }

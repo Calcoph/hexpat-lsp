@@ -125,5 +125,7 @@ pub fn get_definition_of_expr(
         Expr::Dollar => (false, None), // TODO
         Expr::Unary(_, _) => (false, None), // TODO
         Expr::Using(_, _) => (false, None), // TODO
+        Expr::Continue => (false, None), // TODO
+        Expr::Break => (false, None), // TODO
     }
 }

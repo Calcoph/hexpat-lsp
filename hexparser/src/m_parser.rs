@@ -77,6 +77,8 @@ pub enum Expr {
     ArrayAccess(Box<Spanned<Self>>, Box<Spanned<Self>>),
     NamespaceAccess(Box<Spanned<Self>>, Spanned<String>),
     Using(Box<Spanned<Self>>, Box<Spanned<Self>>), // new_name old_name
+    Continue,
+    Break,
 }
 
 impl Expr {
@@ -505,19 +507,22 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
                     Box::new(new_type),
                     Box::new(match old_type {
                         Some(a) => a,
-                        None => (Expr::Value(Value::Null), span),
+                        None => (Expr::Value(Value::Null), span.clone()),
                     })
                 ), span)
             });
+        
+        let control_flow = just(Token::K(Keyword::Break)).map_with_span(|_, span| (Expr::Break, span))
+            .or(just(Token::K(Keyword::Continue)).map_with_span(|_, span| (Expr::Continue, span)));
 
-        definition
-            .or(assignment)
-            .or(using)
-            // Expressions, chained by semicolons, are statements
-            .or(block_chain)
-        //block_chain
-            .or(raw_expr)
-            .then(just(Token::Separator(';')).ignore_then(expr.or_not()).repeated())
+        choice((
+            definition,
+            assignment,
+            using,
+            block_chain,
+            raw_expr,
+            control_flow
+        )).then(just(Token::Separator(';')).ignore_then(expr.or_not()).repeated())
             .foldl(|a, b| {
                 let span = a.1.clone(); // TODO: Not correct
                 (
@@ -658,6 +663,8 @@ fn register_defined_names(named_nodes: &mut HashMap<String, NamedASTNode>, e: &E
             Ok(_) => register_defined_names(named_nodes, &e2.0),
             Err(e) => Err(e),
         },
+        Expr::Continue => Ok(()),
+        Expr::Break => Ok(()),
     }
 }
 

@@ -167,5 +167,7 @@ pub fn semantic_token_from_expr(
         Expr::Dollar => (), // TODO
         Expr::Unary(_, _) => (), // TODO
         Expr::Using(_, _) => (), // TODO
+        Expr::Continue => (), // TODO
+        Expr::Break => (), // TODO
     }
 }
