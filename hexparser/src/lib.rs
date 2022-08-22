@@ -274,7 +274,8 @@ pub fn parse(
     let (tokens, errs) = lexer().parse_recovery(
         Stream::from_iter(len..len + 1, src.char_indices()
         .map(|(index, chr)| {
-            let res = (chr, cur_start..index+1);
+            let index = index + 1;
+            let res = (chr, cur_start..index);
             cur_start += index - last_indx;
             last_indx = index;
             res
