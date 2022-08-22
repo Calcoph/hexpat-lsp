@@ -150,6 +150,10 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
         let atom = val.map_with_span(|expr, span| (expr, span))
             .or(array_access)
             .or(member_access)
+            .or(
+                just(Token::Op("$".to_string()))
+                .map_with_span(|_, span: Range<usize>| (Expr::Local(("$".to_string(), span.clone())), span))
+            )
             //.or(ident.map(Expr::Local).map_with_span(|expr, span| (expr, span)))
             .or(builtin_func
                 .map_with_span(|a, span| (Expr::Local((a.0.to_string(), a.1)), span))
