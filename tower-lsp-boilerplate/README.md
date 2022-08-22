@@ -1,0 +1,1 @@
+This repository uses th "IWANABETHATGUY/towerlsp-boilerplate" as a template, which is licensed under MIT license. A copy of the license is provided in this folder.
