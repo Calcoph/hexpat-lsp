@@ -1,3 +1,5 @@
-# (WIP)
+Language Server Provider for ImHex's pattern language.
 
-This does not work, nad it probably won't ever. If you want syntax highlighting, see here: [(only for vscode)](https://github.com/Calcoph/vscode-hexpat)
+It is still buggy. For more stable syntax highlighting, see here: [(only for vscode)](https://github.com/Calcoph/vscode-hexpat)
+
+Vscode extension for this lsp: [https://github.com/Calcoph/vscode-hexpat-lsp](https://github.com/Calcoph/vscode-hexpat-lsp)
