@@ -160,6 +160,7 @@ pub fn semantic_token_from_expr(
         },
         Expr::BitFieldEntry(_, _, _) => (),// TODO
         Expr::EnumEntry(_, _, _) => (), // TODO
-        Expr::Access(_, _) => (), // TODO
+        Expr::MemberAccess(_, _) => (), // TODO
+        Expr::ArrayAccess(_, _) => (), // TODO
     }
 }

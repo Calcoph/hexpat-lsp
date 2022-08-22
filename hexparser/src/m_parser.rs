@@ -70,7 +70,8 @@ pub enum Expr {
     Definition(Spanned<String>, Spanned<String>, Box<Spanned<Self>>), // type name everything_else
     BitFieldEntry(Spanned<String>, Box<Spanned<Self>>, Box<Spanned<Self>>), // name length next_entry
     EnumEntry(Spanned<String>, Box<Spanned<Self>>, Box<Spanned<Self>>), // name value next_entry
-    Access(Box<Spanned<Self>>, Spanned<String>),
+    MemberAccess(Box<Spanned<Self>>, Spanned<String>),
+    ArrayAccess(Box<Spanned<Self>>, Box<Spanned<Self>>),
 }
 
 impl Expr {
@@ -131,14 +132,25 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
                 .ignore_then(ident)
                 .repeated()
             ).foldl(|a, b| {
+                let span = b.1.clone(); // TODO: Not correct
+                (Expr::MemberAccess(Box::new(a), b), span)
+            });
+        let array_access = ident.clone()
+            .map_with_span(|a, span| (Expr::Local(a), span))
+            .then(
+                just(Token::Separator('['))
+                .ignore_then(expr.clone())
+                .then_ignore(just(Token::Separator(']')))
+            ).map(|(a, b)| {
                 let span = a.1.clone(); // TODO: Not correct
-                (Expr::Access(Box::new(a), b), span)
+                (Expr::ArrayAccess(Box::new(a), Box::new(b)), span)
             });
 
         // 'Atoms' are expressions that contain no ambiguity
         let atom = val.map_with_span(|expr, span| (expr, span))
+            .or(array_access)
             .or(member_access)
-            .or(ident.map(Expr::Local).map_with_span(|expr, span| (expr, span)))
+            //.or(ident.map(Expr::Local).map_with_span(|expr, span| (expr, span)))
             .or(builtin_func
                 .map_with_span(|a, span| (Expr::Local((a.0.to_string(), a.1)), span))
             )
@@ -205,13 +217,12 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
                 (Expr::Binary(Box::new(a), op, Box::new(b)), span)
             });
         
-        let array_definition = expr.clone()
+        let array_definition = expr.clone() // TODO: Custom parser instead of "expr"
             .delimited_by(just(Token::Separator('[')), just(Token::Separator(']')))
             .recover_with(nested_delimiters(
-                Token::Separator('['),
-                Token::Separator(']'),
+                Token::Separator('('),
+                Token::Separator(')'),
                 [
-                    (Token::Separator('('), Token::Separator(')')),
                     (Token::Separator('{'), Token::Separator('}')),
                 ],
                 |span| (Expr::Error, span),
@@ -220,8 +231,21 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
         
         let definition = ident.clone()
             .then(ident)
-            .then_ignore(array_definition.or_not())
+            .then_ignore(
+                array_definition
+                .or(
+                    just(Token::Separator('['))
+                    .ignore_then(just(Token::Separator(']')))
+                    .ignored()
+                    .map_with_span(|(), span| (Expr::Value(Value::Null), span))
+                ).or_not())
             .then(just(Token::Op("@".to_string())).ignore_then(raw_expr.clone()).or_not())
+            .then_ignore(
+                just(Token::Separator('['))
+                    .then(just(Token::Separator('[')))
+                    .then(take_until(just(Token::Separator(']')).then(just(Token::Separator(']')))))
+                    .or_not()
+            )
             //.map(|((name, val), body)| {
             .map_with_span(|((type_, name), val), span| {
                 let val = match val {
@@ -411,7 +435,11 @@ fn register_defined_names(named_nodes: &mut HashMap<String, NamedASTNode>, e: &E
         },
         Expr::BitFieldEntry(_, _, _) => Ok(()), // This should never happen
         Expr::EnumEntry(_, _, _) => Ok(()), // This should never happen
-        Expr::Access(e, _) => register_defined_names(named_nodes, &e.0),
+        Expr::MemberAccess(e, _) => register_defined_names(named_nodes, &e.0),
+        Expr::ArrayAccess(e1, e2) => match register_defined_names(named_nodes, &e1.0) {
+            Ok(_) => register_defined_names(named_nodes, &e2.0),
+            Err(e) => Err(e),
+        },
     }
 }
 

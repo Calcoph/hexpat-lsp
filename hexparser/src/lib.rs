@@ -51,7 +51,8 @@ pub fn type_inference(expr: &Spanned<Expr>, symbol_type_table: &mut HashMap<Span
         Expr::Definition(_, _, _) => (),
         Expr::BitFieldEntry(_, _, _) => (),
         Expr::EnumEntry(_, _, _) => (),
-        Expr::Access(_, _) => (),
+        Expr::MemberAccess(_, _) => (),
+        Expr::ArrayAccess(_, _) => (),
     }
 }
 // fn eval_expr(

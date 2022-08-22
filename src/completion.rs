@@ -157,6 +157,7 @@ pub fn get_completion_of(
         },
         Expr::BitFieldEntry(_, _, _) => false, // TODO
         Expr::EnumEntry(_, _, _) => false, // TODO
-        Expr::Access(_, _) => false, // TODO
+        Expr::MemberAccess(_, _) => false, // TODO
+        Expr::ArrayAccess(_, _) => false, // TODO
     }
 }

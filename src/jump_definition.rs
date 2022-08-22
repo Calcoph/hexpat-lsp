@@ -120,6 +120,7 @@ pub fn get_definition_of_expr(
         },
         Expr::BitFieldEntry(_, _, _) => (false, None), // TODO
         Expr::EnumEntry(_, _, _) => (false, None), // TODO
-        Expr::Access(_, _) => (false, None), // TODO
+        Expr::MemberAccess(_, _) => (false, None), // TODO
+        Expr::ArrayAccess(_, _) => (false, None), // TODO
     }
 }
