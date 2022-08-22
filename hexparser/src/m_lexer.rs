@@ -231,8 +231,8 @@ pub fn lexer() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
     let directive = just("#").then(take_until(just('\n'))).padded();
 
     token
-        .padded_by(comment.or(directive).repeated())
         .map_with_span(|tok, span| (tok, span))
+        .padded_by(comment.or(directive).repeated())
         .padded()
         .repeated()
 }
