@@ -179,11 +179,15 @@ pub fn lexer() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
         .map(Token::Str);
 
     // A parser for operators
-    let op = one_of(":@=!><&|^=+-*/%~?$")
-        .repeated()
-        .at_least(1)
-        .collect::<String>()
-        .map(Token::Op);
+    let op = just("::").map(|_| "::".to_string())
+            .or(one_of("=!><").then(just('=')).map(|(c, _)| c.to_string() + "="))
+            .or(just("&&").map(|_| "&&".to_string()))
+            .or(just("||").map(|_| "||".to_string()))
+            .or(just("^^").map(|_| "^^".to_string()))
+            .or(just("<<").map(|_| "<<".to_string()))
+            .or(just(">>").map(|_| "<<".to_string()))
+            .or(one_of("=:+-*/%@><!|&^~?$").map(|c: char| c.to_string()))
+            .map(Token::Op);
 
     // A parser for control characters (delimiters, semicolons, etc.)
     let ctrl = one_of("()[]{};,.")
