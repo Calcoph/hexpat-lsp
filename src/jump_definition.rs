@@ -121,5 +121,8 @@ pub fn get_definition_of_expr(
         Expr::MemberAccess(_, _) => (false, None), // TODO
         Expr::ArrayAccess(_, _) => (false, None), // TODO
         Expr::Ternary(_, _, _) => (false, None), // TODO
+        Expr::NamespaceAccess(_, _) => (false, None), // TODO
+        Expr::Dollar => (false, None), // TODO
+        Expr::Unary(_, _) => (false, None), // TODO
     }
 }

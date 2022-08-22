@@ -62,10 +62,12 @@ impl std::fmt::Display for Value {
 pub enum Expr {
     Error,
     Value(Value),
+    Dollar,
     Local(Spanned<String>),
     Then(Box<Spanned<Self>>, Box<Spanned<Self>>),
-    Binary(Box<Spanned<Self>>, BinaryOp, Box<Spanned<Self>>), // something something_else
-    Ternary(Box<Spanned<Self>>, Box<Spanned<Self>>, Box<Spanned<Self>>), // something something_else
+    Unary(UnaryOp, Box<Spanned<Self>>), // something
+    Binary(Box<Spanned<Self>>, BinaryOp, Box<Spanned<Self>>), // something operator something_else
+    Ternary(Box<Spanned<Self>>, Box<Spanned<Self>>, Box<Spanned<Self>>), // something ? something_else : something_else_else
     Call(Box<Spanned<Self>>, Spanned<Vec<Spanned<Self>>>), // name arguments
     If(Box<Spanned<Self>>, Box<Spanned<Self>>, Box<Spanned<Self>>), // if condition body
     Definition(Spanned<String>, Spanned<String>, Box<Spanned<Self>>), // type name everything_else
@@ -73,6 +75,7 @@ pub enum Expr {
     EnumEntry(Spanned<String>, Box<Spanned<Self>>, Box<Spanned<Self>>), // name value next_entry
     MemberAccess(Box<Spanned<Self>>, Spanned<String>),
     ArrayAccess(Box<Spanned<Self>>, Box<Spanned<Self>>),
+    NamespaceAccess(Box<Spanned<Self>>, Spanned<String>),
 }
 
 impl Expr {
@@ -108,6 +111,15 @@ pub enum BinaryOp {
     LOr,
 }
 
+#[derive(Clone, Debug)]
+pub enum UnaryOp {
+    Add,
+    Sub,
+    LNot,
+    BNot,
+    
+}
+
 fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone {
     recursive(|expr| {
         let val = filter_map(|span, tok| match tok {
@@ -132,8 +144,7 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
         .labelled("built in function");
 
         // A list of expressions
-        let items = expr
-            .clone()
+        let items = expr.clone()
             .chain(just(Token::Separator(',')).ignore_then(expr.clone()).repeated())
             .then_ignore(just(Token::Separator(',')).or_not())
             .or_not()
@@ -145,9 +156,21 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
                 just(Token::Separator('.'))
                 .ignore_then(ident)
                 .repeated()
+                .at_least(1)
             ).foldl(|a, b| {
                 let span = b.1.clone(); // TODO: Not correct
                 (Expr::MemberAccess(Box::new(a), b), span)
+            });
+        let namespace_access = ident.clone()
+            .map_with_span(|a, span| (Expr::Local(a), span))
+            .then(
+                just(Token::Op("::".to_string()))
+                .ignore_then(ident)
+                .repeated()
+                .at_least(1)
+            ).foldl(|a, b| {
+                let span = b.1.clone(); // TODO: Not correct
+                (Expr::NamespaceAccess(Box::new(a), b), span)
             });
         let array_access = ident.clone()
             .map_with_span(|a, span| (Expr::Local(a), span))
@@ -160,32 +183,56 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
                 (Expr::ArrayAccess(Box::new(a), Box::new(b)), span)
             });
 
+        let assignable = choice((
+            just(Token::Op("$".to_string()))
+                .map_with_span(|_, span| (Expr::Dollar, span)),
+            array_access.clone(),
+            namespace_access.clone(),
+            member_access.clone(),
+            ident.clone()
+                .map_with_span(|a, span| (Expr::Local(a), span))
+        ));
+
+        let assignment = assignable.then(
+            choice((
+                just(Token::Op("+".to_string())),
+                just(Token::Op("-".to_string())),
+                just(Token::Op("*".to_string())),
+                just(Token::Op("/".to_string())),
+                just(Token::Op("%".to_string())),
+                just(Token::Op("|".to_string())),
+                just(Token::Op("&".to_string())),
+                just(Token::Op("^".to_string())),
+            )).or_not()
+        ).ignore_then(just(Token::Op("=".to_string())))
+        .ignore_then(expr.clone());
+
         // 'Atoms' are expressions that contain no ambiguity
-        let atom = val.map_with_span(|expr, span| (expr, span))
-            .or(array_access)
-            .or(member_access)
-            .or(
-                just(Token::Op("$".to_string()))
-                .map_with_span(|_, span: Range<usize>| (Expr::Local(("$".to_string(), span.clone())), span))
-            )
+        let atom = choice((
+            val.map_with_span(|expr, span| (expr, span)),
+            array_access,
+            namespace_access,
+            member_access,
+            ident.map_with_span(|a, span| (Expr::Local(a), span)),
+            just(Token::Op("$".to_string()))
+                .map_with_span(|_, span: Range<usize>| (Expr::Local(("$".to_string(), span.clone())), span)),
             //.or(ident.map(Expr::Local).map_with_span(|expr, span| (expr, span)))
-            .or(builtin_func
-                .map_with_span(|a, span| (Expr::Local((a.0.to_string(), a.1)), span))
-            )
+            builtin_func
+                .map_with_span(|a, span| (Expr::Local((a.0.to_string(), a.1)), span)),
             // Atoms can also just be normal expressions, but surrounded with parentheses
-            .or(expr
-                .clone()
-                .delimited_by(just(Token::Separator('(')), just(Token::Separator(')'))))
-            // Attempt to recover anything that looks like a parenthesised expression but contains errors
-            .recover_with(nested_delimiters(
-                Token::Separator('('),
-                Token::Separator(')'),
-                [
-                    (Token::Separator('['), Token::Separator(']')),
-                    (Token::Separator('{'), Token::Separator('}')),
-                ],
-                |span| (Expr::Error, span),
-            ));
+            expr.clone()
+                .delimited_by(just(Token::Separator('(')), just(Token::Separator(')'))),
+        ))
+        // Attempt to recover anything that looks like a parenthesised expression but contains errors
+        .recover_with(nested_delimiters(
+            Token::Separator('('),
+            Token::Separator(')'),
+            [
+                (Token::Separator('['), Token::Separator(']')),
+                (Token::Separator('{'), Token::Separator('}')),
+            ],
+            |span| (Expr::Error, span),
+        ));
 
         // Function calls have very high precedence so we prioritise them
         let call = atom
@@ -200,15 +247,28 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
                 (Expr::Call(Box::new(f), args), span)
             });
         
-        //let assign = atom.then();
+        let unary = choice((
+            just(Token::Op("+".to_string())).to(UnaryOp::Add),
+            just(Token::Op("-".to_string())).to(UnaryOp::Sub),
+            just(Token::Op("~".to_string())).to(UnaryOp::LNot),
+            just(Token::Op("!".to_string())).to(UnaryOp::BNot),
+        )).or_not().then(call)
+          .map_with_span(|(op, a), span| {
+            match op {
+                Some(o) => (Expr::Unary(o, Box::new(a)), span),
+                None => a,
+            }
+          });
 
         // Product ops (multiply and divide) have equal precedence
-        let op = just(Token::Op("*".to_string()))
-            .to(BinaryOp::Mul)
-            .or(just(Token::Op("/".to_string())).to(BinaryOp::Div))
-            .or(just(Token::Op("%".to_string())).to(BinaryOp::Mod));
-        let product = call.clone()
-            .then(op.then(call).repeated())
+        let op = choice((
+            just(Token::Op("*".to_string())).to(BinaryOp::Mul),
+            just(Token::Op("/".to_string())).to(BinaryOp::Div),
+            just(Token::Op("%".to_string())).to(BinaryOp::Mod),
+        ));
+
+        let product = unary.clone()
+            .then(op.then(unary).repeated())
             .foldl(|a, (op, b)| {
                 let span = a.1.start..b.1.end;
                 (Expr::Binary(Box::new(a), op, Box::new(b)), span)
@@ -268,11 +328,13 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
             });
         
         // Relationship
-        let op = just(Token::Op(">=".to_string()))
-            .to(BinaryOp::GreaterEqual)
-            .or(just(Token::Op("<=".to_string())).to(BinaryOp::LessEqual))
-            .or(just(Token::Op(">".to_string())).to(BinaryOp::Greater))
-            .or(just(Token::Op("<".to_string())).to(BinaryOp::Less));
+        let op = choice((
+            just(Token::Op(">=".to_string())).to(BinaryOp::GreaterEqual),
+            just(Token::Op("<=".to_string())).to(BinaryOp::LessEqual),
+            just(Token::Op(">".to_string())).to(BinaryOp::Greater),
+            just(Token::Op("<".to_string())).to(BinaryOp::Less)
+        ));
+        
         let relation = b_or.clone()
             .then(op.then(b_or).repeated())
             .foldl(|a, (op, b)| {
@@ -356,7 +418,13 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
                     .ignore_then(just(Token::Separator(']')))
                     .ignored()
                     .map_with_span(|(), span| (Expr::Value(Value::Null), span))
-                ).or_not())
+                ).or_not()
+                .then_ignore(
+                    just(Token::K(Keyword::Out))
+                    .or(just(Token::K(Keyword::In)))
+                    .or_not()
+                )
+            )
             .then(just(Token::Op("@".to_string())).ignore_then(raw_expr.clone()).or_not())
             .then_ignore(
                 just(Token::Separator('['))
@@ -427,10 +495,11 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
             });
 
         definition
+            .or(assignment)
             // Expressions, chained by semicolons, are statements
-            .or(block_chain.clone())
+            .or(block_chain)
         //block_chain
-            .or(raw_expr.clone())
+            .or(raw_expr)
             .then(just(Token::Separator(';')).ignore_then(expr.or_not()).repeated())
             .foldl(|a, b| {
                 let span = a.1.clone(); // TODO: Not correct
@@ -565,19 +634,23 @@ fn register_defined_names(named_nodes: &mut HashMap<String, NamedASTNode>, e: &E
             },
             Err(e) => Err(e),
         },
+        Expr::NamespaceAccess(e, _) => register_defined_names(named_nodes, &e.0),
+        Expr::Dollar => Ok(()),
+        Expr::Unary(_, e) => register_defined_names(named_nodes, &e.0),
     }
 }
 
 // Hashmap is for named nodes: Structs, namespaces, funcs, etc.
 // Vec is for normal nodes: Expressions, whiles, fors, etc.
 pub fn parser() -> impl Parser<Token, (HashMap<String, NamedASTNode>, Vec<NormalASTNode>), Error = Simple<Token>> + Clone {
-    funcs_parser()
-        .or(struct_parser())
-        .or(enum_parser())
-        .or(namespace_parser())
-        .or(bitfield_parser())
-        .or(expr_parser().map(|expr| SpanASTNode::Expr(expr)))
-        .repeated()
+    choice((
+        funcs_parser(),
+        struct_parser(),
+        enum_parser(),
+        namespace_parser(),
+        bitfield_parser(),
+        expr_parser().map(|expr| SpanASTNode::Expr(expr)),
+    )).repeated()
         .try_map(|nodes, _| {
             let mut named_nodes = HashMap::new();
             let mut normal_nodes = Vec::new();

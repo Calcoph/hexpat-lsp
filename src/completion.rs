@@ -160,5 +160,8 @@ pub fn get_completion_of(
         Expr::MemberAccess(_, _) => false, // TODO
         Expr::ArrayAccess(_, _) => false, // TODO
         Expr::Ternary(_, _, _) => false, // TODO
+        Expr::NamespaceAccess(_, _) => false, // TODO
+        Expr::Dollar => false, // TODO
+        Expr::Unary(_, _) => false, // TODO
     }
 }

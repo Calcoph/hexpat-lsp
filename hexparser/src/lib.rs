@@ -54,6 +54,9 @@ pub fn type_inference(expr: &Spanned<Expr>, symbol_type_table: &mut HashMap<Span
         Expr::MemberAccess(_, _) => (),
         Expr::ArrayAccess(_, _) => (),
         Expr::Ternary(_, _, _) => (),
+        Expr::NamespaceAccess(_, _) => (),
+        Expr::Dollar => (),
+        Expr::Unary(_, _) => (),
     }
 }
 // fn eval_expr(

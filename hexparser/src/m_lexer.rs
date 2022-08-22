@@ -112,38 +112,20 @@ impl ToString for BuiltFunc {
 
 pub fn lexer() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
     // Integer parsers
-    let hex_num = just('-').or_not().then_ignore(just('0'))
-        .then_ignore(just('x').or(just('X')))
-        .then(one_of("0123456789ABCDEFabcdef").repeated().at_least(1))
-        .map(|(minus, rest)|{
-            let s: String = rest.into_iter().collect();
-            match minus {
-                Some(m) => Token::Num(String::from(m)+&s),
-                None => Token::Num(s),
-            }
-        });
+    let hex_num = just('0')
+        .ignore_then(just('x').or(just('X')))
+        .ignore_then(one_of("0123456789ABCDEFabcdef").repeated().at_least(1).collect())
+        .map(Token::Num);
 
-    let oct_num = just('-').or_not().then_ignore(just('0'))
-        .then_ignore(just('o').or(just('O')))
-        .then(one_of("01234567").repeated().at_least(1))
-        .map(|(minus, rest)|{
-            let s: String = rest.into_iter().collect();
-            match minus {
-                Some(m) => Token::Num(String::from(m)+&s),
-                None => Token::Num(s),
-            }
-        });
+    let oct_num = just('0')
+        .ignore_then(just('o').or(just('O')))
+        .ignore_then(one_of("01234567").repeated().at_least(1).collect())
+        .map(Token::Num);
 
-    let bin_num = just('-').or_not().then_ignore(just('0'))
-        .then_ignore(just('b').or(just('B')))
-        .then(one_of("01").repeated().at_least(1))
-        .map(|(minus, rest)|{
-            let s: String = rest.into_iter().collect();
-            match minus {
-                Some(m) => Token::Num(String::from(m)+&s),
-                None => Token::Num(s),
-            }
-        });
+    let bin_num = just('0')
+        .ignore_then(just('b').or(just('B')))
+        .ignore_then(one_of("01").repeated().at_least(1).collect())
+        .map(Token::Num);
 
     let dec_num = text::int(10) // TODO: differentiate between ints and floats
         .chain::<char, _, _>(just('.').chain(text::digits(10)).or_not().flatten())

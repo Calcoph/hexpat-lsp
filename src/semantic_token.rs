@@ -163,5 +163,8 @@ pub fn semantic_token_from_expr(
         Expr::MemberAccess(_, _) => (), // TODO
         Expr::ArrayAccess(_, _) => (), // TODO
         Expr::Ternary(_, _, _) => (), // TODO
+        Expr::NamespaceAccess(_, _) => (), // TODO
+        Expr::Dollar => (), // TODO
+        Expr::Unary(_, _) => (), // TODO
     }
 }
