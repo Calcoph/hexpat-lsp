@@ -65,6 +65,7 @@ pub enum Expr {
     Local(Spanned<String>),
     Then(Box<Spanned<Self>>, Box<Spanned<Self>>),
     Binary(Box<Spanned<Self>>, BinaryOp, Box<Spanned<Self>>), // something something_else
+    Ternary(Box<Spanned<Self>>, Box<Spanned<Self>>, Box<Spanned<Self>>), // something something_else
     Call(Box<Spanned<Self>>, Spanned<Vec<Spanned<Self>>>), // name arguments
     If(Box<Spanned<Self>>, Box<Spanned<Self>>, Box<Spanned<Self>>), // if condition body
     Definition(Spanned<String>, Spanned<String>, Box<Spanned<Self>>), // type name everything_else
@@ -92,6 +93,19 @@ pub enum BinaryOp {
     Div,
     Eq,
     NotEq,
+    Mod,
+    LShift,
+    RShift,
+    BAnd,
+    BXor,
+    BOr,
+    GreaterEqual,
+    LessEqual,
+    Greater,
+    Less,
+    LAnd,
+    LXor,
+    LOr,
 }
 
 fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone {
@@ -185,11 +199,14 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
                 let span = f.1.start..args.1.end;
                 (Expr::Call(Box::new(f), args), span)
             });
+        
+        //let assign = atom.then();
 
         // Product ops (multiply and divide) have equal precedence
         let op = just(Token::Op("*".to_string()))
             .to(BinaryOp::Mul)
-            .or(just(Token::Op("/".to_string())).to(BinaryOp::Div));
+            .or(just(Token::Op("/".to_string())).to(BinaryOp::Div))
+            .or(just(Token::Op("%".to_string())).to(BinaryOp::Mod));
         let product = call.clone()
             .then(op.then(call).repeated())
             .foldl(|a, (op, b)| {
@@ -209,19 +226,117 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
                 (Expr::Binary(Box::new(a), op, Box::new(b)), span)
             });
 
-        // Comparison ops (equal, not-equal) have equal precedence
-        let op = just(Token::Op("==".to_string()))
-            .to(BinaryOp::Eq)
-            .or(just(Token::Op("!=".to_string())).to(BinaryOp::NotEq));
-        let raw_expr = sum
-            .clone()
+        // Shift ops
+        let op = just(Token::Op("<<".to_string()))
+            .to(BinaryOp::LShift)
+            .or(just(Token::Op(">>".to_string())).to(BinaryOp::RShift));
+        let shift = sum.clone()
             .then(op.then(sum).repeated())
             .foldl(|a, (op, b)| {
                 let span = a.1.start..b.1.end;
                 (Expr::Binary(Box::new(a), op, Box::new(b)), span)
             });
         
-        let array_definition = expr.clone() // TODO: Custom parser instead of "expr"
+        // Binary and
+        let op = just(Token::Op("&".to_string()))
+            .to(BinaryOp::BAnd);
+        let b_and = shift.clone()
+            .then(op.then(shift).repeated())
+            .foldl(|a, (op, b)| {
+                let span = a.1.start..b.1.end;
+                (Expr::Binary(Box::new(a), op, Box::new(b)), span)
+            }).boxed();
+        
+        // Binary xor
+        let op = just(Token::Op("^".to_string()))
+            .to(BinaryOp::BXor);
+        let b_xor = b_and.clone()
+            .then(op.then(b_and).repeated())
+            .foldl(|a, (op, b)| {
+                let span = a.1.start..b.1.end;
+                (Expr::Binary(Box::new(a), op, Box::new(b)), span)
+            });
+        
+        // Binary or
+        let op = just(Token::Op("|".to_string()))
+            .to(BinaryOp::BOr);
+        let b_or = b_xor.clone()
+            .then(op.then(b_xor).repeated())
+            .foldl(|a, (op, b)| {
+                let span = a.1.start..b.1.end;
+                (Expr::Binary(Box::new(a), op, Box::new(b)), span)
+            });
+        
+        // Relationship
+        let op = just(Token::Op(">=".to_string()))
+            .to(BinaryOp::GreaterEqual)
+            .or(just(Token::Op("<=".to_string())).to(BinaryOp::LessEqual))
+            .or(just(Token::Op(">".to_string())).to(BinaryOp::Greater))
+            .or(just(Token::Op("<".to_string())).to(BinaryOp::Less));
+        let relation = b_or.clone()
+            .then(op.then(b_or).repeated())
+            .foldl(|a, (op, b)| {
+                let span = a.1.start..b.1.end;
+                (Expr::Binary(Box::new(a), op, Box::new(b)), span)
+            });
+
+        // Comparison ops (equal, not-equal) have equal precedence
+        let op = just(Token::Op("==".to_string()))
+            .to(BinaryOp::Eq)
+            .or(just(Token::Op("!=".to_string())).to(BinaryOp::NotEq));
+        let comp = relation
+            .clone()
+            .then(op.then(relation).repeated())
+            .foldl(|a, (op, b)| {
+                let span = a.1.start..b.1.end;
+                (Expr::Binary(Box::new(a), op, Box::new(b)), span)
+            });
+        
+        // Logical and
+        let op = just(Token::Op("&&".to_string()))
+            .to(BinaryOp::LAnd);
+        let l_and = comp.clone()
+            .then(op.then(comp).repeated())
+            .foldl(|a, (op, b)| {
+                let span = a.1.start..b.1.end;
+                (Expr::Binary(Box::new(a), op, Box::new(b)), span)
+            });
+
+        // Logical xor
+        let op = just(Token::Op("^^".to_string()))
+            .to(BinaryOp::LXor);
+        let l_xor = l_and.clone()
+            .then(op.then(l_and).repeated())
+            .foldl(|a, (op, b)| {
+                let span = a.1.start..b.1.end;
+                (Expr::Binary(Box::new(a), op, Box::new(b)), span)
+            });
+
+        // Logical or
+        let op = just(Token::Op("||".to_string()))
+            .to(BinaryOp::LOr);
+        let l_or = l_xor.clone()
+            .then(op.then(l_xor).repeated())
+            .foldl(|a, (op, b)| {
+                let span = a.1.start..b.1.end;
+                (Expr::Binary(Box::new(a), op, Box::new(b)), span)
+            });
+
+        let raw_expr = l_or.clone()
+            .then(
+                just(Token::Op("?".to_string()))
+                    .ignore_then(l_or.clone())
+                    .then_ignore(just(Token::Op(":".to_string())))
+                    .then(l_or)
+                    .repeated()
+            ).foldl(|a, (b, c)| {
+                let span = a.1.start..c.1.end;
+                (Expr::Ternary(Box::new(a), Box::new(b), Box::new(c)), span)
+            });
+            
+
+        let array_definition = expr.clone()
+            .or(just(Token::K(Keyword::While)).ignore_then(expr.clone().delimited_by(just(Token::Separator('(')), just(Token::Separator(')'))))) // TODO: Custom parser instead of "expr"
             .delimited_by(just(Token::Separator('[')), just(Token::Separator(']')))
             .recover_with(nested_delimiters(
                 Token::Separator('('),
@@ -231,8 +346,7 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
                 ],
                 |span| (Expr::Error, span),
             ));
-            
-        
+
         let definition = ident.clone()
             .then(ident)
             .then_ignore(
@@ -442,6 +556,13 @@ fn register_defined_names(named_nodes: &mut HashMap<String, NamedASTNode>, e: &E
         Expr::MemberAccess(e, _) => register_defined_names(named_nodes, &e.0),
         Expr::ArrayAccess(e1, e2) => match register_defined_names(named_nodes, &e1.0) {
             Ok(_) => register_defined_names(named_nodes, &e2.0),
+            Err(e) => Err(e),
+        },
+        Expr::Ternary(e1, e2, e3) => match register_defined_names(named_nodes, &e1.0) {
+            Ok(_) => match register_defined_names(named_nodes, &e2.0) {
+                Ok(_) => register_defined_names(named_nodes, &e3.0),
+                Err(e) => Err(e),
+            },
             Err(e) => Err(e),
         },
     }

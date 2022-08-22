@@ -114,13 +114,12 @@ pub fn get_definition_of_expr(
             }
         }
         Expr::Definition(_, (name, name_span), lhs) => {
-            let new_decl = Vector::unit((name.clone(), name_span.clone()));
-
             get_definition_of_expr(lhs, definition_ass_list.clone(), ident_offset)
         },
         Expr::BitFieldEntry(_, _, _) => (false, None), // TODO
         Expr::EnumEntry(_, _, _) => (false, None), // TODO
         Expr::MemberAccess(_, _) => (false, None), // TODO
         Expr::ArrayAccess(_, _) => (false, None), // TODO
+        Expr::Ternary(_, _, _) => (false, None), // TODO
     }
 }

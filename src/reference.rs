@@ -284,5 +284,6 @@ pub fn get_reference_of_expr(
         Expr::EnumEntry(_, _, _) => (), // TODO
         Expr::MemberAccess(_, _) => (), // TODO
         Expr::ArrayAccess(_, _) => (), // TODO
+        Expr::Ternary(_, _, _) => (), // TODO
     }
 }

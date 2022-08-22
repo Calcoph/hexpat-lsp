@@ -159,5 +159,6 @@ pub fn get_completion_of(
         Expr::EnumEntry(_, _, _) => false, // TODO
         Expr::MemberAccess(_, _) => false, // TODO
         Expr::ArrayAccess(_, _) => false, // TODO
+        Expr::Ternary(_, _, _) => false, // TODO
     }
 }
