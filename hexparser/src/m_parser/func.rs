@@ -7,7 +7,7 @@ use super::{Token, Expr, expr_parser, Spanned, SpanASTNode};
 // A function node in the AST.
 #[derive(Debug, Clone)]
 pub struct Func {
-    pub args: Vec<Spanned<String>>,
+    pub args: Vec<(Spanned<String>, Spanned<String>)>,
     pub body: Spanned<Expr>,
     pub name: Spanned<String>,
     pub span: Span,
@@ -19,9 +19,11 @@ pub fn funcs_parser() -> impl Parser<Token, SpanASTNode, Error = Simple<Token>> 
         _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
     });
 
+    let definition = ident.clone().map_with_span(|a, span| (a, span))
+                .then(ident.map_with_span(|a, span| (a, span)));
+
     // Argument lists are just identifiers separated by commas, surrounded by parentheses
-    let args = ident
-        .map_with_span(|name, span| (name, span))
+    let args = definition
         .clone()
         .separated_by(just(Token::Separator(',')))
         .allow_trailing()

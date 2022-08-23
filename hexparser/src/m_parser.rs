@@ -198,9 +198,9 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
         // 'Atoms' are expressions that contain no ambiguity
         let atom = choice((
             val.map_with_span(|expr, span| (expr, span)),
-            array_access,
-            namespace_access,
-            member_access,
+            array_access.clone(),
+            namespace_access.clone(),
+            member_access.clone(),
             ident.map_with_span(|a, span| (Expr::Local(a), span)),
             just(Token::Op("$".to_string()))
                 .map_with_span(|_, span: Range<usize>| (Expr::Local(("$".to_string(), span.clone())), span)),
@@ -384,55 +384,7 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
                 (Expr::Ternary(Box::new(a), Box::new(b), Box::new(c)), span)
             });
 
-        let ident = filter_map(|span: Range<usize>, tok| match tok {// TODO: Instead of declaring twice the parser, clone it for inside the closure
-            Token::Ident(ident) => Ok((ident.clone(), span)),
-            _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
-        })
-        .labelled("identifier");
-
-        let member_access = choice((// TODO: Instead of declaring twice the parser, clone it for inside the closure
-                ident.clone(),
-                just(Token::K(Keyword::This)).map_with_span(|_, span| ("this".to_string(), span)),
-                just(Token::K(Keyword::Parent)).map_with_span(|_, span| ("parent".to_string(), span))
-            ))
-            .map_with_span(|a, span| (Expr::Local(a), span))
-            .then(
-                just(Token::Separator('.'))
-                .ignore_then(choice((
-                    ident.clone(),
-                    just(Token::K(Keyword::Parent)).map_with_span(|_, span| ("parent".to_string(), span))
-                )))
-                .repeated()
-                .at_least(1)
-            ).foldl(|a, b| {
-                let span = b.1.clone(); // TODO: Not correct
-                (Expr::MemberAccess(Box::new(a), b), span)
-            });
-
-        let namespace_access = ident.clone()// TODO: Instead of declaring twice the parser, clone it for inside the closure
-            .map_with_span(|a, span| (Expr::Local(a), span))
-            .then(
-                just(Token::Op("::".to_string()))
-                .ignore_then(ident)
-                .repeated()
-                .at_least(1)
-            ).foldl(|a, b| {
-                let span = b.1.clone(); // TODO: Not correct
-                (Expr::NamespaceAccess(Box::new(a), b), span)
-            });
-
-        let array_access = ident.clone()// TODO: Instead of declaring twice the parser, clone it for inside the closure
-            .map_with_span(|a, span| (Expr::Local(a), span))
-            .then(
-                just(Token::Separator('['))
-                .ignore_then(expr.clone())
-                .then_ignore(just(Token::Separator(']')))
-            ).map(|(a, b)| {
-                let span = a.1.clone(); // TODO: Not correct
-                (Expr::ArrayAccess(Box::new(a), Box::new(b)), span)
-            });
-
-        let array_definition = expr.clone() // TODO: Instead of declaring twice the parser, clone it for inside the closure
+        let array_definition = expr.clone()
             .or(just(Token::K(Keyword::While)).ignore_then(expr.clone().delimited_by(just(Token::Separator('(')), just(Token::Separator(')'))))) // TODO: Custom parser instead of "expr"
             .delimited_by(just(Token::Separator('[')), just(Token::Separator(']')))
             .recover_with(nested_delimiters(
@@ -444,7 +396,7 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
                 |span| (Expr::Error, span),
             ));
 
-        let definition = ident.clone()// TODO: Instead of declaring twice the parser, clone it for inside the closure
+        let definition = ident.clone()
                 .then(ident)
                 .then_ignore(
                     array_definition
@@ -479,7 +431,7 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
                     )
                 });
         
-        let assignable = choice((// TODO: Instead of declaring twice the parser, clone it for inside the closure
+        let assignable = choice((
             just(Token::Op("$".to_string()))
                 .map_with_span(|_, span| (Expr::Dollar, span)),
             array_access.clone(),
@@ -489,7 +441,7 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
                 .map_with_span(|a, span| (Expr::Local(a), span))
         ));
         
-        let assignment = assignable.then(// TODO: Instead of declaring twice the parser, clone it for inside the closure
+        let assignment = assignable.then(
             choice((
                 just(Token::Op("+".to_string())),
                 just(Token::Op("-".to_string())),

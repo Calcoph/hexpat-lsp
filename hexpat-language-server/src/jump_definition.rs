@@ -23,7 +23,7 @@ pub fn get_definition(ast: &(HashMap<String, NamedASTNode>, Vec<NormalASTNode>),
     for (_, v) in ast.0.iter() {
         if let NamedASTNode::Func(v) = v {
             let args = v.args.iter().map(|arg| arg.clone()).collect::<Vector<_>>();
-            match get_definition_of_expr(&v.body, args + vector.clone(), ident_offset) {
+            match get_definition_of_expr(&v.body, args.iter().map(|(_, a)| a.clone()).collect::<Vector<Spanned<String>>>() + vector.clone(), ident_offset) {
                 (_, Some(value)) => {
                     return Some(value);
                 }

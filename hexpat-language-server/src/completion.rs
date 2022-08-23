@@ -24,7 +24,7 @@ pub fn completion(
                         v.name.0.clone(),
                         ImCompleteCompletionItem::Function(
                             v.name.0.clone(),
-                            v.args.clone().into_iter().map(|(name, _)| name).collect(),
+                            v.args.clone().into_iter().map(|(_, (name, _))| name).collect(),
                         ),
                     );
                 }
@@ -79,7 +79,7 @@ pub fn completion(
             NamedASTNode::Func(v) => {
                 if v.span.end > ident_offset && v.span.start < ident_offset {
                     // log::debug!("this is completion from body {}", name);
-                    v.args.iter().for_each(|(item, _)| {
+                    v.args.iter().for_each(|(_, (item, _))| {
                         map.insert(
                             item.clone(),
                             ImCompleteCompletionItem::Variable(item.clone()),

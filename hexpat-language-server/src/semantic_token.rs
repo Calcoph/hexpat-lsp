@@ -11,7 +11,7 @@ pub fn semantic_token_from_ast(ast: &(HashMap<String, NamedASTNode>, Vec<NormalA
     ast.0.iter().for_each(|(_name, node)| {
         match node {
             NamedASTNode::Func(f) => {
-                f.args.iter().for_each(|(_, span)| {
+                f.args.iter().for_each(|(_, (_, span))| {
                     semantic_tokens.push(ImCompleteSemanticToken {
                         start: span.start,
                         length: span.len(),

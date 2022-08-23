@@ -42,7 +42,7 @@ pub fn get_reference(
                 let args = v
                     .args
                     .iter()
-                    .map(|arg| {
+                    .map(|(_, arg)| {
                         if ident_offset >= arg.1.start && ident_offset < arg.1.end {
                             reference_symbol = ReferenceSymbol::Founded(arg.clone());
                             if include_self {
