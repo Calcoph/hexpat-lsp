@@ -169,7 +169,7 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
                 .repeated()
                 .at_least(1)
             ).foldl(|a, b| {
-                let span = b.1.clone(); // TODO: Not correct
+                let span = a.1.start..b.1.end;
                 (Expr::MemberAccess(Box::new(a), b), span)
             });
 
@@ -181,7 +181,7 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
                 .repeated()
                 .at_least(1)
             ).foldl(|a, b| {
-                let span = b.1.clone(); // TODO: Not correct
+                let span = a.1.start..b.1.end;
                 (Expr::NamespaceAccess(Box::new(a), b), span)
             });
 
@@ -192,7 +192,7 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
                 .ignore_then(expr.clone())
                 .then_ignore(just(Token::Separator(']')))
             ).map(|(a, b)| {
-                let span = a.1.clone(); // TODO: Not correct
+                let span = a.1.start..b.1.end;
                 (Expr::ArrayAccess(Box::new(a), Box::new(b)), span)
             });
 
