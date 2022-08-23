@@ -16,11 +16,22 @@ pub fn namespace_parser() -> impl Parser<Token, SpanASTNode, Error = Simple<Toke
     let ident = filter_map(|span, tok| match tok {
         Token::Ident(ident) => Ok(ident.clone()),
         _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
+    })
+    .labelled("identifier");
+
+    let namespace_access = ident.clone()
+    .then(
+        just(Token::Op("::".to_string()))
+        .ignore_then(ident)
+        .repeated()
+        .at_least(1)
+    ).foldl(|a, b| {
+        a + "::" + &b
     });
 
     let nspace = just(Token::K(Keyword::Namespace))
         .ignore_then(
-            ident
+            namespace_access
                 .map_with_span(|name, span| (name, span))
                 .labelled("namespace name"),
         )
@@ -38,8 +49,7 @@ pub fn namespace_parser() -> impl Parser<Token, SpanASTNode, Error = Simple<Toke
                     ],
                     |span| (Expr::Error, span),
                 )),
-        ).then_ignore(just(Token::Separator(';')))
-        .map_with_span(|(name, body), span| {
+        ).map_with_span(|(name, body), span| {
             SpanASTNode::Namespace(
                 name.clone(),
                 NameSpace {

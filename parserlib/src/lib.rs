@@ -12,4 +12,5 @@ pub const LEGEND_TYPE: &[SemanticTokenType] = &[
     SemanticTokenType::STRUCT, // 8
     SemanticTokenType::new("bitfield"), // 9
     SemanticTokenType::ENUM, // 10
+    SemanticTokenType::NAMESPACE, // 11
 ];
