@@ -16,8 +16,15 @@ pub enum Token {
     Ident(String),
     Separator(char),
     Bool(bool),
-    //PreprocStart(String),
+    Pre(PreProc)
     //PreprocStr(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum PreProc {
+    Include(String),
+    Define(String),
+    Pragma(String)
 }
 
 impl fmt::Display for Token {
@@ -57,6 +64,7 @@ impl fmt::Display for Token {
                 BuiltFunc::SizeOf => write!(f, "sizeof"),
             }
             Token::V(_) => write!(f, "V"), // TODO
+            Token::Pre(_) => write!(f, "PreProc"), // TODO
             //Token::PreprocStart(s) => write!(f, "{}", s),
             //Token::PreprocStr(s) => write!(f, "{}", s),
         }
@@ -175,12 +183,23 @@ pub fn lexer() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
     let ctrl = one_of("()[]{};,.")
         .map(|c| Token::Separator(c));
 
-/*     // A parser for preproccessor directives start
-    let preproc = just("#include")
-        .or(just("#pragma"))
-        .or(just("#define"))
-        .map(|s| Token::PreprocStart(s.to_string()));
-    
+    // A parser for preproccessor directives start
+    let preproc = just("#")
+            .ignore_then(choice((
+                just("include"),
+                just("pragma"),
+                just("define"),
+            ))).then(filter(|c: &char| *c != '\n').repeated().collect())
+            .map(|(command, arg)| {
+                match command {
+                    "include" => PreProc::Include(arg),
+                    "pragma" => PreProc::Pragma(arg),
+                    "define" => PreProc::Define(arg),
+                    _ => unreachable!()
+                }
+            })
+        .map(|s| Token::Pre(s));
+    /*
     let preproc_str = just('<')
         .ignore_then(filter(|c| *c != '>' && *c != '\n').repeated())
         .then_ignore(just('>'))
@@ -224,15 +243,16 @@ pub fn lexer() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
         .or(op)
         .or(ctrl)
         .or(ident)
-        //.or(preproc)
+        .or(preproc)
         .recover_with(skip_then_retry_until([]));
 
-    let comment = just("//").then(take_until(just('\n'))).padded();
-    let directive = just("#").then(take_until(just('\n'))).padded();
+    let comment = just("//").then(take_until(text::newline())).padded();
+    //let directive = just("#").then(take_until(just('\n'))).padded();
 
     token
         .map_with_span(|tok, span| (tok, span))
-        .padded_by(comment.or(directive).repeated())
+        //.padded_by(comment.or(directive).repeated())
+        .padded_by(comment.repeated())
         .padded()
         .repeated()
 }

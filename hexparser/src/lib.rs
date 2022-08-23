@@ -1,6 +1,7 @@
 use chumsky::Parser;
 use chumsky::{prelude::*, stream::Stream};
 use std::collections::HashMap;
+use std::path::Path;
 use tower_lsp::lsp_types::SemanticTokenType;
 
 use parserlib::LEGEND_TYPE;
@@ -278,7 +279,7 @@ pub fn parse(
     let mut cur_start = 0;
     let mut last_indx = 0;
     let len = src.as_bytes().len();
-    let (tokens, errs) = lexer().parse_recovery(
+    let (tokens, mut errs) = lexer().parse_recovery(
         Stream::from_iter(len..len + 1, src.char_indices()
         .map(|(index, chr)| {
             let index = index + 1;
@@ -287,6 +288,15 @@ pub fn parse(
             last_indx = index;
             res
         })));
+    
+    let (tokens, errors) = if let Some(tokens) = tokens {
+        let (tokens, errors) = expand_preprocessor_tokens(tokens);
+        (Some(tokens), errors)
+    } else {
+        (None, vec![])
+    };
+
+    errs.extend(errors.into_iter());
 
     let (ast, tokenize_errors, semantic_tokens) = if let Some(tokens) = tokens {
         // info!("Tokens = {:?}", tokens);
@@ -516,6 +526,7 @@ pub fn parse(
                             .unwrap(),
                     }),
                 },
+                Token::Pre(_) => None,
             })
             .collect::<Vec<_>>();
         let len = src.chars().count();
@@ -558,4 +569,124 @@ pub fn parse(
     //         chumsky::error::SimpleReason::Custom(msg) => {}
     //     };
     // });
+}
+
+fn expand_preprocessor_tokens(tokens: Vec<(Token, std::ops::Range<usize>)>) -> (Vec<(Token, std::ops::Range<usize>)>, Vec<Simple<char>>) {
+    let mut errors = vec![];
+    let mut defines = HashMap::new();
+    let v = expand_preprocessor_tokens_recursive(tokens, &mut errors, &mut defines);
+    (v, errors)
+}
+
+fn expand_preprocessor_tokens_recursive(
+        tokens: Vec<(Token, std::ops::Range<usize>)>,
+        errors: &mut Vec<Simple<char>>,
+        defines: &mut HashMap<String, Vec<Token>>
+    ) -> Vec<(Token, std::ops::Range<usize>)> {
+    let mut v = vec![];
+
+    for token in tokens.into_iter() {
+        match token.0 {
+            Token::Ident(i) => {
+                v.extend(try_define(i, &defines).into_iter().map(|tok| (tok, token.1.clone())))
+            },
+            Token::Pre(p) => match p {
+                m_lexer::PreProc::Include(i) => {
+                    let (tokens, errs) = add_include((i, token.1.clone()));
+                    match tokens {
+                        Some(tokens) => {
+                            let span = token.1.clone();
+                            let res = expand_preprocessor_tokens_recursive(tokens, errors, defines);
+                            v.extend(res.into_iter().map(|tok| (tok.0, span.clone())))
+                        },
+                        None => (),
+                    };
+                    errors.extend(errs.into_iter());
+                },
+                m_lexer::PreProc::Define(d) => errors.extend(add_define(defines, (d, token.1)).into_iter()),
+                m_lexer::PreProc::Pragma(_) => (),
+            },
+            _ => v.push(token),
+        }
+    };
+
+    v
+}
+
+fn try_define(i: String, defines: &HashMap<String, Vec<Token>>) -> Vec<Token> {
+    match defines.get(&i) {
+        Some(v) => v.clone(),
+        None => vec![Token::Ident(i)],
+    }
+}
+
+fn add_include(i: Spanned<String>) -> (Option<Vec<Spanned<Token>>>, Vec<Simple<char>>) {
+    let quote_parser = just::<_, _, Simple<char>>('"').ignore_then(take_until(just('"'))).map(|(a,_)| a).collect::<String>();
+    let angle_parser = just('<').ignore_then(take_until(just('>'))).map(|(a,_)| a).collect::<String>();
+    let include_parser = choice((
+        quote_parser,
+        angle_parser
+    )).padded().then_ignore(end()).map_with_span(|a, span| (a, span));
+
+    let (res, mut errors) = include_parser.parse_recovery(i.0);
+
+    let tokens = match res {
+        Some(p) => {
+            let span = p.1.clone();
+            let (tokens, errs) = get_include_tokens(p, i.1.clone());
+            errors.extend(errs.into_iter().map(|err| Simple::custom(span.clone(), err.to_string())));
+            tokens
+        },
+        None => None,
+    };
+
+    (tokens, errors)
+}
+
+fn get_include_tokens(p: Spanned<String>, span: Span) -> (Option<Vec<Spanned<Token>>>, Vec<Simple<char>>) {
+    let includeable_folders = vec![ // TODO: Read these paths from imhex's files and/or vscode config
+        Path::new("~/.local/share/imhex/includes"),
+        Path::new("/usr/share/imhex/includes"),
+    ];
+
+    let mut result = (None, vec![Simple::custom(p.1, "File not found")]);
+    for path in includeable_folders {
+        let path = path.join(p.0.clone());
+        if path.exists() {
+            result = get_path_tokens(path, span);
+            break
+        }
+    }
+
+    result
+}
+
+fn get_path_tokens(path: std::path::PathBuf, span: Span) -> (Option<Vec<Spanned<Token>>>, Vec<Simple<char>>) {
+    let source = std::fs::read_to_string(path).unwrap();
+
+    let (tokens, errs) = lexer().parse_recovery(source);
+    let tokens = match tokens {
+        Some(tokens) => Some(tokens.into_iter().map(|(a, _)| (a, span.clone())).collect()),
+        None => None,
+    };
+
+    (tokens, errs)
+}
+
+fn add_define(defines: &mut HashMap<String, Vec<Token>>, new_define: Spanned<String>) -> Vec<Simple<char>> {
+    let define_lexer = text::ident().then(lexer()).padded();
+
+    let (res, errors) = define_lexer.parse_recovery(new_define.0);
+    if let Some((name, tokens)) = res {
+        let tokens = tokens.into_iter()
+            .map(|tok| tok.0)
+            .collect();
+        
+        defines.insert(name, tokens);
+    };
+
+    let errors = errors.into_iter()
+        .map(|_| Simple::custom(new_define.1.clone(), "Define not formed correctly")).collect();
+
+    errors
 }
