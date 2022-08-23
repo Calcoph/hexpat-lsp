@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::path::Path;
 
 use dashmap::DashMap;
 use hexparser::m_parser::{NamedASTNode, NormalASTNode};
@@ -15,12 +16,19 @@ use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::notification::Notification;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
+
+#[derive(Debug)]
+enum ConfigurationEntry {
+    ImHexPaths(Vec<String>)
+}
+
 #[derive(Debug)]
 struct Backend {
     client: Client,
     ast_map: DashMap<String, (HashMap<String, NamedASTNode>, Vec<NormalASTNode>)>,
     document_map: DashMap<String, Rope>,
     semantic_token_map: DashMap<String, Vec<ImCompleteSemanticToken>>,
+    configuration: DashMap<String, ConfigurationEntry>
 }
 
 #[tower_lsp::async_trait]
@@ -179,6 +187,12 @@ impl LanguageServer for Backend {
     }
 
     async fn initialized(&self, _: InitializedParams) {
+        self.client.register_capability(vec![Registration {
+            id: "configurationcapability".to_string(),
+            method: "workspace/didChangeConfiguration".to_string(),
+            register_options: None
+        }]).await.unwrap();
+        self.update_configuration().await;
         self.client
             .log_message(MessageType::INFO, "initialized!")
             .await;
@@ -239,14 +253,16 @@ impl LanguageServer for Backend {
         Ok(definition)
     }
     async fn did_change_workspace_folders(&self, _: DidChangeWorkspaceFoldersParams) {
+        self.update_configuration().await;
         self.client
             .log_message(MessageType::INFO, "workspace folders changed!")
             .await;
     }
 
-    async fn did_change_configuration(&self, _: DidChangeConfigurationParams) {
+    async fn did_change_configuration(&self, params: DidChangeConfigurationParams) {
+        let params = params.settings;
         self.client
-            .log_message(MessageType::INFO, "configuration changed!")
+            .log_message(MessageType::INFO, format!("configuration changed! {}", params))
             .await;
     }
 
@@ -470,7 +486,17 @@ impl Backend {
         let rope = ropey::Rope::from_str(&params.text);
         self.document_map
             .insert(params.uri.to_string(), rope.clone());
-        let (ast, errors, semantic_tokens) = parse(&params.text);
+        let mut paths_v = vec![];
+        let paths = self.configuration.get("imhexBaseFolders");
+        match paths {
+            Some(p) => match p.value() {
+                ConfigurationEntry::ImHexPaths(p) => for path in p {
+                    paths_v.push(path.clone())
+                },
+            },
+            None => (),
+        };
+        let (ast, errors, semantic_tokens) = parse(&params.text, &paths_v);
         self.client
             .log_message(MessageType::INFO, format!("{:?}", errors))
             .await;
@@ -537,6 +563,30 @@ impl Backend {
         self.semantic_token_map
             .insert(params.uri.to_string(), semantic_tokens);
     }
+
+    async fn update_configuration(&self) {
+        let mut config = self.client.configuration(vec![
+            ConfigurationItem {
+                scope_uri: None,
+                section: Some("hexpat-language-server.imhexBaseFolders".to_string())
+            }
+        ]).await.unwrap();
+
+        let paths = match config.swap_remove(0) {
+            jValue::Array(v) => {
+                let paths = v.into_iter()
+                    .map(|path| match path {
+                        jValue::String(s) => s,
+                        _ => unreachable!(),
+                    }).collect();
+                
+                ConfigurationEntry::ImHexPaths(paths)
+            },
+            _ => unreachable!(),
+        };
+
+        self.configuration.insert("imhexBaseFolders".to_string(), paths);
+    }
 }
 
 #[tokio::main]
@@ -551,6 +601,7 @@ async fn main() {
         ast_map: DashMap::new(),
         document_map: DashMap::new(),
         semantic_token_map: DashMap::new(),
+        configuration: DashMap::new()
     })
     .custom_method("custom/inlay_hint", Backend::inlay_hint)
     .finish();

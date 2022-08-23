@@ -9,6 +9,8 @@ edition = "2021"
 chumsky = "0.8.0"
 serde = { version = "1.0", features = ["derive"] }
 tower-lsp = { version = "0.17.0"}
+shellexpand = "2.1.2"
+expand_str = "0.1.1"
 
 [dependencies.parserlib]
 path = "../parserlib"

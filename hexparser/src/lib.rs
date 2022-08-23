@@ -271,6 +271,7 @@ pub fn type_inference(expr: &Spanned<Expr>, symbol_type_table: &mut HashMap<Span
 
 pub fn parse(
     src: &str,
+    includeable_folders: &Vec<String>
 ) -> (
     Option<(HashMap<String, NamedASTNode>, Vec<NormalASTNode>)>,
     Vec<Simple<String>>,
@@ -290,7 +291,7 @@ pub fn parse(
         })));
     
     let (tokens, errors) = if let Some(tokens) = tokens {
-        let (tokens, errors) = expand_preprocessor_tokens(tokens);
+        let (tokens, errors) = expand_preprocessor_tokens(tokens, includeable_folders);
         (Some(tokens), errors)
     } else {
         (None, vec![])
@@ -571,17 +572,18 @@ pub fn parse(
     // });
 }
 
-fn expand_preprocessor_tokens(tokens: Vec<(Token, std::ops::Range<usize>)>) -> (Vec<(Token, std::ops::Range<usize>)>, Vec<Simple<char>>) {
+fn expand_preprocessor_tokens(tokens: Vec<(Token, std::ops::Range<usize>)>, includeable_folders: &Vec<String>) -> (Vec<(Token, std::ops::Range<usize>)>, Vec<Simple<char>>) {
     let mut errors = vec![];
     let mut defines = HashMap::new();
-    let v = expand_preprocessor_tokens_recursive(tokens, &mut errors, &mut defines);
+    let v = expand_preprocessor_tokens_recursive(tokens, &mut errors, &mut defines, includeable_folders);
     (v, errors)
 }
 
 fn expand_preprocessor_tokens_recursive(
         tokens: Vec<(Token, std::ops::Range<usize>)>,
         errors: &mut Vec<Simple<char>>,
-        defines: &mut HashMap<String, Vec<Token>>
+        defines: &mut HashMap<String, Vec<Token>>,
+        includeable_folders: &Vec<String>
     ) -> Vec<(Token, std::ops::Range<usize>)> {
     let mut v = vec![];
 
@@ -592,11 +594,11 @@ fn expand_preprocessor_tokens_recursive(
             },
             Token::Pre(p) => match p {
                 m_lexer::PreProc::Include(i) => {
-                    let (tokens, errs) = add_include((i, token.1.clone()));
+                    let (tokens, errs) = add_include((i, token.1.clone()), includeable_folders);
                     match tokens {
                         Some(tokens) => {
                             let span = token.1.clone();
-                            let res = expand_preprocessor_tokens_recursive(tokens, errors, defines);
+                            let res = expand_preprocessor_tokens_recursive(tokens, errors, defines, includeable_folders);
                             v.extend(res.into_iter().map(|tok| (tok.0, span.clone())))
                         },
                         None => (),
@@ -620,7 +622,7 @@ fn try_define(i: String, defines: &HashMap<String, Vec<Token>>) -> Vec<Token> {
     }
 }
 
-fn add_include(i: Spanned<String>) -> (Option<Vec<Spanned<Token>>>, Vec<Simple<char>>) {
+fn add_include(i: Spanned<String>, includeable_folders: &Vec<String>) -> (Option<Vec<Spanned<Token>>>, Vec<Simple<char>>) {
     let quote_parser = just::<_, _, Simple<char>>('"').ignore_then(take_until(just('"'))).map(|(a,_)| a).collect::<String>();
     let angle_parser = just('<').ignore_then(take_until(just('>'))).map(|(a,_)| a).collect::<String>();
     let include_parser = choice((
@@ -633,7 +635,7 @@ fn add_include(i: Spanned<String>) -> (Option<Vec<Spanned<Token>>>, Vec<Simple<c
     let tokens = match res {
         Some(p) => {
             let span = p.1.clone();
-            let (tokens, errs) = get_include_tokens(p, i.1.clone());
+            let (tokens, errs) = get_include_tokens(p, i.1.clone(), includeable_folders);
             errors.extend(errs.into_iter().map(|err| Simple::custom(span.clone(), err.to_string())));
             tokens
         },
@@ -643,18 +645,22 @@ fn add_include(i: Spanned<String>) -> (Option<Vec<Spanned<Token>>>, Vec<Simple<c
     (tokens, errors)
 }
 
-fn get_include_tokens(p: Spanned<String>, span: Span) -> (Option<Vec<Spanned<Token>>>, Vec<Simple<char>>) {
-    let includeable_folders = vec![ // TODO: Read these paths from imhex's files and/or vscode config
-        Path::new("~/.local/share/imhex/includes"),
-        Path::new("/usr/share/imhex/includes"),
-    ];
-
+fn get_include_tokens(p: Spanned<String>, span: Span, includeable_folders: &Vec<String>) -> (Option<Vec<Spanned<Token>>>, Vec<Simple<char>>) {
     let mut result = (None, vec![Simple::custom(p.1, "File not found")]);
     for path in includeable_folders {
-        let path = path.join(p.0.clone());
-        if path.exists() {
-            result = get_path_tokens(path, span);
-            break
+        let path = Path::new(path);
+        let path = match shellexpand::full(&p.0.clone()) {
+            Ok(p) => match expand_str::expand_string_with_env(p.as_ref()) {
+                Ok(p) => Some(path.join("includes").join(p)),
+                Err(_) => None,
+            },
+            Err(_) => None
+        };
+        if let Some(path) = path {
+            if path.exists() {
+                result = get_path_tokens(path, span);
+                break
+            }
         }
     }
 
