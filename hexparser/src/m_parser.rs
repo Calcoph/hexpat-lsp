@@ -125,313 +125,264 @@ pub enum UnaryOp {
 
 fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone {
     recursive(|expr| {
-        let raw_expr = recursive(|raw_expr| {
-            let val = filter_map(|span, tok| match tok {
-                Token::Bool(x) => Ok(Expr::Value(Value::Bool(x))),
-                Token::Num(_) => Ok(Expr::Value(Value::Num(42342.0))),// TODO: change 42342.0 to a proper (hex, bin, oct, dec) str->f64
-                Token::Str(s) => Ok(Expr::Value(Value::Str(s))),
-                Token::Char(c) => Ok(Expr::Value(Value::Char(c))),
-                _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
-            })
-            .labelled("value");
+        let val = filter_map(|span, tok| match tok {
+            Token::Bool(x) => Ok(Expr::Value(Value::Bool(x))),
+            Token::Num(_) => Ok(Expr::Value(Value::Num(42342.0))),// TODO: change 42342.0 to a proper (hex, bin, oct, dec) str->f64
+            Token::Str(s) => Ok(Expr::Value(Value::Str(s))),
+            Token::Char(c) => Ok(Expr::Value(Value::Char(c))),
+            _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
+        })
+        .labelled("value");
 
-            let ident = filter_map(|span: Range<usize>, tok| match tok {
-                Token::Ident(ident) => Ok((ident.clone(), span)),
-                _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
-            })
-            .labelled("identifier");
+        let ident = filter_map(|span: Range<usize>, tok| match tok {
+            Token::Ident(ident) => Ok((ident.clone(), span)),
+            _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
+        })
+        .labelled("identifier");
 
-            let builtin_func = filter_map(|span, tok| match tok {
-                Token::B(func) => Ok((func.clone(), span)),
-                _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
-            })
-            .labelled("built in function");
+        let builtin_func = filter_map(|span, tok| match tok {
+            Token::B(func) => Ok((func.clone(), span)),
+            _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
+        })
+        .labelled("built in function");
 
-            let array_definition = expr.clone()
-                .or(just(Token::K(Keyword::While)).ignore_then(expr.clone().delimited_by(just(Token::Separator('(')), just(Token::Separator(')'))))) // TODO: Custom parser instead of "expr"
-                .delimited_by(just(Token::Separator('[')), just(Token::Separator(']')))
-                .recover_with(nested_delimiters(
-                    Token::Separator('('),
-                    Token::Separator(')'),
-                    [
-                        (Token::Separator('{'), Token::Separator('}')),
-                    ],
-                    |span| (Expr::Error, span),
-                ));
+        // A list of expressions
+        let items = expr.clone()
+            .chain(just(Token::Separator(',')).ignore_then(expr.clone()).repeated())
+            .then_ignore(just(Token::Separator(',')).or_not())
+            .or_not()
+            .map(|item| item.unwrap_or_else(Vec::new));
 
-            let definition = ident.clone()
-                .then(ident)
-                .then_ignore(
-                    array_definition
-                    .or(
-                        just(Token::Separator('['))
-                        .ignore_then(just(Token::Separator(']')))
-                        .ignored()
-                        .map_with_span(|(), span| (Expr::Value(Value::Null), span))
-                    ).or_not()
-                    .then_ignore(
-                        just(Token::K(Keyword::Out))
-                        .or(just(Token::K(Keyword::In)))
-                        .or_not()
-                    )
-                )
-                .then(just(Token::Op("@".to_string())).ignore_then(raw_expr.clone()).or_not())
-                .then_ignore(
-                    just(Token::Separator('['))
-                        .then(just(Token::Separator('[')))
-                        .then(take_until(just(Token::Separator(']')).then(just(Token::Separator(']')))))
-                        .or_not()
-                )
-                //.map(|((name, val), body)| {
-                .map_with_span(|((type_, name), val), span| {
-                    let val = match val {
-                        Some(val) => Box::new(val),
-                        None => Box::new((Expr::Value(Value::Null), span.clone()))
-                    };
-                    (
-                        Expr::Definition(type_, name, val),
-                        span
-                    )
-                });
-
-            // A list of expressions
-            let items = definition.clone()
-                .chain(just(Token::Separator(',')).ignore_then(definition.clone()).repeated())
-                .then_ignore(just(Token::Separator(',')).or_not())
-                .or_not()
-                .map(|item| item.unwrap_or_else(Vec::new));
-
-            let member_access = choice((
-                    ident.clone(),
-                    just(Token::K(Keyword::This)).map_with_span(|_, span| ("this".to_string(), span)),
-                    just(Token::K(Keyword::Parent)).map_with_span(|_, span| ("parent".to_string(), span))
-                ))
-                .map_with_span(|a, span| (Expr::Local(a), span))
-                .then(
-                    just(Token::Separator('.'))
-                    .ignore_then(choice((
-                        ident.clone(),
-                        just(Token::K(Keyword::Parent)).map_with_span(|_, span| ("parent".to_string(), span))
-                    )))
-                    .repeated()
-                    .at_least(1)
-                ).foldl(|a, b| {
-                    let span = b.1.clone(); // TODO: Not correct
-                    (Expr::MemberAccess(Box::new(a), b), span)
-                });
-
-            let namespace_access = ident.clone()
-                .map_with_span(|a, span| (Expr::Local(a), span))
-                .then(
-                    just(Token::Op("::".to_string()))
-                    .ignore_then(ident)
-                    .repeated()
-                    .at_least(1)
-                ).foldl(|a, b| {
-                    let span = b.1.clone(); // TODO: Not correct
-                    (Expr::NamespaceAccess(Box::new(a), b), span)
-                });
-
-            let array_access = ident.clone()
-                .map_with_span(|a, span| (Expr::Local(a), span))
-                .then(
-                    just(Token::Separator('['))
-                    .ignore_then(expr.clone())
-                    .then_ignore(just(Token::Separator(']')))
-                ).map(|(a, b)| {
-                    let span = a.1.clone(); // TODO: Not correct
-                    (Expr::ArrayAccess(Box::new(a), Box::new(b)), span)
-                });
-
-            // 'Atoms' are expressions that contain no ambiguity
-            let atom = choice((
-                val.map_with_span(|expr, span| (expr, span)),
-                array_access,
-                namespace_access,
-                member_access,
-                ident.map_with_span(|a, span| (Expr::Local(a), span)),
-                just(Token::Op("$".to_string()))
-                    .map_with_span(|_, span: Range<usize>| (Expr::Local(("$".to_string(), span.clone())), span)),
-                //.or(ident.map(Expr::Local).map_with_span(|expr, span| (expr, span)))
-                builtin_func
-                    .map_with_span(|a, span| (Expr::Local((a.0.to_string(), a.1)), span)),
-                // Atoms can also just be normal expressions, but surrounded with parentheses
-                expr.clone()
-                    .delimited_by(just(Token::Separator('(')), just(Token::Separator(')'))),
+        let member_access = choice((
+                ident.clone(),
+                just(Token::K(Keyword::This)).map_with_span(|_, span| ("this".to_string(), span)),
+                just(Token::K(Keyword::Parent)).map_with_span(|_, span| ("parent".to_string(), span))
             ))
-            // Attempt to recover anything that looks like a parenthesised expression but contains errors
-            .recover_with(nested_delimiters(
-                Token::Separator('('),
-                Token::Separator(')'),
-                [
-                    (Token::Separator('['), Token::Separator(']')),
-                    (Token::Separator('{'), Token::Separator('}')),
-                ],
-                |span| (Expr::Error, span),
-            ));
+            .map_with_span(|a, span| (Expr::Local(a), span))
+            .then(
+                just(Token::Separator('.'))
+                .ignore_then(choice((
+                    ident.clone(),
+                    just(Token::K(Keyword::Parent)).map_with_span(|_, span| ("parent".to_string(), span))
+                )))
+                .repeated()
+                .at_least(1)
+            ).foldl(|a, b| {
+                let span = b.1.clone(); // TODO: Not correct
+                (Expr::MemberAccess(Box::new(a), b), span)
+            });
 
-            // Function calls have very high precedence so we prioritise them
-            let call = atom
-                .then(
-                    items
-                        .delimited_by(just(Token::Separator('(')), just(Token::Separator(')')))
-                        .map_with_span(|args, span| (args, span))
-                        .repeated(),
-                )
-                .foldl(|f, args| {
-                    let span = f.1.start..args.1.end;
-                    (Expr::Call(Box::new(f), args), span)
-                });
-            
-            let unary = choice((
-                just(Token::Op("+".to_string())).to(UnaryOp::Add),
-                just(Token::Op("-".to_string())).to(UnaryOp::Sub),
-                just(Token::Op("~".to_string())).to(UnaryOp::LNot),
-                just(Token::Op("!".to_string())).to(UnaryOp::BNot),
-            )).or_not().then(call)
-                .map_with_span(|(op, a), span| {
-                match op {
-                    Some(o) => (Expr::Unary(o, Box::new(a)), span),
-                    None => a,
-                }
-                });
+        let namespace_access = ident.clone()
+            .map_with_span(|a, span| (Expr::Local(a), span))
+            .then(
+                just(Token::Op("::".to_string()))
+                .ignore_then(ident)
+                .repeated()
+                .at_least(1)
+            ).foldl(|a, b| {
+                let span = b.1.clone(); // TODO: Not correct
+                (Expr::NamespaceAccess(Box::new(a), b), span)
+            });
 
-            // Product ops (multiply and divide) have equal precedence
-            let op = choice((
-                just(Token::Op("*".to_string())).to(BinaryOp::Mul),
-                just(Token::Op("/".to_string())).to(BinaryOp::Div),
-                just(Token::Op("%".to_string())).to(BinaryOp::Mod),
-            ));
+        let array_access = ident.clone()
+            .map_with_span(|a, span| (Expr::Local(a), span))
+            .then(
+                just(Token::Separator('['))
+                .ignore_then(expr.clone())
+                .then_ignore(just(Token::Separator(']')))
+            ).map(|(a, b)| {
+                let span = a.1.clone(); // TODO: Not correct
+                (Expr::ArrayAccess(Box::new(a), Box::new(b)), span)
+            });
 
-            let product = unary.clone()
-                .then(op.then(unary).repeated())
-                .foldl(|a, (op, b)| {
-                    let span = a.1.start..b.1.end;
-                    (Expr::Binary(Box::new(a), op, Box::new(b)), span)
-                });
+        // 'Atoms' are expressions that contain no ambiguity
+        let atom = choice((
+            val.map_with_span(|expr, span| (expr, span)),
+            array_access,
+            namespace_access,
+            member_access,
+            ident.map_with_span(|a, span| (Expr::Local(a), span)),
+            just(Token::Op("$".to_string()))
+                .map_with_span(|_, span: Range<usize>| (Expr::Local(("$".to_string(), span.clone())), span)),
+            //.or(ident.map(Expr::Local).map_with_span(|expr, span| (expr, span)))
+            builtin_func
+                .map_with_span(|a, span| (Expr::Local((a.0.to_string(), a.1)), span)),
+            // Atoms can also just be normal expressions, but surrounded with parentheses
+            expr.clone()
+                .delimited_by(just(Token::Separator('(')), just(Token::Separator(')'))),
+        ))
+        // Attempt to recover anything that looks like a parenthesised expression but contains errors
+        .recover_with(nested_delimiters(
+            Token::Separator('('),
+            Token::Separator(')'),
+            [
+                (Token::Separator('['), Token::Separator(']')),
+                (Token::Separator('{'), Token::Separator('}')),
+            ],
+            |span| (Expr::Error, span),
+        ));
 
-            // Sum ops (add and subtract) have equal precedence
-            let op = just(Token::Op("+".to_string()))
-                .to(BinaryOp::Add)
-                .or(just(Token::Op("-".to_string())).to(BinaryOp::Sub));
-            let sum = product
-                .clone()
-                .then(op.then(product).repeated())
-                .foldl(|a, (op, b)| {
-                    let span = a.1.start..b.1.end;
-                    (Expr::Binary(Box::new(a), op, Box::new(b)), span)
-                });
+        // Function calls have very high precedence so we prioritise them
+        let call = atom
+            .then(
+                items
+                    .delimited_by(just(Token::Separator('(')), just(Token::Separator(')')))
+                    .map_with_span(|args, span| (args, span))
+                    .repeated(),
+            )
+            .foldl(|f, args| {
+                let span = f.1.start..args.1.end;
+                (Expr::Call(Box::new(f), args), span)
+            });
 
-            // Shift ops
-            let op = just(Token::Op("<<".to_string()))
-                .to(BinaryOp::LShift)
-                .or(just(Token::Op(">>".to_string())).to(BinaryOp::RShift));
-            let shift = sum.clone()
-                .then(op.then(sum).repeated())
-                .foldl(|a, (op, b)| {
-                    let span = a.1.start..b.1.end;
-                    (Expr::Binary(Box::new(a), op, Box::new(b)), span)
-                });
-            
-            // Binary and
-            let op = just(Token::Op("&".to_string()))
-                .to(BinaryOp::BAnd);
-            let b_and = shift.clone()
-                .then(op.then(shift).repeated())
-                .foldl(|a, (op, b)| {
-                    let span = a.1.start..b.1.end;
-                    (Expr::Binary(Box::new(a), op, Box::new(b)), span)
-                }).boxed();
-            
-            // Binary xor
-            let op = just(Token::Op("^".to_string()))
-                .to(BinaryOp::BXor);
-            let b_xor = b_and.clone()
-                .then(op.then(b_and).repeated())
-                .foldl(|a, (op, b)| {
-                    let span = a.1.start..b.1.end;
-                    (Expr::Binary(Box::new(a), op, Box::new(b)), span)
-                });
-            
-            // Binary or
-            let op = just(Token::Op("|".to_string()))
-                .to(BinaryOp::BOr);
-            let b_or = b_xor.clone()
-                .then(op.then(b_xor).repeated())
-                .foldl(|a, (op, b)| {
-                    let span = a.1.start..b.1.end;
-                    (Expr::Binary(Box::new(a), op, Box::new(b)), span)
-                });
-            
-            // Relationship
-            let op = choice((
-                just(Token::Op(">=".to_string())).to(BinaryOp::GreaterEqual),
-                just(Token::Op("<=".to_string())).to(BinaryOp::LessEqual),
-                just(Token::Op(">".to_string())).to(BinaryOp::Greater),
-                just(Token::Op("<".to_string())).to(BinaryOp::Less)
-            ));
-            
-            let relation = b_or.clone()
-                .then(op.then(b_or).repeated())
-                .foldl(|a, (op, b)| {
-                    let span = a.1.start..b.1.end;
-                    (Expr::Binary(Box::new(a), op, Box::new(b)), span)
-                });
+        let unary = choice((
+            just(Token::Op("+".to_string())).to(UnaryOp::Add),
+            just(Token::Op("-".to_string())).to(UnaryOp::Sub),
+            just(Token::Op("~".to_string())).to(UnaryOp::LNot),
+            just(Token::Op("!".to_string())).to(UnaryOp::BNot),
+        )).or_not().then(call)
+            .map_with_span(|(op, a), span| {
+            match op {
+                Some(o) => (Expr::Unary(o, Box::new(a)), span),
+                None => a,
+            }
+            });
 
-            // Comparison ops (equal, not-equal) have equal precedence
-            let op = just(Token::Op("==".to_string()))
-                .to(BinaryOp::Eq)
-                .or(just(Token::Op("!=".to_string())).to(BinaryOp::NotEq));
-            let comp = relation
-                .clone()
-                .then(op.then(relation).repeated())
-                .foldl(|a, (op, b)| {
-                    let span = a.1.start..b.1.end;
-                    (Expr::Binary(Box::new(a), op, Box::new(b)), span)
-                });
-            
-            // Logical and
-            let op = just(Token::Op("&&".to_string()))
-                .to(BinaryOp::LAnd);
-            let l_and = comp.clone()
-                .then(op.then(comp).repeated())
-                .foldl(|a, (op, b)| {
-                    let span = a.1.start..b.1.end;
-                    (Expr::Binary(Box::new(a), op, Box::new(b)), span)
-                });
+        // Product ops (multiply and divide) have equal precedence
+        let op = choice((
+            just(Token::Op("*".to_string())).to(BinaryOp::Mul),
+            just(Token::Op("/".to_string())).to(BinaryOp::Div),
+            just(Token::Op("%".to_string())).to(BinaryOp::Mod),
+        ));
 
-            // Logical xor
-            let op = just(Token::Op("^^".to_string()))
-                .to(BinaryOp::LXor);
-            let l_xor = l_and.clone()
-                .then(op.then(l_and).repeated())
-                .foldl(|a, (op, b)| {
-                    let span = a.1.start..b.1.end;
-                    (Expr::Binary(Box::new(a), op, Box::new(b)), span)
-                });
+        let product = unary.clone()
+            .then(op.then(unary).repeated())
+            .foldl(|a, (op, b)| {
+                let span = a.1.start..b.1.end;
+                (Expr::Binary(Box::new(a), op, Box::new(b)), span)
+            });
 
-            // Logical or
-            let op = just(Token::Op("||".to_string()))
-                .to(BinaryOp::LOr);
-            let l_or = l_xor.clone()
-                .then(op.then(l_xor).repeated())
-                .foldl(|a, (op, b)| {
-                    let span = a.1.start..b.1.end;
-                    (Expr::Binary(Box::new(a), op, Box::new(b)), span)
-                });
+        // Sum ops (add and subtract) have equal precedence
+        let op = just(Token::Op("+".to_string()))
+            .to(BinaryOp::Add)
+            .or(just(Token::Op("-".to_string())).to(BinaryOp::Sub));
+        let sum = product
+            .clone()
+            .then(op.then(product).repeated())
+            .foldl(|a, (op, b)| {
+                let span = a.1.start..b.1.end;
+                (Expr::Binary(Box::new(a), op, Box::new(b)), span)
+            });
 
-            l_or.clone()
-                .then(
-                    just(Token::Op("?".to_string()))
-                        .ignore_then(l_or.clone())
-                        .then_ignore(just(Token::Op(":".to_string())))
-                        .then(l_or)
-                        .repeated()
-                ).foldl(|a, (b, c)| {
-                    let span = a.1.start..c.1.end;
-                    (Expr::Ternary(Box::new(a), Box::new(b), Box::new(c)), span)
-                })
-        });
+        // Shift ops
+        let op = just(Token::Op("<<".to_string()))
+            .to(BinaryOp::LShift)
+            .or(just(Token::Op(">>".to_string())).to(BinaryOp::RShift));
+        let shift = sum.clone()
+            .then(op.then(sum).repeated())
+            .foldl(|a, (op, b)| {
+                let span = a.1.start..b.1.end;
+                (Expr::Binary(Box::new(a), op, Box::new(b)), span)
+            });
+        
+        // Binary and
+        let op = just(Token::Op("&".to_string()))
+            .to(BinaryOp::BAnd);
+        let b_and = shift.clone()
+            .then(op.then(shift).repeated())
+            .foldl(|a, (op, b)| {
+                let span = a.1.start..b.1.end;
+                (Expr::Binary(Box::new(a), op, Box::new(b)), span)
+            }).boxed();
+        
+        // Binary xor
+        let op = just(Token::Op("^".to_string()))
+            .to(BinaryOp::BXor);
+        let b_xor = b_and.clone()
+            .then(op.then(b_and).repeated())
+            .foldl(|a, (op, b)| {
+                let span = a.1.start..b.1.end;
+                (Expr::Binary(Box::new(a), op, Box::new(b)), span)
+            });
+        
+        // Binary or
+        let op = just(Token::Op("|".to_string()))
+            .to(BinaryOp::BOr);
+        let b_or = b_xor.clone()
+            .then(op.then(b_xor).repeated())
+            .foldl(|a, (op, b)| {
+                let span = a.1.start..b.1.end;
+                (Expr::Binary(Box::new(a), op, Box::new(b)), span)
+            });
+        
+        // Relationship
+        let op = choice((
+            just(Token::Op(">=".to_string())).to(BinaryOp::GreaterEqual),
+            just(Token::Op("<=".to_string())).to(BinaryOp::LessEqual),
+            just(Token::Op(">".to_string())).to(BinaryOp::Greater),
+            just(Token::Op("<".to_string())).to(BinaryOp::Less)
+        ));
+        
+        let relation = b_or.clone()
+            .then(op.then(b_or).repeated())
+            .foldl(|a, (op, b)| {
+                let span = a.1.start..b.1.end;
+                (Expr::Binary(Box::new(a), op, Box::new(b)), span)
+            });
+
+        // Comparison ops (equal, not-equal) have equal precedence
+        let op = just(Token::Op("==".to_string()))
+            .to(BinaryOp::Eq)
+            .or(just(Token::Op("!=".to_string())).to(BinaryOp::NotEq));
+        let comp = relation
+            .clone()
+            .then(op.then(relation).repeated())
+            .foldl(|a, (op, b)| {
+                let span = a.1.start..b.1.end;
+                (Expr::Binary(Box::new(a), op, Box::new(b)), span)
+            });
+        
+        // Logical and
+        let op = just(Token::Op("&&".to_string()))
+            .to(BinaryOp::LAnd);
+        let l_and = comp.clone()
+            .then(op.then(comp).repeated())
+            .foldl(|a, (op, b)| {
+                let span = a.1.start..b.1.end;
+                (Expr::Binary(Box::new(a), op, Box::new(b)), span)
+            });
+
+        // Logical xor
+        let op = just(Token::Op("^^".to_string()))
+            .to(BinaryOp::LXor);
+        let l_xor = l_and.clone()
+            .then(op.then(l_and).repeated())
+            .foldl(|a, (op, b)| {
+                let span = a.1.start..b.1.end;
+                (Expr::Binary(Box::new(a), op, Box::new(b)), span)
+            });
+
+        // Logical or
+        let op = just(Token::Op("||".to_string()))
+            .to(BinaryOp::LOr);
+        let l_or = l_xor.clone()
+            .then(op.then(l_xor).repeated())
+            .foldl(|a, (op, b)| {
+                let span = a.1.start..b.1.end;
+                (Expr::Binary(Box::new(a), op, Box::new(b)), span)
+            });
+
+        let raw_expr = l_or.clone()
+            .then(
+                just(Token::Op("?".to_string()))
+                    .ignore_then(l_or.clone())
+                    .then_ignore(just(Token::Op(":".to_string())))
+                    .then(l_or)
+                    .repeated()
+            ).foldl(|a, (b, c)| {
+                let span = a.1.start..c.1.end;
+                (Expr::Ternary(Box::new(a), Box::new(b), Box::new(c)), span)
+            });
 
         let ident = filter_map(|span: Range<usize>, tok| match tok {// TODO: Instead of declaring twice the parser, clone it for inside the closure
             Token::Ident(ident) => Ok((ident.clone(), span)),
