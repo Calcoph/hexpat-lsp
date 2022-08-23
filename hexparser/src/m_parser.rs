@@ -63,6 +63,7 @@ pub enum Expr {
     Error,
     Value(Value),
     Dollar,
+    ExprList(Box<Vec<Spanned<Self>>>),
     Local(Spanned<String>),
     Then(Box<Spanned<Self>>, Box<Spanned<Self>>),
     Unary(UnaryOp, Box<Spanned<Self>>), // something
@@ -121,11 +122,10 @@ pub enum UnaryOp {
     Sub,
     LNot,
     BNot,
-    
 }
 
 fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone {
-    recursive(|expr| {
+    recursive(|expr: Recursive<Token, Spanned<Expr>, Simple<Token>>| {
         let val = filter_map(|span, tok| match tok {
             Token::Bool(x) => Ok(Expr::Value(Value::Bool(x))),
             Token::Num(_) => Ok(Expr::Value(Value::Num(42342.0))),// TODO: change 42342.0 to a proper (hex, bin, oct, dec) str->f64
@@ -501,9 +501,16 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
         let block_chain = block_expr
             .clone()
             .then(block_expr.clone().repeated())
-            .foldl(|a, b| {
-                let span = a.1.start..b.1.end;
-                (Expr::Then(Box::new(a), Box::new(b)), span)
+            .map(|(a, b)| {
+                let span = if b.len() > 0 {
+                    a.1.start..b.get(b.len()-1).unwrap().1.end
+                } else {
+                    a.1.clone()
+                };
+
+                let mut a = vec![a];
+                a.extend(b);
+                (Expr::ExprList(Box::new(a)), span)
             });
         
         let using = just(Token::K(Keyword::Using))
@@ -524,27 +531,41 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
         let control_flow = just(Token::K(Keyword::Break)).map_with_span(|_, span| (Expr::Break, span))
             .or(just(Token::K(Keyword::Continue)).map_with_span(|_, span| (Expr::Continue, span)));
 
-        choice((
+        let semicolon_expr = choice((
             definition,
             assignment,
             using,
-            block_chain,
             raw_expr,
             control_flow
-        )).then(just(Token::Separator(';')).ignore_then(expr.or_not()).repeated())
-            .foldl(|a, b| {
+        ));
+
+        let not_semicolon_expr = choice((
+            block_chain,
+        ));
+
+        semicolon_expr
+            .then(just(Token::Separator(';')).ignore_then(expr.clone().or_not()).repeated())
+            .or(
+                not_semicolon_expr
+                    .then(
+                        expr.clone()
+                            .map(|a| Some(a))
+                            .or(just(Token::Separator(';')).ignore_then(expr.clone().or_not()))
+                            .repeated()
+                    )
+            ).map(|(a, b)| {
                 let span = a.1.clone(); // TODO: Not correct
-                (
-                    Expr::Then(
-                        Box::new(a),
-                        Box::new(match b {
-                            Some(b) => b,
-                            None => (Expr::Value(Value::Null), span.clone()),
-                        }),
-                    ),
-                    span,
-                )
-            }).labelled("Expr")
+                ((vec![a], span), b)
+            }).foldl(|(mut a, span), b| {
+                match b {
+                    Some(b) => match b {
+                        (Expr::ExprList(b), _) => a.extend((*b).into_iter()),
+                        _ => unreachable!()
+                    },
+                    None => ()
+                }
+                (a, span)
+            }).map(|(a, span)| (Expr::ExprList(Box::new(a)), span))
     })
 }
 
@@ -678,6 +699,15 @@ fn register_defined_names(named_nodes: &mut HashMap<String, NamedASTNode>, e: &E
             let (named, normal) = box_.as_ref();
             normal_nodes.extend(normal.iter().map(|a| a.clone()));
             named_nodes.extend(named.iter().map(|(a, b)| (a.clone(), b.clone())));
+            Ok(())
+        },
+        Expr::ExprList(box_) => {
+            for expr in box_.as_ref() {
+                match register_defined_names(named_nodes, &expr.0, normal_nodes) {
+                    Ok(_) => (),
+                    Err(e) => return Err(e),
+                }
+            };
             Ok(())
         },
     }

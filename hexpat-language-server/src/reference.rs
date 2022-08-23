@@ -292,5 +292,6 @@ pub fn get_reference_of_expr(
         Expr::Continue => (), // TODO
         Expr::Break => (), // TODO
         Expr::NamespaceBody(_) => (), // TODO
+        Expr::ExprList(_) => (), // TODO
     }
 }
