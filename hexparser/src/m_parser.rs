@@ -79,6 +79,7 @@ pub enum Expr {
     Using(Box<Spanned<Self>>, Box<Spanned<Self>>), // new_name old_name
     Continue,
     Break,
+    NamespaceBody(Box<(HashMap<String, NamedASTNode>, Vec<NormalASTNode>)>),
 }
 
 impl Expr {
@@ -597,30 +598,30 @@ impl NamedASTNode {// TODO: remove this impl
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum NormalASTNode {
     Expr(Spanned<Expr>)
 }
 
-fn register_defined_names(named_nodes: &mut HashMap<String, NamedASTNode>, e: &Expr) -> Result<(), Simple<Token>> {
+fn register_defined_names(named_nodes: &mut HashMap<String, NamedASTNode>, e: &Expr, normal_nodes: &mut Vec<NormalASTNode>) -> Result<(), Simple<Token>> {
     match e {
         Expr::Error => Ok(()),
         Expr::Value(_) => Ok(()),
         Expr::Local(_) => Ok(()),
         Expr::Then(e1, e2) => {
-            match register_defined_names(named_nodes, &e1.0) {
-                Ok(_) => register_defined_names(named_nodes, &e2.0),
+            match register_defined_names(named_nodes, &e1.0, normal_nodes) {
+                Ok(_) => register_defined_names(named_nodes, &e2.0, normal_nodes),
                 Err(e) => Err(e),
             }
         },
-        Expr::Binary(e1, _, e2) => match register_defined_names(named_nodes, &e1.0) {
-            Ok(_) => register_defined_names(named_nodes, &e2.0),
+        Expr::Binary(e1, _, e2) => match register_defined_names(named_nodes, &e1.0, normal_nodes) {
+            Ok(_) => register_defined_names(named_nodes, &e2.0, normal_nodes),
             Err(e) => Err(e),
         },
-        Expr::Call(e1, e2) => match register_defined_names(named_nodes, &e1.0) {
+        Expr::Call(e1, e2) => match register_defined_names(named_nodes, &e1.0, normal_nodes) {
             Ok(_) => {
                 for e in &e2.0 {
-                    match register_defined_names(named_nodes, &e.0) {
+                    match register_defined_names(named_nodes, &e.0, normal_nodes) {
                         Ok(_) => (),
                         Err(e) => return Err(e),
                     };    
@@ -629,9 +630,9 @@ fn register_defined_names(named_nodes: &mut HashMap<String, NamedASTNode>, e: &E
             },
             Err(e) => Err(e),
         },
-        Expr::If(e1, e2, e3) => match register_defined_names(named_nodes, &e1.0) {
-            Ok(_) => match register_defined_names(named_nodes, &e2.0) {
-                Ok(_) => register_defined_names(named_nodes, &e3.0),
+        Expr::If(e1, e2, e3) => match register_defined_names(named_nodes, &e1.0, normal_nodes) {
+            Ok(_) => match register_defined_names(named_nodes, &e2.0, normal_nodes) {
+                Ok(_) => register_defined_names(named_nodes, &e3.0, normal_nodes),
                 Err(e) => Err(e),
             },
             Err(e) => Err(e),
@@ -648,105 +649,113 @@ fn register_defined_names(named_nodes: &mut HashMap<String, NamedASTNode>, e: &E
                     format!("Variable '{}' already exists", name),
                 ));
             }
-            register_defined_names(named_nodes, &body.0)
+            register_defined_names(named_nodes, &body.0, normal_nodes)
         },
         Expr::BitFieldEntry(_, _, _) => Ok(()), // This should never happen
         Expr::EnumEntry(_, _, _) => Ok(()), // This should never happen
-        Expr::MemberAccess(e, _) => register_defined_names(named_nodes, &e.0),
-        Expr::ArrayAccess(e1, e2) => match register_defined_names(named_nodes, &e1.0) {
-            Ok(_) => register_defined_names(named_nodes, &e2.0),
+        Expr::MemberAccess(e, _) => register_defined_names(named_nodes, &e.0, normal_nodes),
+        Expr::ArrayAccess(e1, e2) => match register_defined_names(named_nodes, &e1.0, normal_nodes) {
+            Ok(_) => register_defined_names(named_nodes, &e2.0, normal_nodes),
             Err(e) => Err(e),
         },
-        Expr::Ternary(e1, e2, e3) => match register_defined_names(named_nodes, &e1.0) {
-            Ok(_) => match register_defined_names(named_nodes, &e2.0) {
-                Ok(_) => register_defined_names(named_nodes, &e3.0),
+        Expr::Ternary(e1, e2, e3) => match register_defined_names(named_nodes, &e1.0, normal_nodes) {
+            Ok(_) => match register_defined_names(named_nodes, &e2.0, normal_nodes) {
+                Ok(_) => register_defined_names(named_nodes, &e3.0, normal_nodes),
                 Err(e) => Err(e),
             },
             Err(e) => Err(e),
         },
-        Expr::NamespaceAccess(e, _) => register_defined_names(named_nodes, &e.0),
+        Expr::NamespaceAccess(e, _) => register_defined_names(named_nodes, &e.0, normal_nodes),
         Expr::Dollar => Ok(()),
-        Expr::Unary(_, e) => register_defined_names(named_nodes, &e.0),
-        Expr::Using(e1, e2) => match register_defined_names(named_nodes, &e1.0) {
-            Ok(_) => register_defined_names(named_nodes, &e2.0),
+        Expr::Unary(_, e) => register_defined_names(named_nodes, &e.0, normal_nodes),
+        Expr::Using(e1, e2) => match register_defined_names(named_nodes, &e1.0, normal_nodes) {
+            Ok(_) => register_defined_names(named_nodes, &e2.0, normal_nodes),
             Err(e) => Err(e),
         },
         Expr::Continue => Ok(()),
         Expr::Break => Ok(()),
+        Expr::NamespaceBody(box_) => {
+            let (named, normal) = box_.as_ref();
+            normal_nodes.extend(normal.iter().map(|a| a.clone()));
+            named_nodes.extend(named.iter().map(|(a, b)| (a.clone(), b.clone())));
+            Ok(())
+        },
     }
 }
 
 // Hashmap is for named nodes: Structs, namespaces, funcs, etc.
 // Vec is for normal nodes: Expressions, whiles, fors, etc.
 pub fn parser() -> impl Parser<Token, (HashMap<String, NamedASTNode>, Vec<NormalASTNode>), Error = Simple<Token>> + Clone {
-    choice((
-        funcs_parser(),
-        struct_parser(),
-        enum_parser(),
-        namespace_parser(),
-        bitfield_parser(),
-        expr_parser().map(|expr| SpanASTNode::Expr(expr)),
-    )).repeated()
-        .try_map(|nodes, _| {
-            let mut named_nodes = HashMap::new();
-            let mut normal_nodes = Vec::new();
-            for node in nodes {
-                match node {
-                    SpanASTNode::Expr((e, span)) => {
-                        normal_nodes.push(NormalASTNode::Expr((e.clone(), span.clone())));
-                        match register_defined_names(&mut named_nodes, &e) {
-                            Ok(_) => (),
-                            Err(e) => return Err(e),
-                        };
-                    },
-                    SpanASTNode::Func((name, name_span), f) => {
-                        let f = NamedASTNode::Func(f);
-                        if named_nodes.insert(name.clone(), f).is_some() {
-                            return Err(Simple::custom(
-                                name_span.clone(),
-                                format!("Function '{}' already exists", name),
-                            ));
-                        }
-                    },
-                    SpanASTNode::Struct((name, name_span), s) => {
-                        let s = NamedASTNode::Struct(s);
-                        if named_nodes.insert(name.clone(), s).is_some() {
-                            return Err(Simple::custom(
-                                name_span.clone(),
-                                format!("Struct '{}' already exists", name),
-                            ));
-                        }
-                    },
-                    SpanASTNode::Enum((name, name_span), e) => {
-                        let e = NamedASTNode::Enum(e);
-                        if named_nodes.insert(name.clone(), e).is_some() {
-                            return Err(Simple::custom(
-                                name_span.clone(),
-                                format!("Enum '{}' already exists", name),
-                            ));
-                        }
-                    },
-                    SpanASTNode::Namespace((name, name_span), n) => {
-                        let n = NamedASTNode::Namespace(n);
-                        if named_nodes.insert(name.clone(), n).is_some() {
-                            return Err(Simple::custom(
-                                name_span.clone(),
-                                format!("Namespace '{}' already exists", name),
-                            ));
-                        }
-                    },
-                    SpanASTNode::Bitfield((name, name_span), b) => {
-                        let b = NamedASTNode::Bitfield(b);
-                        if named_nodes.insert(name.clone(), b).is_some() {
-                            return Err(Simple::custom(
-                                name_span.clone(),
-                                format!("Bitfield '{}' already exists", name),
-                            ));
-                        }
-                    },
+    recursive(|ast_parser| {
+        choice((
+            funcs_parser(),
+            struct_parser(),
+            enum_parser(),
+            namespace_parser(ast_parser),
+            bitfield_parser(),
+            expr_parser().map(|expr| SpanASTNode::Expr(expr)),
+        )).repeated()
+            .try_map(|nodes, _| {
+                let mut named_nodes = HashMap::new();
+                let mut normal_nodes = Vec::new();
+                for node in nodes {
+                    match node {
+                        SpanASTNode::Expr((e, span)) => {
+                            normal_nodes.push(NormalASTNode::Expr((e.clone(), span.clone())));
+                            match register_defined_names(&mut named_nodes, &e, &mut normal_nodes) {
+                                Ok(_) => (),
+                                Err(e) => return Err(e),
+                            };
+                        },
+                        SpanASTNode::Func((name, name_span), f) => {
+                            let f = NamedASTNode::Func(f);
+                            if named_nodes.insert(name.clone(), f).is_some() {
+                                return Err(Simple::custom(
+                                    name_span.clone(),
+                                    format!("Function '{}' already exists", name),
+                                ));
+                            }
+                        },
+                        SpanASTNode::Struct((name, name_span), s) => {
+                            let s = NamedASTNode::Struct(s);
+                            if named_nodes.insert(name.clone(), s).is_some() {
+                                return Err(Simple::custom(
+                                    name_span.clone(),
+                                    format!("Struct '{}' already exists", name),
+                                ));
+                            }
+                        },
+                        SpanASTNode::Enum((name, name_span), e) => {
+                            let e = NamedASTNode::Enum(e);
+                            if named_nodes.insert(name.clone(), e).is_some() {
+                                return Err(Simple::custom(
+                                    name_span.clone(),
+                                    format!("Enum '{}' already exists", name),
+                                ));
+                            }
+                        },
+                        SpanASTNode::Namespace((name, name_span), n) => {
+                            let n = NamedASTNode::Namespace(n);
+                            if named_nodes.insert(name.clone(), n).is_some() {
+                                return Err(Simple::custom(
+                                    name_span.clone(),
+                                    format!("Namespace '{}' already exists", name),
+                                ));
+                            }
+                        },
+                        SpanASTNode::Bitfield((name, name_span), b) => {
+                            let b = NamedASTNode::Bitfield(b);
+                            if named_nodes.insert(name.clone(), b).is_some() {
+                                return Err(Simple::custom(
+                                    name_span.clone(),
+                                    format!("Bitfield '{}' already exists", name),
+                                ));
+                            }
+                        },
+                    }
                 }
-            }
-            Ok((named_nodes, normal_nodes))
-        })
-        .then_ignore(end())
+                Ok((named_nodes, normal_nodes))
+            })
+            .then_ignore(end())
+    })
 }

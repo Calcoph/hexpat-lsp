@@ -291,5 +291,6 @@ pub fn get_reference_of_expr(
         Expr::Using(_, _) => (), // TODO
         Expr::Continue => (), // TODO
         Expr::Break => (), // TODO
+        Expr::NamespaceBody(_) => (), // TODO
     }
 }

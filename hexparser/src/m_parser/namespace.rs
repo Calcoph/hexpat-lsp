@@ -1,8 +1,10 @@
+use std::collections::HashMap;
+
 use chumsky::{prelude::*,Parser};
 
 use crate::{m_lexer::Keyword, Span, Value};
 
-use super::{Token, expr_parser, Expr, Spanned, SpanASTNode};
+use super::{Token, Expr, Spanned, SpanASTNode, NamedASTNode, NormalASTNode};
 
 // A namespace node in the AST.
 #[derive(Debug, Clone)]
@@ -12,7 +14,7 @@ pub struct NameSpace {
     pub span: Span,
 }
 
-pub fn namespace_parser() -> impl Parser<Token, SpanASTNode, Error = Simple<Token>> + Clone {
+pub fn namespace_parser(ast_parser: impl Parser<Token, (HashMap<String, NamedASTNode>, Vec<NormalASTNode>), Error = Simple<Token>> + Clone) -> impl Parser<Token, SpanASTNode, Error = Simple<Token>> + Clone {
     let ident = filter_map(|span, tok| match tok {
         Token::Ident(ident) => Ok(ident.clone()),
         _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
@@ -36,7 +38,7 @@ pub fn namespace_parser() -> impl Parser<Token, SpanASTNode, Error = Simple<Toke
                 .labelled("namespace name"),
         )
         .then(
-            expr_parser()
+            ast_parser.map_with_span(|a, span| (Expr::NamespaceBody(Box::new(a)), span))
                 .delimited_by(just(Token::Separator('{')), just(Token::Separator('}')))
                 .or(just(Token::Separator('{')).ignore_then(just(Token::Separator('}'))).ignored().map_with_span(|_, span| (Expr::Value(Value::Null), span)))
                 // Attempt to recover anything that looks like a function body but contains errors

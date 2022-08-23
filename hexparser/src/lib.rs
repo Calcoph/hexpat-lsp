@@ -61,6 +61,7 @@ pub fn type_inference(expr: &Spanned<Expr>, symbol_type_table: &mut HashMap<Span
         Expr::Using(_, _) => (),
         Expr::Continue => (),
         Expr::Break => (),
+        Expr::NamespaceBody(_) => (),
     }
 }
 // fn eval_expr(

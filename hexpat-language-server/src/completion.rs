@@ -166,5 +166,6 @@ pub fn get_completion_of(
         Expr::Using(_, _) => false, // TODO
         Expr::Continue => false, // TODO
         Expr::Break => false, // TODO
+        Expr::NamespaceBody(_) => false, // TODO
     }
 }

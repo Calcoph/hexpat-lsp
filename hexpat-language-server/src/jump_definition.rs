@@ -127,5 +127,6 @@ pub fn get_definition_of_expr(
         Expr::Using(_, _) => (false, None), // TODO
         Expr::Continue => (false, None), // TODO
         Expr::Break => (false, None), // TODO
+        Expr::NamespaceBody(_) => (false, None), // TODO
     }
 }

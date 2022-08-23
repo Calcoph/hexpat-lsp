@@ -169,5 +169,6 @@ pub fn semantic_token_from_expr(
         Expr::Using(_, _) => (), // TODO
         Expr::Continue => (), // TODO
         Expr::Break => (), // TODO
+        Expr::NamespaceBody(_) => (), // TODO
     }
 }
