@@ -50,7 +50,7 @@ pub enum Expr {
     If(Box<Spanned<Self>>, Box<Spanned<Self>>, Box<Spanned<Self>>), // if condition body
     Definition(Spanned<String>, Spanned<String>, Box<Spanned<Self>>), // type name everything_else
     BitFieldEntry(Spanned<String>, Box<Spanned<Self>>, Box<Spanned<Self>>), // name length next_entry
-    EnumEntry(Spanned<String>, Box<Spanned<Self>>, Box<Spanned<Self>>), // name value next_entry
+    EnumEntry(Spanned<String>, Box<Spanned<Self>>), // name value
     MemberAccess(Box<Spanned<Self>>, Spanned<String>),
     ArrayAccess(Box<Spanned<Self>>, Box<Spanned<Self>>), // name value
     NamespaceAccess(Box<Spanned<Self>>, Spanned<String>),
@@ -754,7 +754,6 @@ fn enum_entries_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Tok
                         Some(v) => v,
                         None => (Expr::Value(Value::Null), span.clone()),
                     }),
-                    Box::new((Expr::Value(Value::Null), span.clone()))
                 ),
                 span
             )
@@ -762,29 +761,22 @@ fn enum_entries_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Tok
         .then(
             just(Token::Separator(','))
                 .ignore_then(entry)
-                .map_with_span(|a, span| (a, span))
+                .map_with_span(|(name, val), span| (
+                    Expr::EnumEntry(
+                        name,
+                        Box::new(match val {
+                            Some(v) => v,
+                            None => (Expr::Value(Value::Null), span.clone()),
+                        }),
+                    ),
+                    span
+                ))
                 .repeated()
                 .then_ignore(just(Token::Separator(',')).or_not())
-        )
-        .foldl(|(a, a_span), ((b_name, b_val), b_span)| {
-            let span = a_span.start..b_span.end;
-            match a {
-                Expr::EnumEntry(name, val, last) => {
-                    let next = Box::new((
-                        Expr::EnumEntry(
-                            b_name,
-                            Box::new(match b_val {
-                                Some(v) => v,
-                                None => (Expr::Value(Value::Null), b_span.clone())
-                            }),
-                            last
-                        ),
-                        b_span
-                    ));
-                    (Expr::EnumEntry(name, val, next), span)
-                },
-                _ => unreachable!()
-            }
+        ).map_with_span(|(a, b), span| {
+            let mut v = vec![a];
+            v.extend(b.into_iter());
+            (Expr::ExprList(Box::new(v)), span)
         })
 }
 
@@ -971,7 +963,7 @@ fn register_defined_names(named_nodes: &mut HashMap<String, Spanned<NamedNode>>,
             register_defined_names(named_nodes, &body.0)
         },
         Expr::BitFieldEntry(_, _, _) => Ok(()), // This should never happen
-        Expr::EnumEntry(_, _, _) => Ok(()), // This should never happen
+        Expr::EnumEntry(_, _) => Ok(()), // This should never happen
         Expr::MemberAccess(e, _) => register_defined_names(named_nodes, &e.0),
         Expr::ArrayAccess(e1, e2) => match register_defined_names(named_nodes, &e1.0) {
             Ok(_) => register_defined_names(named_nodes, &e2.0),

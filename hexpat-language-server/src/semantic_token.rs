@@ -68,7 +68,7 @@ pub fn semantic_token_from_expr(
             semantic_token_from_expr(e1, semantic_tokens);
             semantic_token_from_expr(e2, semantic_tokens)
         },// TODO
-        Expr::EnumEntry((_, name_span), e1, e2) => {
+        Expr::EnumEntry((_, name_span), e1) => {
             semantic_tokens.push(ImCompleteSemanticToken {
                 start: name_span.start,
                 length: name_span.len(),
@@ -78,7 +78,6 @@ pub fn semantic_token_from_expr(
                     .unwrap(),
             });
             semantic_token_from_expr(e1, semantic_tokens);
-            semantic_token_from_expr(e2, semantic_tokens);
         },
         Expr::MemberAccess(e, (_, name_span)) => {
             semantic_token_from_expr(e, semantic_tokens);

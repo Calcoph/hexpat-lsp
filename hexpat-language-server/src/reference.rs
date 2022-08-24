@@ -149,7 +149,7 @@ pub fn get_reference_of_expr(
                 include_self,
             );
         },
-        Expr::EnumEntry((name, name_span), _length, next_entries) => {
+        Expr::EnumEntry((name, name_span), _length) => {
             let next_symbol = match reference_symbol {
                 Finding(ident) if ident >= name_span.start && ident < name_span.end => {
                     let spanned_name = (name.clone(), name_span.clone());
@@ -160,14 +160,6 @@ pub fn get_reference_of_expr(
                 }
                 _ => reference_symbol,
             };
-
-            get_reference_of_expr(
-                next_entries,
-                definition_ass_list.clone(),
-                next_symbol.clone(),
-                reference_list,
-                include_self,
-            );
         },
         Expr::MemberAccess(previous_entries, (name, name_span)) => {
             let next_symbol = match reference_symbol {

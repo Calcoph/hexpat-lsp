@@ -149,7 +149,7 @@ pub fn get_completion_of(
             get_completion_of(lhs, definition_map, ident_offset)
         },
         Expr::BitFieldEntry(_, _, _) => false, // TODO
-        Expr::EnumEntry(_, _, _) => false, // TODO
+        Expr::EnumEntry(_, _) => false, // TODO
         Expr::MemberAccess(_, _) => false, // TODO
         Expr::ArrayAccess(_, _) => false, // TODO
         Expr::Ternary(_, _, _) => false, // TODO
