@@ -5,8 +5,8 @@ use hexparser::m_parser::{Spanned, Expr, NamedNode};
 
 #[derive(Debug, Clone)]
 pub enum ReferenceSymbol {
-    Founded(Spanned<String>),
-    Founding(usize),
+    Found(Spanned<String>),
+    Finding(usize),
 }
 
 use ReferenceSymbol::*;
@@ -18,7 +18,7 @@ pub fn get_reference(
 ) -> Vec<Spanned<String>> {
     let vector = Vector::new();
     let mut reference_list = vec![];
-    let reference_symbol = ReferenceSymbol::Founding(ident_offset);
+    let reference_symbol = ReferenceSymbol::Finding(ident_offset);
     get_reference_of_expr(&ast.1, vector, reference_symbol, &mut reference_list, include_self);
     reference_list
 }
@@ -34,7 +34,7 @@ pub fn get_reference_of_expr(
         Expr::Error => {}
         Expr::Value(_) => {}
         Expr::Local((name, span)) => {
-            if let Founded((symbol_name, symbol_span)) = reference_symbol {
+            if let Found((symbol_name, symbol_span)) = reference_symbol {
                 if &symbol_name == name {
                     let index = definition_ass_list
                         .iter()
@@ -58,22 +58,6 @@ pub fn get_reference_of_expr(
             // } else {
             //     (true, None)
             // }
-        }
-        Expr::Then(first, second) => {
-            get_reference_of_expr(
-                first,
-                definition_ass_list.clone(),
-                reference_symbol.clone(),
-                reference_list,
-                include_self,
-            );
-            get_reference_of_expr(
-                second,
-                definition_ass_list.clone(),
-                reference_symbol,
-                reference_list,
-                include_self,
-            );
         }
         Expr::Binary(lhs, _op, rhs) => {
             get_reference_of_expr(
@@ -135,12 +119,12 @@ pub fn get_reference_of_expr(
         Expr::Definition(_, (name, name_span), lhs) => {
             let new_decl = Vector::unit((name.clone(), name_span.clone()));
             let next_symbol = match reference_symbol {
-                Founding(ident) if ident >= name_span.start && ident < name_span.end => {
+                Finding(ident) if ident >= name_span.start && ident < name_span.end => {
                     let spanned_name = (name.clone(), name_span.clone());
                     if include_self {
                         reference_list.push(spanned_name.clone());
                     }
-                    ReferenceSymbol::Founded(spanned_name)
+                    ReferenceSymbol::Found(spanned_name)
                 }
                 _ => reference_symbol,
             };

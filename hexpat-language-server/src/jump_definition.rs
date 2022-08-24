@@ -45,15 +45,6 @@ pub fn get_definition_of_expr(
                 (true, None)
             }
         }
-        Expr::Then(first, second) => {
-            match get_definition_of_expr(first, definition_ass_list.clone(), ident_offset) {
-                (true, None) => {
-                    get_definition_of_expr(second, definition_ass_list.clone(), ident_offset)
-                }
-                (false, None) => (false, None),
-                (true, Some(value)) | (false, Some(value)) => (false, Some(value)),
-            }
-        }
         Expr::Binary(lhs, _op, rhs) => {
             match get_definition_of_expr(lhs, definition_ass_list.clone(), ident_offset) {
                 (true, None) => {

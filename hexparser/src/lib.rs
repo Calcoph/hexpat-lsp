@@ -40,10 +40,6 @@ pub fn type_inference(expr: &Spanned<Expr>, symbol_type_table: &mut HashMap<Span
         Expr::Error => {}
         Expr::Value(_) => {}
         Expr::Local(_) => {}
-        Expr::Then(first, second) => {
-            type_inference(first, symbol_type_table);
-            type_inference(second, symbol_type_table);
-        }
         Expr::Binary(_, _, _) => {}
         Expr::Call(_, _) => {}
         Expr::If(_test, consequent, alternative) => {

@@ -75,7 +75,6 @@ pub enum Expr {
     Dollar,
     ExprList(Box<Vec<Spanned<Self>>>),
     Local(Spanned<String>),
-    Then(Box<Spanned<Self>>, Box<Spanned<Self>>),
     Unary(UnaryOp, Box<Spanned<Self>>), // something
     Binary(Box<Spanned<Self>>, BinaryOp, Box<Spanned<Self>>), // something operator something_else
     Ternary(Box<Spanned<Self>>, Box<Spanned<Self>>, Box<Spanned<Self>>), // something ? something_else : something_else_else
@@ -922,15 +921,6 @@ fn bitfield_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>>
         })
 }
 
-pub enum SpanASTNode {
-    Expr(Spanned<Expr>),
-    Func(Spanned<String>, Func),
-    Struct(Spanned<String>, Struct),
-    Enum(Spanned<String>, Enum),
-    Namespace(Spanned<String>, NameSpace),
-    Bitfield(Spanned<String>, BitField)
-}
-
 #[derive(Debug, Clone)]
 pub struct Declaration {
     pub type_: Spanned<String>,
@@ -953,12 +943,6 @@ fn register_defined_names(named_nodes: &mut HashMap<String, Spanned<NamedNode>>,
         Expr::Error => Ok(()),
         Expr::Value(_) => Ok(()),
         Expr::Local(_) => Ok(()),
-        Expr::Then(e1, e2) => {
-            match register_defined_names(named_nodes, &e1.0) {
-                Ok(_) => register_defined_names(named_nodes, &e2.0),
-                Err(e) => Err(e),
-            }
-        },
         Expr::Binary(e1, _, e2) => match register_defined_names(named_nodes, &e1.0) {
             Ok(_) => register_defined_names(named_nodes, &e2.0),
             Err(e) => Err(e),

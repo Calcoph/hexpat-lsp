@@ -20,7 +20,7 @@ pub fn semantic_token_from_expr(
     match &expr.0 {
         Expr::Error => {}
         Expr::Value(_) => {}
-        Expr::Local((_name, span)) => {
+        Expr::Local((_, span)) => {
             semantic_tokens.push(ImCompleteSemanticToken {
                 start: span.start,
                 length: span.len(),
@@ -29,10 +29,6 @@ pub fn semantic_token_from_expr(
                     .position(|item| item == &SemanticTokenType::VARIABLE)
                     .unwrap(),
             });
-        }
-        Expr::Then(first, rest) => {
-            semantic_token_from_expr(first, semantic_tokens);
-            semantic_token_from_expr(rest, semantic_tokens);
         }
         Expr::Binary(lhs, _op, rhs) => {
             semantic_token_from_expr(lhs, semantic_tokens);

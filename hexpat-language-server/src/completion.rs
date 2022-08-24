@@ -111,12 +111,6 @@ pub fn get_completion_of(
                 true
             }
         }
-        Expr::Then(first, second) => {
-            match get_completion_of(first, definition_map, ident_offset) {
-                true => get_completion_of(second, definition_map, ident_offset),
-                false => false,
-            }
-        },
         Expr::Binary(lhs, _op, rhs) => {
             match get_completion_of(lhs, definition_map, ident_offset) {
                 true => get_completion_of(rhs, definition_map, ident_offset),
