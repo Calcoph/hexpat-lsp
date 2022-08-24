@@ -92,9 +92,9 @@ pub fn semantic_token_from_expr(
             length: expr.1.len(),
             token_type: LEGEND_TYPE
                 .iter()
-                .position(|item| item == &SemanticTokenType::KEYWORD)
+                .position(|item| item == &SemanticTokenType::new("dollar"))
                 .unwrap(),
-        }), // TODO: Make dollars different from keywords
+        }),
         Expr::Unary(_, e) => {
             semantic_token_from_expr(e, semantic_tokens)
         },
