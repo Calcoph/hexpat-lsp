@@ -106,10 +106,10 @@ pub fn get_definition_of_expr(
         Expr::Continue => (false, None), // TODO
         Expr::Break => (false, None), // TODO
         Expr::ExprList(_) => (false, None), // TODO
-        Expr::Func(_, _) => (false, None), // TODO
+        Expr::Func(_, _, _) => (false, None), // TODO
         Expr::Struct(_, _) => (false, None), // TODO
         Expr::Namespace(_, _) => (false, None), // TODO
-        Expr::Enum(_, _) => (false, None), // TODO
+        Expr::Enum(_, _, _) => (false, None), // TODO
         Expr::Bitfield(_, _) => (false, None), // TODO
     }
 }

@@ -35,38 +35,6 @@ impl std::fmt::Display for Value {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct Struct {
-    pub body: Spanned<Expr>,
-    pub name: Spanned<String>,
-}
-
-#[derive(Debug, Clone)]
-pub struct Func {
-    pub args: Vec<(Spanned<String>, Spanned<String>)>,
-    pub body: Spanned<Expr>,
-    pub name: Spanned<String>,
-}
-
-#[derive(Debug, Clone)]
-pub struct NameSpace {
-    pub body: Spanned<Expr>,
-    pub name: Spanned<String>,
-}
-
-#[derive(Debug, Clone)]
-pub struct Enum {
-    pub body: Spanned<Expr>,
-    pub name: Spanned<String>,
-    pub type_: Spanned<String>,
-}
-
-#[derive(Debug, Clone)]
-pub struct BitField {
-    pub body: Spanned<Expr>,
-    pub name: Spanned<String>,
-}
-
 // An expression node in the AST. Children are spanned so we can generate useful runtime errors.
 #[derive(Debug, Clone)]
 pub enum Expr {
@@ -89,11 +57,11 @@ pub enum Expr {
     Using(Box<Spanned<Self>>),
     Continue,
     Break,
-    Func(Spanned<String>, Box<Spanned<Func>>),
-    Struct(Spanned<String>, Box<Spanned<Struct>>),
-    Namespace(Spanned<String>, Box<Spanned<NameSpace>>),
-    Enum(Spanned<String>, Box<Spanned<Enum>>),
-    Bitfield(Spanned<String>, Box<Spanned<BitField>>),
+    Func(Spanned<String>, Vec<(Spanned<String>, Spanned<String>)>, Box<Spanned<Self>>), // name args body
+    Struct(Spanned<String>, Box<Spanned<Self>>), // name body
+    Namespace(Spanned<String>, Box<Spanned<Self>>), // name body
+    Enum(Spanned<String>, Box<Spanned<Self>>, Spanned<String>), // name body type
+    Bitfield(Spanned<String>, Box<Spanned<Self>>), // name body
 }
 
 impl Expr {
@@ -716,13 +684,9 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
             ).map_with_span(|((name, args), body), span| {
                 (
                     Expr::Func(
-                        name.clone(),
-                        Box::new((Func {
-                            args,
-                            body,
-                            name,
-                        },
-                        span.clone())),
+                        name,
+                        args,
+                        Box::new(body),
                     ),
                     span
                 )
@@ -751,30 +715,23 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
                 (
                     Expr::Struct(
                         name.clone(),
-                        Box::new((
-                            Struct {
-                                body,
-                                name,
-                            },
-                            span.clone()
-                        )),
+                        Box::new(body),
                     ),
                     span
                 )
             }).labelled("struct");
 
-        let namespace_access = ident.clone() // TODO: Rework and rename this parser
+        let namespace_name = ident.clone() // TODO: Rework this parser
             .then(
                 just(Token::Op("::".to_string()))
                 .ignore_then(ident.clone())
                 .repeated()
-                .at_least(1)
             ).foldl(|a, b| {
                 (a.0 + "::" + &b.0, a.1.start..b.1.end)
             });
         
         let nspace = just(Token::K(Keyword::Namespace))
-            .ignore_then(namespace_access.labelled("namespace name"))
+            .ignore_then(namespace_name.labelled("namespace name"))
             .then(
                 expr.clone()
                     .delimited_by(just(Token::Separator('{')), just(Token::Separator('}')))
@@ -793,12 +750,7 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
                 (
                     Expr::Namespace(
                         name.clone(),
-                        Box::new((NameSpace {
-                            body,
-                            name,
-                        },
-                        span.clone()
-                        )),
+                        Box::new(body),
                     ),
                     span
                 )
@@ -876,14 +828,8 @@ fn enum_() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone {
             (
                 Expr::Enum(
                     name.clone(),
-                    Box::new((
-                        Enum {
-                            body,
-                            name,
-                            type_,
-                        },
-                        span.clone()
-                    )),
+                    Box::new(body),
+                    type_,
                 ),
                 span
             )
@@ -911,13 +857,7 @@ fn bitfield_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>>
             (
                 Expr::Bitfield(
                     name.clone(),
-                    Box::new((
-                        BitField {
-                            body,
-                            name,
-                        },
-                        span.clone()
-                    )),
+                    Box::new(body),
                 ),
                 span
             )
@@ -1007,10 +947,10 @@ fn register_defined_names(named_nodes: &mut HashMap<String, Spanned<NamedNode>>,
             };
             Ok(())
         },
-        Expr::Func(_, _) => Ok(()), // TODO
+        Expr::Func(_, _, _) => Ok(()), // TODO
         Expr::Struct(_, _) => Ok(()), // TODO
         Expr::Namespace(_, _) => Ok(()), // TODO
-        Expr::Enum(_, _) => Ok(()), // TODO
+        Expr::Enum(_, _, _) => Ok(()), // TODO
         Expr::Bitfield(_, _) => Ok(()), // TODO
     }
 }

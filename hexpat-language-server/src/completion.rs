@@ -160,10 +160,10 @@ pub fn get_completion_of(
         Expr::Continue => false, // TODO
         Expr::Break => false, // TODO
         Expr::ExprList(_) => false, // TODO
-        Expr::Func(_, _) => false, // TODO
+        Expr::Func(_, _, _) => false, // TODO
         Expr::Struct(_, _) => false, // TODO
         Expr::Namespace(_, _) => false, // TODO
-        Expr::Enum(_, _) => false, // TODO
+        Expr::Enum(_, _, _) => false, // TODO
         Expr::Bitfield(_, _) => false, // TODO
     }
 }

@@ -276,10 +276,10 @@ pub fn get_reference_of_expr(
                 include_self,
             );
         },
-        Expr::Func(_, _) => (), // TODO
+        Expr::Func(_, _, _) => (), // TODO
         Expr::Struct(_, _) => (), // TODO
         Expr::Namespace(_, _) => (), // TODO
-        Expr::Enum(_, _) => (), // TODO
+        Expr::Enum(_, _, _) => (), // TODO
         Expr::Bitfield(_, _) => (), // TODO
     }
 }
