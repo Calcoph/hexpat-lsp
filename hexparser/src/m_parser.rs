@@ -84,9 +84,9 @@ pub enum Expr {
     BitFieldEntry(Spanned<String>, Box<Spanned<Self>>, Box<Spanned<Self>>), // name length next_entry
     EnumEntry(Spanned<String>, Box<Spanned<Self>>, Box<Spanned<Self>>), // name value next_entry
     MemberAccess(Box<Spanned<Self>>, Spanned<String>),
-    ArrayAccess(Box<Spanned<Self>>, Box<Spanned<Self>>),
+    ArrayAccess(Box<Spanned<Self>>, Box<Spanned<Self>>), // name value
     NamespaceAccess(Box<Spanned<Self>>, Spanned<String>),
-    Using(Box<Spanned<Self>>, Box<Spanned<Self>>), // new_name old_name
+    Using(Box<Spanned<Self>>),
     Continue,
     Break,
     Func(Spanned<String>, Box<Spanned<Func>>),
@@ -662,18 +662,21 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
             });
         
         let using = just(Token::K(Keyword::Using))
-            .ignore_then(ident.clone().map_with_span(|a, span| (Expr::Local(a), span)))
+            .ignore_then(ident.clone())
             .then(
                 just(Token::Op("=".to_string()))
-                    .ignore_then(ident.clone().map_with_span(|a, span| (Expr::Local(a), span))).or_not()
+                    .ignore_then(ident.clone()).or_not()
             ).map_with_span(|(new_type, old_type), span| {
-                (Expr::Using(
-                    Box::new(new_type),
-                    Box::new(match old_type {
-                        Some(a) => a,
-                        None => (Expr::Value(Value::Null), span.clone()),
-                    })
-                ), span)
+                let new_type = match old_type {
+                    Some(s) => (Expr::Definition(new_type.clone(), s, Box::new((Expr::Value(Value::Null), span.clone()))), new_type.1),
+                    None => (Expr::Definition(new_type.clone(), new_type.clone(), Box::new((Expr::Value(Value::Null), span.clone()))), new_type.1),
+                };
+                (
+                    Expr::Using(
+                        Box::new(new_type)
+                    ),
+                    span
+                )
             });
         
         let control_flow = just(Token::K(Keyword::Break)).map_with_span(|_, span| (Expr::Break, span))
@@ -992,10 +995,7 @@ fn register_defined_names(named_nodes: &mut HashMap<String, Spanned<NamedNode>>,
         Expr::NamespaceAccess(e, _) => register_defined_names(named_nodes, &e.0),
         Expr::Dollar => Ok(()),
         Expr::Unary(_, e) => register_defined_names(named_nodes, &e.0),
-        Expr::Using(e1, e2) => match register_defined_names(named_nodes, &e1.0) {
-            Ok(_) => register_defined_names(named_nodes, &e2.0),
-            Err(e) => Err(e),
-        },
+        Expr::Using(e) => register_defined_names(named_nodes, &e.0),
         Expr::Continue => Ok(()),
         Expr::Break => Ok(()),
         Expr::ExprList(box_) => {

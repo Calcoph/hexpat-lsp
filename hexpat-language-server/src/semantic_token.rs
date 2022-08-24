@@ -64,7 +64,7 @@ pub fn semantic_token_from_expr(
         Expr::NamespaceAccess(_, _) => (), // TODO
         Expr::Dollar => (), // TODO
         Expr::Unary(_, _) => (), // TODO
-        Expr::Using(_, _) => (), // TODO
+        Expr::Using(_) => (), // TODO
         Expr::Continue => (), // TODO
         Expr::Break => (), // TODO
         Expr::ExprList(_) => (), // TODO

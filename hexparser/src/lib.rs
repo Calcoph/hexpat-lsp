@@ -55,7 +55,7 @@ pub fn type_inference(expr: &Spanned<Expr>, symbol_type_table: &mut HashMap<Span
         Expr::NamespaceAccess(_, _) => (), // TODO
         Expr::Dollar => (), // TODO
         Expr::Unary(_, _) => (), // TODO
-        Expr::Using(_, _) => (), // TODO
+        Expr::Using(_) => (), // TODO
         Expr::Continue => (), // TODO
         Expr::Break => (), // TODO
         Expr::ExprList(_) => (), // TODO

@@ -93,14 +93,7 @@ pub fn get_reference_of_expr(
                 );
             }
         }
-        Expr::If(test, consequent, alternative) => {
-            get_reference_of_expr(
-                test,
-                definition_ass_list.clone(),
-                reference_symbol.clone(),
-                reference_list,
-                include_self,
-            );
+        Expr::If(_test, consequent, alternative) => {
             get_reference_of_expr(
                 consequent,
                 definition_ass_list.clone(),
@@ -117,7 +110,6 @@ pub fn get_reference_of_expr(
             );
         }
         Expr::Definition(_, (name, name_span), lhs) => {
-            let new_decl = Vector::unit((name.clone(), name_span.clone()));
             let next_symbol = match reference_symbol {
                 Finding(ident) if ident >= name_span.start && ident < name_span.end => {
                     let spanned_name = (name.clone(), name_span.clone());
@@ -137,18 +129,153 @@ pub fn get_reference_of_expr(
                 include_self,
             );
         },
-        Expr::BitFieldEntry(_, _, _) => (), // TODO
-        Expr::EnumEntry(_, _, _) => (), // TODO
-        Expr::MemberAccess(_, _) => (), // TODO
-        Expr::ArrayAccess(_, _) => (), // TODO
-        Expr::Ternary(_, _, _) => (), // TODO
-        Expr::NamespaceAccess(_, _) => (), // TODO
-        Expr::Dollar => (), // TODO
-        Expr::Unary(_, _) => (), // TODO
-        Expr::Using(_, _) => (), // TODO
-        Expr::Continue => (), // TODO
-        Expr::Break => (), // TODO
-        Expr::ExprList(_) => (), // TODO
+        Expr::BitFieldEntry((name, name_span), _length, next_entries) => {
+            let next_symbol = match reference_symbol {
+                Finding(ident) if ident >= name_span.start && ident < name_span.end => {
+                    let spanned_name = (name.clone(), name_span.clone());
+                    if include_self {
+                        reference_list.push(spanned_name.clone());
+                    }
+                    ReferenceSymbol::Found(spanned_name)
+                }
+                _ => reference_symbol,
+            };
+
+            get_reference_of_expr(
+                next_entries,
+                definition_ass_list.clone(),
+                next_symbol.clone(),
+                reference_list,
+                include_self,
+            );
+        },
+        Expr::EnumEntry((name, name_span), _length, next_entries) => {
+            let next_symbol = match reference_symbol {
+                Finding(ident) if ident >= name_span.start && ident < name_span.end => {
+                    let spanned_name = (name.clone(), name_span.clone());
+                    if include_self {
+                        reference_list.push(spanned_name.clone());
+                    }
+                    ReferenceSymbol::Found(spanned_name)
+                }
+                _ => reference_symbol,
+            };
+
+            get_reference_of_expr(
+                next_entries,
+                definition_ass_list.clone(),
+                next_symbol.clone(),
+                reference_list,
+                include_self,
+            );
+        },
+        Expr::MemberAccess(previous_entries, (name, name_span)) => {
+            let next_symbol = match reference_symbol {
+                Finding(ident) if ident >= name_span.start && ident < name_span.end => {
+                    let spanned_name = (name.clone(), name_span.clone());
+                    if include_self {
+                        reference_list.push(spanned_name.clone());
+                    }
+                    ReferenceSymbol::Found(spanned_name)
+                }
+                _ => reference_symbol,
+            };
+
+            get_reference_of_expr(
+                previous_entries,
+                definition_ass_list.clone(),
+                next_symbol.clone(),
+                reference_list,
+                include_self,
+            );
+        },
+        Expr::ArrayAccess(name, value) => {
+            get_reference_of_expr(
+                name,
+                definition_ass_list.clone(),
+                reference_symbol.clone(),
+                reference_list,
+                include_self,
+            );
+            get_reference_of_expr(
+                value,
+                definition_ass_list.clone(),
+                reference_symbol.clone(),
+                reference_list,
+                include_self,
+            );
+        },
+        Expr::Ternary(exp1, exp2, exp3) => {
+            get_reference_of_expr(
+                exp1,
+                definition_ass_list.clone(),
+                reference_symbol.clone(),
+                reference_list,
+                include_self,
+            );
+            get_reference_of_expr(
+                exp2,
+                definition_ass_list.clone(),
+                reference_symbol.clone(),
+                reference_list,
+                include_self,
+            );
+            get_reference_of_expr(
+                exp3,
+                definition_ass_list.clone(),
+                reference_symbol.clone(),
+                reference_list,
+                include_self,
+            );
+        },
+        Expr::NamespaceAccess(previous_entries, (name, name_span)) => {
+            let next_symbol = match reference_symbol {
+                Finding(ident) if ident >= name_span.start && ident < name_span.end => {
+                    let spanned_name = (name.clone(), name_span.clone());
+                    if include_self {
+                        reference_list.push(spanned_name.clone());
+                    }
+                    ReferenceSymbol::Found(spanned_name)
+                }
+                _ => reference_symbol,
+            };
+
+            get_reference_of_expr(
+                previous_entries,
+                definition_ass_list.clone(),
+                next_symbol.clone(),
+                reference_list,
+                include_self,
+            );
+        },
+        Expr::Dollar => (),
+        Expr::Unary(_, exp) => get_reference_of_expr(
+            exp,
+            definition_ass_list.clone(),
+            reference_symbol.clone(),
+            reference_list,
+            include_self,
+        ),
+        Expr::Using(new_name) => {
+            get_reference_of_expr(
+                new_name,
+                definition_ass_list.clone(),
+                reference_symbol.clone(),
+                reference_list,
+                include_self,
+            );
+        },
+        Expr::Continue => (),
+        Expr::Break => (),
+        Expr::ExprList(exps) => for exp in exps.as_ref() {
+            get_reference_of_expr(
+                exp,
+                definition_ass_list.clone(),
+                reference_symbol.clone(),
+                reference_list,
+                include_self,
+            );
+        },
         Expr::Func(_, _) => (), // TODO
         Expr::Struct(_, _) => (), // TODO
         Expr::Namespace(_, _) => (), // TODO
