@@ -111,5 +111,6 @@ pub fn get_definition_of_expr(
         Expr::Namespace(_, _) => (false, None), // TODO
         Expr::Enum(_, _, _) => (false, None), // TODO
         Expr::Bitfield(_, _) => (false, None), // TODO
+        Expr::Return(_) => (false, None), // TODO
     }
 }

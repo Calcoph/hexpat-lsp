@@ -165,5 +165,6 @@ pub fn get_completion_of(
         Expr::Namespace(_, _) => false, // TODO
         Expr::Enum(_, _, _) => false, // TODO
         Expr::Bitfield(_, _) => false, // TODO
+        Expr::Return(_) => false, // TODO
     }
 }

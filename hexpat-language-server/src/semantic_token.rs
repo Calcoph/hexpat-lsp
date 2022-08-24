@@ -177,5 +177,6 @@ pub fn semantic_token_from_expr(
             });
             semantic_token_from_expr(e, semantic_tokens)
         },
+        Expr::Return(_) => (), // TODO
     }
 }

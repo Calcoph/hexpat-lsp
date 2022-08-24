@@ -55,6 +55,7 @@ pub enum Expr {
     ArrayAccess(Box<Spanned<Self>>, Box<Spanned<Self>>), // name value
     NamespaceAccess(Box<Spanned<Self>>, Spanned<String>),
     Using(Box<Spanned<Self>>),
+    Return(Box<Spanned<Self>>),
     Continue,
     Break,
     Func(Spanned<String>, Vec<(Spanned<String>, Spanned<String>)>, Box<Spanned<Self>>), // name args body
@@ -516,7 +517,7 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
         let definition = ident.clone()
                 .then(ident.clone())
                 .then_ignore(
-                    array_definition
+                    array_definition.clone()
                     .or(
                         just(Token::Separator('['))
                         .ignore_then(just(Token::Separator(']')))
@@ -575,6 +576,7 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
         // Blocks are expressions but delimited with braces
         let block = expr.clone()
             .delimited_by(just(Token::Separator('{')), just(Token::Separator('}')))
+            .or(just(Token::Separator('{')).ignore_then(just(Token::Separator('}'))).ignored().map_with_span(|_, span| (Expr::Value(Value::Null), span)))
             // Attempt to recover anything that looks like a block but contains errors
             .recover_with(nested_delimiters(
                 Token::Separator('{'),
@@ -651,14 +653,77 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
             .or(just(Token::K(Keyword::Continue)).map_with_span(|_, span| (Expr::Continue, span)));
 
         let arg_definition = ident.clone()
-            .then(ident.clone());
+            .then(ident.clone())
+            .or(
+                just(Token::Ident("auto".to_string())).map_with_span(|_, span| ("auto".to_string(), span))
+                    .then_ignore(just(Token::Separator('.')))
+                    .then_ignore(just(Token::Separator('.')))
+                    .then_ignore(just(Token::Separator('.')))
+                    .then(ident.clone())
+            );
 
         // Argument lists are just identifiers separated by commas, surrounded by parentheses
-        let args = arg_definition.clone()
+        let args = arg_definition
             .separated_by(just(Token::Separator(',')))
             .allow_trailing()
             .delimited_by(just(Token::Separator('(')), just(Token::Separator(')')))
             .labelled("function args");
+
+        let func_definition_alternative = ident.clone()
+            .then(ident.clone())
+            .then_ignore(
+                array_definition
+                .or(
+                    just(Token::Separator('['))
+                    .ignore_then(just(Token::Separator(']')))
+                    .ignored()
+                    .map_with_span(|(), span| (Expr::Value(Value::Null), span))
+                ).or_not()
+                .then_ignore(
+                    just(Token::K(Keyword::Out))
+                    .or(just(Token::K(Keyword::In)))
+                    .or_not()
+                )
+            )
+            .then(just(Token::Op("@".to_string())).or(just(Token::Op("=".to_string()))).ignore_then(raw_expr.clone()).or_not())
+            .then_ignore(
+                just(Token::Separator('['))
+                    .then(just(Token::Separator('[')))
+                    .then(take_until(just(Token::Separator(']')).then(just(Token::Separator(']')))))
+                    .or_not()
+            )
+            //.map(|((name, val), body)| {
+            .map_with_span(|((type_, name), val), span| {
+                let val = match val {
+                    Some(val) => Box::new(val),
+                    None => Box::new((Expr::Value(Value::Null), span.clone()))
+                };
+                (
+                    Expr::Definition(type_, name, val),
+                    span
+                )
+            });
+
+        let func_body = recursive(|func_body| {
+            choice((
+                func_definition_alternative,
+                expr.clone(),
+                just(Token::K(Keyword::Return)).ignore_then(expr.clone()).map_with_span(|e, span| (Expr::Return(Box::new(e)), span)),
+            )).then(just(Token::Separator(';')).ignore_then(func_body.or_not()).repeated())
+            .map(|(a, b)| {
+                let span = a.1.clone(); // TODO: Not correct
+                ((vec![a], span), b)
+            }).foldl(|(mut a, span), b| {
+                match b {
+                    Some(b) => match b {
+                        (Expr::ExprList(b), _) => a.extend((*b).into_iter()),
+                        _ => unreachable!()
+                    },
+                    None => ()
+                }
+                (a, span)
+            }).map(|(a, span)| (Expr::ExprList(Box::new(a)), span))
+        });
 
         let func = just(Token::K(Keyword::Fn))
             .ignore_then(
@@ -667,8 +732,7 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
             )
             .then(args)
             .then(
-                expr.clone()
-                    .or(just(Token::K(Keyword::Return)).ignore_then(expr.clone()))
+                func_body
                     .delimited_by(just(Token::Separator('{')), just(Token::Separator('}')))
                     .or(just(Token::Separator('{')).ignore_then(just(Token::Separator('}'))).ignored().map_with_span(|_, span| (Expr::Value(Value::Null), span)))
                     // Attempt to recover anything that looks like a function body but contains errors
@@ -952,6 +1016,7 @@ fn register_defined_names(named_nodes: &mut HashMap<String, Spanned<NamedNode>>,
         Expr::Namespace(_, _) => Ok(()), // TODO
         Expr::Enum(_, _, _) => Ok(()), // TODO
         Expr::Bitfield(_, _) => Ok(()), // TODO
+        Expr::Return(_) => Ok(()), // TODO
     }
 }
 

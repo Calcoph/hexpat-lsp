@@ -64,6 +64,7 @@ pub fn type_inference(expr: &Spanned<Expr>, symbol_type_table: &mut HashMap<Span
         Expr::Namespace(_, _) => (), // TODO
         Expr::Enum(_, _, _) => (), // TODO
         Expr::Bitfield(_, _) => (), // TODO
+        Expr::Return(_) => (), // TODO
     }
 }
 

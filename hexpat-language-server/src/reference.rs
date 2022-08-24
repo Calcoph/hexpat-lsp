@@ -281,5 +281,6 @@ pub fn get_reference_of_expr(
         Expr::Namespace(_, _) => (), // TODO
         Expr::Enum(_, _, _) => (), // TODO
         Expr::Bitfield(_, _) => (), // TODO
+        Expr::Return(_) => (), // TODO
     }
 }
