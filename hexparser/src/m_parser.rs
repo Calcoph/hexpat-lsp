@@ -106,133 +106,6 @@ pub enum UnaryOp {
     BNot,
 }
 
-fn enum_entries_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone {
-    let ident = filter_map(|span: Span, tok| match tok {
-        Token::Ident(ident) => Ok((ident.clone(), span)),
-        _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
-    });
-
-    let val = filter_map(|span, tok| match tok {
-        Token::Num(_) => Ok((Expr::Value(Value::Num(42342.0)), span)),// TODO: change 42342.0 to a proper (hex, bin, oct, dec) str->f64
-        _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
-    });
-    let entry = ident.clone()
-        .then(
-            just(Token::Op("=".to_string()))
-            .ignore_then(val)
-            .or_not()
-        );
-
-    entry.clone()
-        .map_with_span(|(name, val), span| {
-            (
-                Expr::EnumEntry(
-                    name,
-                    Box::new(match val {
-                        Some(v) => v,
-                        None => (Expr::Value(Value::Null), span.clone()),
-                    }),
-                    Box::new((Expr::Value(Value::Null), span.clone()))
-                ),
-                span
-            )
-        })
-        .then(
-            just(Token::Separator(','))
-                .ignore_then(entry)
-                .map_with_span(|a, span| (a, span))
-                .repeated()
-                .then_ignore(just(Token::Separator(',')).or_not())
-        )
-        .foldl(|(a, a_span), ((b_name, b_val), b_span)| {
-            let span = a_span.start..b_span.end;
-            match a {
-                Expr::EnumEntry(name, val, last) => {
-                    let next = Box::new((
-                        Expr::EnumEntry(
-                            b_name,
-                            Box::new(match b_val {
-                                Some(v) => v,
-                                None => (Expr::Value(Value::Null), b_span.clone())
-                            }),
-                            last
-                        ),
-                        b_span
-                    ));
-                    (Expr::EnumEntry(name, val, next), span)
-                },
-                _ => unreachable!()
-            }
-        })
-}
-
-fn bitfield_entries_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone {
-    let ident = filter_map(|span, tok| match tok {
-        Token::Ident(ident) => Ok((ident.clone(), span)),
-        _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
-    });
-
-    let val = filter_map(|span, tok| match tok {
-        Token::Num(_) => Ok((Expr::Value(Value::Num(42342.0)), span)),// TODO: change 42342.0 to a proper (hex, bin, oct, dec) str->f64
-        _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
-    });
-    recursive(|entry| {
-        ident
-            .then_ignore(just(Token::Op(":".to_string())))
-            .then(val)
-            .then_ignore(just(Token::Separator(';')))
-            .then(entry.or_not())
-            .map_with_span(|((name, value), next), span| {
-                (
-                    Expr::BitFieldEntry(
-                        name,
-                        Box::new(value),
-                        Box::new(match next {
-                            Some(b) => b,
-                            None => (Expr::Value(Value::Null), span.clone()),
-                        }),
-                    ),
-                    span,
-                )
-            })
-    }).then(ident
-                .then_ignore(just(Token::Op(":".to_string())))
-                .then(val)
-                .or_not()
-                .map_with_span(|a, span| {
-                    match a {
-                        Some((name, val)) => (Some(Expr::BitFieldEntry(
-                            name,
-                            Box::new(val),
-                            Box::new((Expr::Value(Value::Null), span.clone())))),
-                            span
-                        ),
-                        None => (None, span),
-                    }
-                })
-    ).map(|(a, b)| {
-        if let (Expr::BitFieldEntry(name, val, next), span) = a {
-            match b {
-                (Some(c), spanb) => (Expr::BitFieldEntry(
-                    name,
-                    val,
-                    Box::new((c, spanb))
-                ), span),
-                (None, span) => (Expr::BitFieldEntry(name, val, next), span)
-            }
-        } else {
-            a
-        }
-    })
-}
-
-fn ident() -> impl Parser<Token, Spanned<String>, Error = Simple<Token>> + Clone {
-    filter_map(|span: Range<usize>, tok| match tok {
-        Token::Ident(ident) => Ok((ident.clone(), span)),
-        _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
-    })
-}
-
 fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone {
     recursive(|expr: Recursive<Token, Spanned<Expr>, Simple<Token>>| {
         let val = filter_map(|span, tok| match tok {
@@ -852,6 +725,133 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
                 }
                 (a, span)
             }).map(|(a, span)| (Expr::ExprList(Box::new(a)), span))
+    })
+}
+
+fn enum_entries_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone {
+    let ident = filter_map(|span: Span, tok| match tok {
+        Token::Ident(ident) => Ok((ident.clone(), span)),
+        _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
+    });
+
+    let val = filter_map(|span, tok| match tok {
+        Token::Num(_) => Ok((Expr::Value(Value::Num(42342.0)), span)),// TODO: change 42342.0 to a proper (hex, bin, oct, dec) str->f64
+        _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
+    });
+    let entry = ident.clone()
+        .then(
+            just(Token::Op("=".to_string()))
+            .ignore_then(val)
+            .or_not()
+        );
+
+    entry.clone()
+        .map_with_span(|(name, val), span| {
+            (
+                Expr::EnumEntry(
+                    name,
+                    Box::new(match val {
+                        Some(v) => v,
+                        None => (Expr::Value(Value::Null), span.clone()),
+                    }),
+                    Box::new((Expr::Value(Value::Null), span.clone()))
+                ),
+                span
+            )
+        })
+        .then(
+            just(Token::Separator(','))
+                .ignore_then(entry)
+                .map_with_span(|a, span| (a, span))
+                .repeated()
+                .then_ignore(just(Token::Separator(',')).or_not())
+        )
+        .foldl(|(a, a_span), ((b_name, b_val), b_span)| {
+            let span = a_span.start..b_span.end;
+            match a {
+                Expr::EnumEntry(name, val, last) => {
+                    let next = Box::new((
+                        Expr::EnumEntry(
+                            b_name,
+                            Box::new(match b_val {
+                                Some(v) => v,
+                                None => (Expr::Value(Value::Null), b_span.clone())
+                            }),
+                            last
+                        ),
+                        b_span
+                    ));
+                    (Expr::EnumEntry(name, val, next), span)
+                },
+                _ => unreachable!()
+            }
+        })
+}
+
+fn bitfield_entries_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone {
+    let ident = filter_map(|span, tok| match tok {
+        Token::Ident(ident) => Ok((ident.clone(), span)),
+        _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
+    });
+
+    let val = filter_map(|span, tok| match tok {
+        Token::Num(_) => Ok((Expr::Value(Value::Num(42342.0)), span)),// TODO: change 42342.0 to a proper (hex, bin, oct, dec) str->f64
+        _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
+    });
+    recursive(|entry| {
+        ident
+            .then_ignore(just(Token::Op(":".to_string())))
+            .then(val)
+            .then_ignore(just(Token::Separator(';')))
+            .then(entry.or_not())
+            .map_with_span(|((name, value), next), span| {
+                (
+                    Expr::BitFieldEntry(
+                        name,
+                        Box::new(value),
+                        Box::new(match next {
+                            Some(b) => b,
+                            None => (Expr::Value(Value::Null), span.clone()),
+                        }),
+                    ),
+                    span,
+                )
+            })
+    }).then(ident
+                .then_ignore(just(Token::Op(":".to_string())))
+                .then(val)
+                .or_not()
+                .map_with_span(|a, span| {
+                    match a {
+                        Some((name, val)) => (Some(Expr::BitFieldEntry(
+                            name,
+                            Box::new(val),
+                            Box::new((Expr::Value(Value::Null), span.clone())))),
+                            span
+                        ),
+                        None => (None, span),
+                    }
+                })
+    ).map(|(a, b)| {
+        if let (Expr::BitFieldEntry(name, val, next), span) = a {
+            match b {
+                (Some(c), spanb) => (Expr::BitFieldEntry(
+                    name,
+                    val,
+                    Box::new((c, spanb))
+                ), span),
+                (None, span) => (Expr::BitFieldEntry(name, val, next), span)
+            }
+        } else {
+            a
+        }
+    })
+}
+
+fn ident() -> impl Parser<Token, Spanned<String>, Error = Simple<Token>> + Clone {
+    filter_map(|span: Range<usize>, tok| match tok {
+        Token::Ident(ident) => Ok((ident.clone(), span)),
+        _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
     })
 }
 
