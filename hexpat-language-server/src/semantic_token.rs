@@ -71,11 +71,11 @@ pub fn semantic_token_from_expr(
         Expr::Using(_, _) => (), // TODO
         Expr::Continue => (), // TODO
         Expr::Break => (), // TODO
-        Expr::ExprList(_) => (),
-        Expr::Func(_, _) => todo!(),
-        Expr::Struct(_, _) => todo!(),
-        Expr::Namespace(_, _) => todo!(),
-        Expr::Enum(_, _) => todo!(),
-        Expr::Bitfield(_, _) => todo!(), // TODO
+        Expr::ExprList(_) => (), // TODO
+        Expr::Func(_, _) => (), // TODO
+        Expr::Struct(_, _) => (), // TODO
+        Expr::Namespace(_, _) => (), // TODO
+        Expr::Enum(_, _) => (), // TODO
+        Expr::Bitfield(_, _) => (), // TODO
     }
 }

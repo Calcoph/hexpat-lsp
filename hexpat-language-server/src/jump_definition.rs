@@ -114,11 +114,11 @@ pub fn get_definition_of_expr(
         Expr::Using(_, _) => (false, None), // TODO
         Expr::Continue => (false, None), // TODO
         Expr::Break => (false, None), // TODO
-        Expr::ExprList(_) => (false, None),
-        Expr::Func(_, _) => todo!(),
-        Expr::Struct(_, _) => todo!(),
-        Expr::Namespace(_, _) => todo!(),
-        Expr::Enum(_, _) => todo!(),
-        Expr::Bitfield(_, _) => todo!(), // TODO
+        Expr::ExprList(_) => (false, None), // TODO
+        Expr::Func(_, _) => (false, None), // TODO
+        Expr::Struct(_, _) => (false, None), // TODO
+        Expr::Namespace(_, _) => (false, None), // TODO
+        Expr::Enum(_, _) => (false, None), // TODO
+        Expr::Bitfield(_, _) => (false, None), // TODO
     }
 }

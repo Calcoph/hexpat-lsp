@@ -69,7 +69,7 @@ pub fn completion(
                     );
                 }
             },
-            NamedNode::Variable => todo!(),
+            NamedNode::Variable => (), // TODO
         }
     }
 
@@ -165,11 +165,11 @@ pub fn get_completion_of(
         Expr::Using(_, _) => false, // TODO
         Expr::Continue => false, // TODO
         Expr::Break => false, // TODO
-        Expr::ExprList(_) => false,
-        Expr::Func(_, _) => todo!(),
-        Expr::Struct(_, _) => todo!(),
-        Expr::Namespace(_, _) => todo!(),
-        Expr::Enum(_, _) => todo!(),
-        Expr::Bitfield(_, _) => todo!(), // TODO
+        Expr::ExprList(_) => false, // TODO
+        Expr::Func(_, _) => false, // TODO
+        Expr::Struct(_, _) => false, // TODO
+        Expr::Namespace(_, _) => false, // TODO
+        Expr::Enum(_, _) => false, // TODO
+        Expr::Bitfield(_, _) => false, // TODO
     }
 }

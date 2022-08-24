@@ -50,24 +50,24 @@ pub fn type_inference(expr: &Spanned<Expr>, symbol_type_table: &mut HashMap<Span
             type_inference(consequent, symbol_type_table);
             type_inference(alternative, symbol_type_table);
         }
-        Expr::Definition(_, _, _) => (),
-        Expr::BitFieldEntry(_, _, _) => (),
-        Expr::EnumEntry(_, _, _) => (),
-        Expr::MemberAccess(_, _) => (),
-        Expr::ArrayAccess(_, _) => (),
-        Expr::Ternary(_, _, _) => (),
-        Expr::NamespaceAccess(_, _) => (),
-        Expr::Dollar => (),
-        Expr::Unary(_, _) => (),
-        Expr::Using(_, _) => (),
-        Expr::Continue => (),
-        Expr::Break => (),
-        Expr::ExprList(_) => (),
-        Expr::Func(_, _) => todo!(),
-        Expr::Struct(_, _) => todo!(),
-        Expr::Namespace(_, _) => todo!(),
-        Expr::Enum(_, _) => todo!(),
-        Expr::Bitfield(_, _) => todo!(),
+        Expr::Definition(_, _, _) => (), // TODO
+        Expr::BitFieldEntry(_, _, _) => (), // TODO
+        Expr::EnumEntry(_, _, _) => (), // TODO
+        Expr::MemberAccess(_, _) => (), // TODO
+        Expr::ArrayAccess(_, _) => (), // TODO
+        Expr::Ternary(_, _, _) => (), // TODO
+        Expr::NamespaceAccess(_, _) => (), // TODO
+        Expr::Dollar => (), // TODO
+        Expr::Unary(_, _) => (), // TODO
+        Expr::Using(_, _) => (), // TODO
+        Expr::Continue => (), // TODO
+        Expr::Break => (), // TODO
+        Expr::ExprList(_) => (), // TODO
+        Expr::Func(_, _) => (), // TODO
+        Expr::Struct(_, _) => (), // TODO
+        Expr::Namespace(_, _) => (), // TODO
+        Expr::Enum(_, _) => (), // TODO
+        Expr::Bitfield(_, _) => (), // TODO
     }
 }
 

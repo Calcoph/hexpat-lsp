@@ -1022,11 +1022,11 @@ fn register_defined_names(named_nodes: &mut HashMap<String, Spanned<NamedNode>>,
             };
             Ok(())
         },
-        Expr::Func(_, _) => todo!(),
-        Expr::Struct(_, _) => todo!(),
-        Expr::Namespace(_, _) => todo!(),
-        Expr::Enum(_, _) => todo!(),
-        Expr::Bitfield(_, _) => todo!(),
+        Expr::Func(_, _) => Ok(()), // TODO
+        Expr::Struct(_, _) => Ok(()), // TODO
+        Expr::Namespace(_, _) => Ok(()), // TODO
+        Expr::Enum(_, _) => Ok(()), // TODO
+        Expr::Bitfield(_, _) => Ok(()), // TODO
     }
 }
 
