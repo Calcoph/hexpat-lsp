@@ -2,33 +2,20 @@ use std::collections::HashMap;
 
 use im_rc::Vector;
 
-use hexparser::m_parser::{Spanned, Expr, NamedASTNode, NormalASTNode, Declaration};
+use hexparser::m_parser::{Spanned, Expr, NamedNode};
 
 /// return (need_to_continue_search, founded reference)
-pub fn get_definition(ast: &(HashMap<String, NamedASTNode>, Vec<NormalASTNode>), ident_offset: usize) -> Option<Spanned<String>> {
+pub fn get_definition(ast: &(HashMap<String, Spanned<NamedNode>>, Spanned<Expr>), ident_offset: usize) -> Option<Spanned<String>> {
     let mut vector = Vector::new();
-    for (_, v) in ast.0.iter() {
-        match v {
-            NamedASTNode::Expr(Declaration {type_: _, name: (name, span), body: _}) => {
-                if span.end < ident_offset {
-                    vector.push_back((name.clone(), span.clone()));
-                }
-            },
-            v => if v.getname().1.end < ident_offset {
-                vector.push_back(v.getname().clone());
-            }
+    for (name, (v, span)) in ast.0.iter() {
+        if span.end < ident_offset {
+            vector.push_back(name.clone());
         }
     }
 
-    for (_, v) in ast.0.iter() {
-        if let NamedASTNode::Func(v) = v {
-            let args = v.args.iter().map(|arg| arg.clone()).collect::<Vector<_>>();
-            match get_definition_of_expr(&v.body, args.iter().map(|(_, a)| a.clone()).collect::<Vector<Spanned<String>>>() + vector.clone(), ident_offset) {
-                (_, Some(value)) => {
-                    return Some(value);
-                }
-                _ => {}
-            }
+    for (_, (v, span)) in ast.0.iter() {
+        if let NamedNode::Function(args) = v {
+            let args = args.iter().map(|arg| arg.clone()).collect::<Vector<_>>();
         }
     }
     None
@@ -127,7 +114,11 @@ pub fn get_definition_of_expr(
         Expr::Using(_, _) => (false, None), // TODO
         Expr::Continue => (false, None), // TODO
         Expr::Break => (false, None), // TODO
-        Expr::NamespaceBody(_) => (false, None), // TODO
-        Expr::ExprList(_) => (false, None), // TODO
+        Expr::ExprList(_) => (false, None),
+        Expr::Func(_, _) => todo!(),
+        Expr::Struct(_, _) => todo!(),
+        Expr::Namespace(_, _) => todo!(),
+        Expr::Enum(_, _) => todo!(),
+        Expr::Bitfield(_, _) => todo!(), // TODO
     }
 }

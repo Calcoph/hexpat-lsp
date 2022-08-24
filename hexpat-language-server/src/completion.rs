@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use hexparser::m_parser::{Spanned, Expr, NormalASTNode, NamedASTNode};
+use hexparser::m_parser::{Spanned, Expr, NamedNode};
 
 pub enum ImCompleteCompletionItem {
     Variable(String),
@@ -12,80 +12,79 @@ pub enum ImCompleteCompletionItem {
 }
 /// return (need_to_continue_search, founded reference)
 pub fn completion(
-    ast: &(HashMap<String, NamedASTNode>, Vec<NormalASTNode>),
+    ast: &(HashMap<String, Spanned<NamedNode>>, Spanned<Expr>),
     ident_offset: usize,
 ) -> HashMap<String, ImCompleteCompletionItem> {
     let mut map = HashMap::new();
-    for (_, v) in ast.0.iter() {
+    for (name, (v, span)) in ast.0.iter() {
         match v {
-            NamedASTNode::Func(v) => {
-                if v.name.1.end < ident_offset {
+            NamedNode::Function(args) => {
+                if span.end < ident_offset {
                     map.insert(
-                        v.name.0.clone(),
+                        name.clone(),
                         ImCompleteCompletionItem::Function(
-                            v.name.0.clone(),
-                            v.args.clone().into_iter().map(|(_, (name, _))| name).collect(),
+                            name.clone(),
+                            args.clone().into_iter().collect(),
                         ),
                     );
                 }
             },
-            NamedASTNode::Expr(_) => (), // TODO: expr completion todo!()
-            NamedASTNode::Struct(v) => {
-                if v.name.1.end < ident_offset {
+            NamedNode::Struct => {
+                if span.end < ident_offset {
                     map.insert(
-                        v.name.0.clone(),
+                        name.clone(),
                         ImCompleteCompletionItem::Struct(
-                            v.name.0.clone(),
+                            name.clone(),
                         ),
                     );
                 }
             },
-            NamedASTNode::Enum(v) => {
-                if v.name.1.end < ident_offset {
+            NamedNode::Enum => {
+                if span.end < ident_offset {
                     map.insert(
-                        v.name.0.clone(),
+                        name.clone(),
                         ImCompleteCompletionItem::Enum(
-                            v.name.0.clone(),
+                            name.clone(),
                         ),
                     );
                 }
             },
-            NamedASTNode::Namespace(v) => {
-                if v.name.1.end < ident_offset {
+            NamedNode::NameSpace => {
+                if span.end < ident_offset {
                     map.insert(
-                        v.name.0.clone(),
+                        name.clone(),
                         ImCompleteCompletionItem::NameSpace(
-                            v.name.0.clone(),
+                            name.clone(),
                         ),
                     );
                 }
             },
-            NamedASTNode::Bitfield(v) => {
-                if v.name.1.end < ident_offset {
+            NamedNode::BitField => {
+                if span.end < ident_offset {
                     map.insert(
-                        v.name.0.clone(),
+                        name.clone(),
                         ImCompleteCompletionItem::BitField(
-                            v.name.0.clone(),
+                            name.clone(),
                         ),
                     );
                 }
             },
+            NamedNode::Variable => todo!(),
         }
     }
 
     // collect params variable
-    for (_, v) in ast.0.iter() {
+    for (_, (v, span)) in ast.0.iter() {
         match v {
-            NamedASTNode::Func(v) => {
-                if v.span.end > ident_offset && v.span.start < ident_offset {
+            NamedNode::Function(v) => {
+                if span.end > ident_offset && span.start < ident_offset {
                     // log::debug!("this is completion from body {}", name);
-                    v.args.iter().for_each(|(_, (item, _))| {
+                    v.iter().for_each(|item| {
                         map.insert(
                             item.clone(),
                             ImCompleteCompletionItem::Variable(item.clone()),
                         );
                     });
-                    get_completion_of(&v.body, &mut map, ident_offset);
                 }
             },
             _ => (),
@@ -166,7 +165,11 @@ pub fn get_completion_of(
         Expr::Using(_, _) => false, // TODO
         Expr::Continue => false, // TODO
         Expr::Break => false, // TODO
-        Expr::NamespaceBody(_) => false,
-        Expr::ExprList(_) => false, // TODO
+        Expr::ExprList(_) => false,
+        Expr::Func(_, _) => todo!(),
+        Expr::Struct(_, _) => todo!(),
+        Expr::Namespace(_, _) => todo!(),
+        Expr::Enum(_, _) => todo!(),
+        Expr::Bitfield(_, _) => todo!(), // TODO
     }
 }

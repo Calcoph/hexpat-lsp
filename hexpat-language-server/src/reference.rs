@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 
-use chumsky::Span;
 use im_rc::Vector;
-use hexparser::m_parser::{Spanned, Expr, NamedASTNode, NormalASTNode, Declaration};
+use hexparser::m_parser::{Spanned, Expr, NamedNode};
 
 #[derive(Debug, Clone)]
 pub enum ReferenceSymbol {
@@ -13,140 +12,14 @@ pub enum ReferenceSymbol {
 use ReferenceSymbol::*;
 
 pub fn get_reference(
-    ast: &(HashMap<String, NamedASTNode>, Vec<NormalASTNode>),
+    ast: &(HashMap<String, Spanned<NamedNode>>, Spanned<Expr>),
     ident_offset: usize,
     include_self: bool,
 ) -> Vec<Spanned<String>> {
-    let mut vector = Vector::new();
+    let vector = Vector::new();
     let mut reference_list = vec![];
-    // for (_, v) in ast.iter() {
-    //     if v.name.1.end < ident_offset {
-    //         vector.push_back(v.name.clone());
-    //     }
-    // }
-    let mut kv_list = ast.0.iter().collect::<Vec<_>>();
-    kv_list.sort_by(|a, b| a.1.getname().start().cmp(&b.1.getname().start()));
-    let mut reference_symbol = ReferenceSymbol::Founding(ident_offset);
-    // let mut fn_vector = Vector::new();
-    for (_, v) in kv_list {
-        match v {
-            NamedASTNode::Func(v) => {
-                let (_, range) = &v.name;
-                if ident_offset >= range.start && ident_offset < range.end {
-                    reference_symbol = ReferenceSymbol::Founded(v.name.clone());
-                    if include_self {
-                        reference_list.push(v.name.clone());
-                    }
-                };
-                vector.push_back(v.name.clone());
-                let args = v
-                    .args
-                    .iter()
-                    .map(|(_, arg)| {
-                        if ident_offset >= arg.1.start && ident_offset < arg.1.end {
-                            reference_symbol = ReferenceSymbol::Founded(arg.clone());
-                            if include_self {
-                                reference_list.push(arg.clone());
-                            }
-                        }
-                        arg.clone()
-                    })
-                    .collect::<Vector<_>>();
-                get_reference_of_expr(
-                    &v.body,
-                    args + vector.clone(),
-                    reference_symbol.clone(),
-                    &mut reference_list,
-                    include_self,
-                );
-            },
-            NamedASTNode::Struct(v) => {
-                let (_, range) = &v.name;
-                if ident_offset >= range.start && ident_offset < range.end {
-                    reference_symbol = ReferenceSymbol::Founded(v.name.clone());
-                    if include_self {
-                        reference_list.push(v.name.clone());
-                    }
-                };
-                vector.push_back(v.name.clone());
-                get_reference_of_expr(
-                    &v.body,
-                    vector.clone(),
-                    reference_symbol.clone(),
-                    &mut reference_list,
-                    include_self,
-                );
-            },
-            NamedASTNode::Enum(v) => {
-                let (_, range) = &v.name;
-                if ident_offset >= range.start && ident_offset < range.end {
-                    reference_symbol = ReferenceSymbol::Founded(v.name.clone());
-                    if include_self {
-                        reference_list.push(v.name.clone());
-                    }
-                };
-                vector.push_back(v.name.clone());
-                get_reference_of_expr(
-                    &v.body,
-                    vector.clone(),
-                    reference_symbol.clone(),
-                    &mut reference_list,
-                    include_self,
-                );
-            },
-            NamedASTNode::Namespace(v) => {
-                let (_, range) = &v.name;
-                if ident_offset >= range.start && ident_offset < range.end {
-                    reference_symbol = ReferenceSymbol::Founded(v.name.clone());
-                    if include_self {
-                        reference_list.push(v.name.clone());
-                    }
-                };
-                vector.push_back(v.name.clone());
-                get_reference_of_expr(
-                    &v.body,
-                    vector.clone(),
-                    reference_symbol.clone(),
-                    &mut reference_list,
-                    include_self,
-                );
-            },
-            NamedASTNode::Bitfield(v) => {
-                let (_, range) = &v.name;
-                if ident_offset >= range.start && ident_offset < range.end {
-                    reference_symbol = ReferenceSymbol::Founded(v.name.clone());
-                    if include_self {
-                        reference_list.push(v.name.clone());
-                    }
-                };
-                vector.push_back(v.name.clone());
-                get_reference_of_expr(
-                    &v.body,
-                    vector.clone(),
-                    reference_symbol.clone(),
-                    &mut reference_list,
-                    include_self,
-                );
-            },
-            NamedASTNode::Expr(Declaration {type_: _, name: (name, range), body: lhs}) => {
-                    if ident_offset >= range.start && ident_offset < range.end {
-                        reference_symbol = ReferenceSymbol::Founded((name.clone(), range.clone()));
-                        if include_self {
-                            reference_list.push((name.clone(), range.clone()));
-                        }
-                    };
-                    vector.push_back((name.clone(), range.clone()));
-
-                    get_reference_of_expr(
-                        lhs,
-                        vector.clone(),
-                        reference_symbol.clone(),
-                        &mut reference_list,
-                        include_self,
-                    );
-            }
-        }
-    }
+    let reference_symbol = ReferenceSymbol::Founding(ident_offset);
+    get_reference_of_expr(&ast.1, vector, reference_symbol, &mut reference_list, include_self);
     reference_list
 }
 
@@ -291,7 +164,11 @@ pub fn get_reference_of_expr(
         Expr::Using(_, _) => (), // TODO
         Expr::Continue => (), // TODO
         Expr::Break => (), // TODO
-        Expr::NamespaceBody(_) => (), // TODO
-        Expr::ExprList(_) => (), // TODO
+        Expr::ExprList(_) => (),
+        Expr::Func(_, _) => todo!(),
+        Expr::Struct(_, _) => todo!(),
+        Expr::Namespace(_, _) => todo!(),
+        Expr::Enum(_, _) => todo!(),
+        Expr::Bitfield(_, _) => todo!(), // TODO
     }
 }

@@ -1,9 +1,8 @@
 use std::collections::HashMap;
-use std::path::Path;
 
 use dashmap::DashMap;
-use hexparser::m_parser::{NamedASTNode, NormalASTNode};
-use hexparser::{parse, type_inference, ImCompleteSemanticToken, Value};
+use hexparser::m_parser::{NamedNode};
+use hexparser::{parse, type_inference, ImCompleteSemanticToken, Value, Spanned, Expr};
 use hexpat_language_server::completion::completion;
 use hexpat_language_server::jump_definition::get_definition;
 use hexpat_language_server::reference::get_reference;
@@ -25,7 +24,7 @@ enum ConfigurationEntry {
 #[derive(Debug)]
 struct Backend {
     client: Client,
-    ast_map: DashMap<String, (HashMap<String, NamedASTNode>, Vec<NormalASTNode>)>,
+    ast_map: DashMap<String, (HashMap<String, Spanned<NamedNode>>, Spanned<Expr>)>,
     document_map: DashMap<String, Rope>,
     semantic_token_map: DashMap<String, Vec<ImCompleteSemanticToken>>,
     configuration: DashMap<String, ConfigurationEntry>
@@ -455,12 +454,7 @@ impl Backend {
     async fn inlay_hint(&self, params: InlayHintParams) -> Result<Vec<(usize, usize, String)>> {
         let mut hashmap = HashMap::new();
         if let Some(ast) = self.ast_map.get(&params.path) {
-            ast.0.iter().for_each(|(_, v)| {
-                match v {
-                    NamedASTNode::Expr(_) => (),
-                    v => type_inference(&v.getbody().unwrap(), &mut hashmap)
-                }
-            });
+            type_inference(&ast.1, &mut hashmap);
         }
 
         let inlay_hint_list = hashmap
