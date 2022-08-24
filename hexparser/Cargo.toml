@@ -14,3 +14,6 @@ expand_str = "0.1.1"
 
 [dependencies.parserlib]
 path = "../parserlib"
+
+[debug]
+incremental = true

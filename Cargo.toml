@@ -4,6 +4,3 @@ members = [
     "hexparser",
     "parserlib"
 ]
-
-[debug]
-incremental = true

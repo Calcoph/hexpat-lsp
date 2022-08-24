@@ -22,3 +22,6 @@ path = "../hexparser"
 
 [dependencies.parserlib]
 path = "../parserlib"
+
+[debug]
+incremental = true

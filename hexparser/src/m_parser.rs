@@ -142,14 +142,12 @@ fn enum_entries_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Tok
     let ident = filter_map(|span: Span, tok| match tok {
         Token::Ident(ident) => Ok((ident.clone(), span)),
         _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
-    })
-    .labelled("identifier");
+    });
 
     let val = filter_map(|span, tok| match tok {
         Token::Num(_) => Ok((Expr::Value(Value::Num(42342.0)), span)),// TODO: change 42342.0 to a proper (hex, bin, oct, dec) str->f64
         _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
-    })
-    .labelled("value");
+    });
     recursive(|entry| {
         ident
             .then(
@@ -216,14 +214,12 @@ fn bitfield_entries_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple
     let ident = filter_map(|span, tok| match tok {
         Token::Ident(ident) => Ok((ident.clone(), span)),
         _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
-    })
-    .labelled("identifier");
+    });
 
     let val = filter_map(|span, tok| match tok {
         Token::Num(_) => Ok((Expr::Value(Value::Num(42342.0)), span)),// TODO: change 42342.0 to a proper (hex, bin, oct, dec) str->f64
         _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
-    })
-    .labelled("value");
+    });
     recursive(|entry| {
         ident
             .then_ignore(just(Token::Op(":".to_string())))
@@ -274,6 +270,13 @@ fn bitfield_entries_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple
     })
 }
 
+fn ident() -> impl Parser<Token, Spanned<String>, Error = Simple<Token>> + Clone {
+    filter_map(|span: Range<usize>, tok| match tok {
+        Token::Ident(ident) => Ok((ident.clone(), span)),
+        _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
+    })
+}
+
 fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone {
     recursive(|expr: Recursive<Token, Spanned<Expr>, Simple<Token>>| {
         let val = filter_map(|span, tok| match tok {
@@ -285,11 +288,7 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
         })
         .labelled("value");
 
-        let ident = filter_map(|span: Range<usize>, tok| match tok {
-            Token::Ident(ident) => Ok((ident.clone(), span)),
-            _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
-        })
-        .labelled("identifier");
+        let ident = ident();
 
         let builtin_func = filter_map(|span, tok| match tok {
             Token::B(func) => Ok((func.clone(), span)),
@@ -327,7 +326,7 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
             .map_with_span(|a, span| (Expr::Local(a), span))
             .then(
                 just(Token::Op("::".to_string()))
-                .ignore_then(ident)
+                .ignore_then(ident.clone())
                 .repeated()
                 .at_least(1)
             ).foldl(|a, b| {
@@ -352,7 +351,7 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
             array_access.clone(),
             namespace_access.clone(),
             member_access.clone(),
-            ident.map_with_span(|a, span| (Expr::Local(a), span)),
+            ident.clone().map_with_span(|a, span| (Expr::Local(a), span)),
             just(Token::Op("$".to_string()))
                 .map_with_span(|_, span: Range<usize>| (Expr::Local(("$".to_string(), span.clone())), span)),
             //.or(ident.map(Expr::Local).map_with_span(|expr, span| (expr, span)))
@@ -548,7 +547,7 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
             ));
 
         let definition = ident.clone()
-                .then(ident)
+                .then(ident.clone())
                 .then_ignore(
                     array_definition
                     .or(
@@ -664,10 +663,10 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
             });
         
         let using = just(Token::K(Keyword::Using))
-            .ignore_then(ident.map_with_span(|a, span| (Expr::Local(a), span)))
+            .ignore_then(ident.clone().map_with_span(|a, span| (Expr::Local(a), span)))
             .then(
                 just(Token::Op("=".to_string()))
-                    .ignore_then(ident.map_with_span(|a, span| (Expr::Local(a), span))).or_not()
+                    .ignore_then(ident.clone().map_with_span(|a, span| (Expr::Local(a), span))).or_not()
             ).map_with_span(|(new_type, old_type), span| {
                 (Expr::Using(
                     Box::new(new_type),
@@ -682,7 +681,7 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
             .or(just(Token::K(Keyword::Continue)).map_with_span(|_, span| (Expr::Continue, span)));
 
         let arg_definition = ident.clone()
-            .then(ident);
+            .then(ident.clone());
 
         // Argument lists are just identifiers separated by commas, surrounded by parentheses
         let args = arg_definition.clone()
@@ -693,7 +692,7 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
 
         let func = just(Token::K(Keyword::Fn))
             .ignore_then(
-                ident
+                ident.clone()
                     .labelled("function name"),
             )
             .then(args)
@@ -725,16 +724,15 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
                     ),
                     span
                 )
-            })
-            .labelled("function");
+            }).labelled("function");
         
         let strct = just(Token::K(Keyword::Struct))
             .ignore_then(
-                ident
+                ident.clone()
                     .labelled("struct name"),
             )
             .then(
-                expr_parser()
+                expr.clone()
                     .delimited_by(just(Token::Separator('{')), just(Token::Separator('}')))
                     .or(just(Token::Separator('{')).ignore_then(just(Token::Separator('}'))).ignored().map_with_span(|_, span| (Expr::Value(Value::Null), span)))
                     // Attempt to recover anything that looks like a function body but contains errors
@@ -761,12 +759,12 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
                     ),
                     span
                 )
-            })
-            .labelled("struct");
+            }).labelled("struct");
+
         let namespace_access = ident.clone() // TODO: Rework and rename this parser
             .then(
                 just(Token::Op("::".to_string()))
-                .ignore_then(ident)
+                .ignore_then(ident.clone())
                 .repeated()
                 .at_least(1)
             ).foldl(|a, b| {
@@ -774,10 +772,7 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
             });
         
         let nspace = just(Token::K(Keyword::Namespace))
-            .ignore_then(
-                namespace_access
-                    .labelled("namespace name"),
-            )
+            .ignore_then(namespace_access.labelled("namespace name"))
             .then(
                 expr.clone()
                     .delimited_by(just(Token::Separator('{')), just(Token::Separator('}')))
@@ -805,78 +800,11 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
                     ),
                     span
                 )
-            })
-            .labelled("namespace");
+            });
         
-        let enm = just(Token::K(Keyword::Enum))
-            .ignore_then(ident.clone())
-            .then_ignore(just(Token::Op(":".to_string())))
-            .then(ident)
-            .then(
-                enum_entries_parser()
-                    .delimited_by(just(Token::Separator('{')), just(Token::Separator('}')))
-                    .or(just(Token::Separator('{')).ignore_then(just(Token::Separator('}'))).ignored().map_with_span(|_, span| (Expr::Value(Value::Null), span)))
-                    // Attempt to recover anything that looks like a function body but contains errors
-                    .recover_with(nested_delimiters(
-                        Token::Separator('{'),
-                        Token::Separator('}'),
-                        [
-                            (Token::Separator('('), Token::Separator(')')),
-                            (Token::Separator('['), Token::Separator(']')),
-                        ],
-                        |span| (Expr::Error, span),
-                    )),
-            )
-            .map_with_span(|((name, type_), body), span| {
-                (
-                    Expr::Enum(
-                        name.clone(),
-                        Box::new((
-                            Enum {
-                                body,
-                                name,
-                                type_,
-                            },
-                            span.clone()
-                        )),
-                    ),
-                    span
-                )
-            })
-            .labelled("enum");
+        let enm = enum_();
 
-        let bitfield = just(Token::K(Keyword::Bitfield))
-            .ignore_then(ident.labelled("bitfield name"))
-            .then(
-                bitfield_entries_parser()
-                    .delimited_by(just(Token::Separator('{')), just(Token::Separator('}')))
-                    .or(just(Token::Separator('{')).ignore_then(just(Token::Separator('}'))).ignored().map_with_span(|_, span| (Expr::Value(Value::Null), span)))
-                    // Attempt to recover anything that looks like a function body but contains errors
-                    .recover_with(nested_delimiters(
-                        Token::Separator('{'),
-                        Token::Separator('}'),
-                        [
-                            (Token::Separator('('), Token::Separator(')')),
-                            (Token::Separator('['), Token::Separator(']')),
-                        ],
-                        |span| (Expr::Error, span),
-                    )),
-            ).map_with_span(|(name, body), span| {
-                (
-                    Expr::Bitfield(
-                        name.clone(),
-                        Box::new((
-                            BitField {
-                                body,
-                                name,
-                            },
-                            span.clone()
-                        )),
-                    ),
-                    span
-                )
-            })
-            .labelled("bitfield");
+        let bitfield = bitfield_parser();
 
         let semicolon_expr = choice((
             definition,
@@ -919,6 +847,79 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
                 (a, span)
             }).map(|(a, span)| (Expr::ExprList(Box::new(a)), span))
     })
+}
+
+fn enum_() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone {
+    let ident = ident();
+    just(Token::K(Keyword::Enum))
+        .ignore_then(ident.clone())
+        .then_ignore(just(Token::Op(":".to_string())))
+        .then(ident)
+        .then(
+            enum_entries_parser()
+                .delimited_by(just(Token::Separator('{')), just(Token::Separator('}')))
+                .or(just(Token::Separator('{')).ignore_then(just(Token::Separator('}'))).ignored().map_with_span(|_, span| (Expr::Value(Value::Null), span)))
+                // Attempt to recover anything that looks like a function body but contains errors
+                .recover_with(nested_delimiters(
+                    Token::Separator('{'),
+                    Token::Separator('}'),
+                    [
+                        (Token::Separator('('), Token::Separator(')')),
+                        (Token::Separator('['), Token::Separator(']')),
+                    ],
+                    |span| (Expr::Error, span),
+                )),
+        )
+        .map_with_span(|((name, type_), body), span| {
+            (
+                Expr::Enum(
+                    name.clone(),
+                    Box::new((
+                        Enum {
+                            body,
+                            name,
+                            type_,
+                        },
+                        span.clone()
+                    )),
+                ),
+                span
+            )
+        })
+}
+
+fn bitfield_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone {
+    just(Token::K(Keyword::Bitfield))
+        .ignore_then(ident())
+        .then(
+            bitfield_entries_parser()
+                .delimited_by(just(Token::Separator('{')), just(Token::Separator('}')))
+                .or(just(Token::Separator('{')).ignore_then(just(Token::Separator('}'))).ignored().map_with_span(|_, span| (Expr::Value(Value::Null), span)))
+                // Attempt to recover anything that looks like a function body but contains errors
+                .recover_with(nested_delimiters(
+                    Token::Separator('{'),
+                    Token::Separator('}'),
+                    [
+                        (Token::Separator('('), Token::Separator(')')),
+                        (Token::Separator('['), Token::Separator(']')),
+                    ],
+                    |span| (Expr::Error, span),
+                )),
+        ).map_with_span(|(name, body), span| {
+            (
+                Expr::Bitfield(
+                    name.clone(),
+                    Box::new((
+                        BitField {
+                            body,
+                            name,
+                        },
+                        span.clone()
+                    )),
+                ),
+                span
+            )
+        })
 }
 
 pub enum SpanASTNode {
