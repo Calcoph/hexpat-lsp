@@ -69,9 +69,17 @@ pub fn semantic_token_from_expr(
             semantic_token_from_expr(e2, semantic_tokens)
         },// TODO
         Expr::EnumEntry((_, name_span), e1, e2) => {
+            semantic_tokens.push(ImCompleteSemanticToken {
+                start: name_span.start,
+                length: name_span.len(),
+                token_type: LEGEND_TYPE
+                    .iter()
+                    .position(|item| item == &SemanticTokenType::ENUM_MEMBER)
+                    .unwrap(),
+            });
             semantic_token_from_expr(e1, semantic_tokens);
-            semantic_token_from_expr(e2, semantic_tokens)
-        },// TODO
+            semantic_token_from_expr(e2, semantic_tokens);
+        },
         Expr::MemberAccess(e, (_, name_span)) => {
             semantic_token_from_expr(e, semantic_tokens);
         }, // TODO

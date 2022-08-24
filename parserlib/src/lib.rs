@@ -15,4 +15,5 @@ pub const LEGEND_TYPE: &[SemanticTokenType] = &[
     SemanticTokenType::NAMESPACE, // 11
     SemanticTokenType::TYPE, // 12
     SemanticTokenType::new("dollar"), // 13
+    SemanticTokenType::ENUM_MEMBER, // 14
 ];

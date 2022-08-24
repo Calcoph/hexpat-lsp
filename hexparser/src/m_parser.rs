@@ -116,66 +116,54 @@ fn enum_entries_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Tok
         Token::Num(_) => Ok((Expr::Value(Value::Num(42342.0)), span)),// TODO: change 42342.0 to a proper (hex, bin, oct, dec) str->f64
         _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
     });
-    recursive(|entry| {
-        ident
-            .then(
-                just(Token::Op("=".to_string()))
-                .ignore_then(val)
-                .or_not()
-            )
-            .then_ignore(just(Token::Separator(',')))
-            .then(entry.or_not())
-            .map_with_span(|((name, value), next), span| {
-                (
-                    Expr::BitFieldEntry(
-                        name,
-                        Box::new(match value {
-                            Some(v) => v,
-                            None => (Expr::Value(Value::Null), span.clone()),
-                        }),
-                        Box::new(match next {
-                            Some(b) => b,
-                            None => (Expr::Value(Value::Null), span.clone()),
-                        }),
-                    ),
-                    span,
-                )
-            })
-    }).then(ident
-                .then(
-                    just(Token::Op("=".to_string()))
-                    .ignore_then(val)
-                    .or_not()
-                )
-                .or_not()
-                .map_with_span(|a, span| {
-                    match a {
-                        Some((name, val)) => (Some(Expr::BitFieldEntry(
-                            name,
-                            Box::new(match val {
-                                Some(v) => v,
-                                None => (Expr::Value(Value::Null), span.clone()),
-                            }),
-                            Box::new((Expr::Value(Value::Null), span.clone())))),
-                            span
-                        ),
-                        None => (None, span),
-                    }
-                })
-    ).map(|(a, b)| {
-        if let (Expr::BitFieldEntry(name, val, next), span) = a {
-            match b {
-                (Some(c), spanb) => (Expr::BitFieldEntry(
+    let entry = ident.clone()
+        .then(
+            just(Token::Op("=".to_string()))
+            .ignore_then(val)
+            .or_not()
+        );
+
+    entry.clone()
+        .map_with_span(|(name, val), span| {
+            (
+                Expr::EnumEntry(
                     name,
-                    val,
-                    Box::new((c, spanb))
-                ), span),
-                (None, span) => (Expr::BitFieldEntry(name, val, next), span)
+                    Box::new(match val {
+                        Some(v) => v,
+                        None => (Expr::Value(Value::Null), span.clone()),
+                    }),
+                    Box::new((Expr::Value(Value::Null), span.clone()))
+                ),
+                span
+            )
+        })
+        .then(
+            just(Token::Separator(','))
+                .ignore_then(entry)
+                .map_with_span(|a, span| (a, span))
+                .repeated()
+                .then_ignore(just(Token::Separator(',')).or_not())
+        )
+        .foldl(|(a, a_span), ((b_name, b_val), b_span)| {
+            let span = a_span.start..b_span.end;
+            match a {
+                Expr::EnumEntry(name, val, last) => {
+                    let next = Box::new((
+                        Expr::EnumEntry(
+                            b_name,
+                            Box::new(match b_val {
+                                Some(v) => v,
+                                None => (Expr::Value(Value::Null), b_span.clone())
+                            }),
+                            last
+                        ),
+                        b_span
+                    ));
+                    (Expr::EnumEntry(name, val, next), span)
+                },
+                _ => unreachable!()
             }
-        } else {
-            a
-        }
-    })
+        })
 }
 
 fn bitfield_entries_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone {
