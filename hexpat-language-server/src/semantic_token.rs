@@ -64,9 +64,8 @@ pub fn semantic_token_from_expr(
             });
             semantic_token_from_expr(rhs, semantic_tokens)
         },
-        Expr::BitFieldEntry((_, name_span), e1, e2) => {
+        Expr::BitFieldEntry((_, name_span), e1) => {
             semantic_token_from_expr(e1, semantic_tokens);
-            semantic_token_from_expr(e2, semantic_tokens)
         },// TODO
         Expr::EnumEntry((_, name_span), e1) => {
             semantic_tokens.push(ImCompleteSemanticToken {
@@ -78,13 +77,6 @@ pub fn semantic_token_from_expr(
                     .unwrap(),
             });
             semantic_token_from_expr(e1, semantic_tokens);
-        },
-        Expr::MemberAccess(e, (_, name_span)) => {
-            semantic_token_from_expr(e, semantic_tokens);
-        }, // TODO
-        Expr::ArrayAccess(e1, e2) => {
-            semantic_token_from_expr(e1, semantic_tokens);
-            semantic_token_from_expr(e2, semantic_tokens)
         },
         Expr::Ternary(e1, e2, e3) => {
             semantic_token_from_expr(e1, semantic_tokens);
@@ -185,5 +177,6 @@ pub fn semantic_token_from_expr(
             semantic_token_from_expr(e, semantic_tokens)
         },
         Expr::Return(_) => (), // TODO
+        Expr::Access(_, _) => (), // TODO
     }
 }

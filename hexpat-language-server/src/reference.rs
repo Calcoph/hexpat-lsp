@@ -129,7 +129,7 @@ pub fn get_reference_of_expr(
                 include_self,
             );
         },
-        Expr::BitFieldEntry((name, name_span), _length, next_entries) => {
+        Expr::BitFieldEntry((name, name_span), _length) => {
             let next_symbol = match reference_symbol {
                 Finding(ident) if ident >= name_span.start && ident < name_span.end => {
                     let spanned_name = (name.clone(), name_span.clone());
@@ -140,14 +140,6 @@ pub fn get_reference_of_expr(
                 }
                 _ => reference_symbol,
             };
-
-            get_reference_of_expr(
-                next_entries,
-                definition_ass_list.clone(),
-                next_symbol.clone(),
-                reference_list,
-                include_self,
-            );
         },
         Expr::EnumEntry((name, name_span), _length) => {
             let next_symbol = match reference_symbol {
@@ -160,42 +152,6 @@ pub fn get_reference_of_expr(
                 }
                 _ => reference_symbol,
             };
-        },
-        Expr::MemberAccess(previous_entries, (name, name_span)) => {
-            let next_symbol = match reference_symbol {
-                Finding(ident) if ident >= name_span.start && ident < name_span.end => {
-                    let spanned_name = (name.clone(), name_span.clone());
-                    if include_self {
-                        reference_list.push(spanned_name.clone());
-                    }
-                    ReferenceSymbol::Found(spanned_name)
-                }
-                _ => reference_symbol,
-            };
-
-            get_reference_of_expr(
-                previous_entries,
-                definition_ass_list.clone(),
-                next_symbol.clone(),
-                reference_list,
-                include_self,
-            );
-        },
-        Expr::ArrayAccess(name, value) => {
-            get_reference_of_expr(
-                name,
-                definition_ass_list.clone(),
-                reference_symbol.clone(),
-                reference_list,
-                include_self,
-            );
-            get_reference_of_expr(
-                value,
-                definition_ass_list.clone(),
-                reference_symbol.clone(),
-                reference_list,
-                include_self,
-            );
         },
         Expr::Ternary(exp1, exp2, exp3) => {
             get_reference_of_expr(
@@ -274,5 +230,6 @@ pub fn get_reference_of_expr(
         Expr::Enum(_, _, _) => (), // TODO
         Expr::Bitfield(_, _) => (), // TODO
         Expr::Return(_) => (), // TODO
+        Expr::Access(_, _) => (), // TODO
     }
 }

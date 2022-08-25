@@ -7,11 +7,6 @@ use super::{m_lexer::{Token, Keyword}, Span};
 
 pub type Spanned<T> = (T, Span);
 
-struct Error {
-    span: Span,
-    msg: String,
-}
-
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Value {
     Null,
@@ -49,10 +44,8 @@ pub enum Expr {
     Call(Box<Spanned<Self>>, Spanned<Vec<Spanned<Self>>>), // name arguments
     If(Box<Spanned<Self>>, Box<Spanned<Self>>, Box<Spanned<Self>>), // if condition body
     Definition(Spanned<String>, Spanned<String>, Box<Spanned<Self>>), // type name everything_else
-    BitFieldEntry(Spanned<String>, Box<Spanned<Self>>, Box<Spanned<Self>>), // name length next_entry
+    BitFieldEntry(Spanned<String>, Box<Spanned<Self>>), // name length
     EnumEntry(Spanned<String>, Box<Spanned<Self>>), // name value
-    MemberAccess(Box<Spanned<Self>>, Spanned<String>),
-    ArrayAccess(Box<Spanned<Self>>, Box<Spanned<Self>>), // name value
     NamespaceAccess(Box<Spanned<Self>>, Spanned<String>),
     Using(Box<Spanned<Self>>),
     Return(Box<Spanned<Self>>),
@@ -63,6 +56,7 @@ pub enum Expr {
     Namespace(Spanned<String>, Box<Spanned<Self>>), // name body
     Enum(Spanned<String>, Box<Spanned<Self>>, Spanned<String>), // name body type
     Bitfield(Spanned<String>, Box<Spanned<Self>>), // name body
+    Access(Box<Spanned<Self>>, Box<Spanned<Self>>),
 }
 
 impl Expr {
@@ -132,54 +126,69 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
             .or_not()
             .map(|item| item.unwrap_or_else(Vec::new));
 
-        let member_access = choice((
-                ident.clone(),
-                just(Token::K(Keyword::This)).map_with_span(|_, span| ("this".to_string(), span)),
-                just(Token::K(Keyword::Parent)).map_with_span(|_, span| ("parent".to_string(), span))
-            ))
-            .map_with_span(|a, span| (Expr::Local(a), span))
-            .then(
-                just(Token::Separator('.'))
-                .ignore_then(choice((
-                    ident.clone(),
-                    just(Token::K(Keyword::Parent)).map_with_span(|_, span| ("parent".to_string(), span))
-                )))
-                .repeated()
-                .at_least(1)
-            ).foldl(|a, b| {
-                let span = a.1.start..b.1.end;
-                (Expr::MemberAccess(Box::new(a), b), span)
-            });
-
         let namespace_access = ident.clone()
             .map_with_span(|a, span| (Expr::Local(a), span))
-            .then(
-                just(Token::Op("::".to_string()))
-                .ignore_then(ident.clone())
-                .repeated()
-                .at_least(1)
-            ).foldl(|a, b| {
-                let span = a.1.start..b.1.end;
-                (Expr::NamespaceAccess(Box::new(a), b), span)
+            .then_ignore(just(Token::Op("::".to_string())))
+            .repeated()
+            .at_least(1)
+            .map_with_span(|a, span| {
+                (Expr::ExprList(Box::new(a)), span)
             });
 
-        let array_access = ident.clone()
-            .map_with_span(|a, span| (Expr::Local(a), span))
-            .then(
-                just(Token::Separator('['))
-                .ignore_then(expr.clone())
-                .then_ignore(just(Token::Separator(']')))
-            ).map(|(a, b)| {
-                let span = a.1.start..b.1.end;
-                (Expr::ArrayAccess(Box::new(a), Box::new(b)), span)
+        let array_access = expr.clone().delimited_by(just(Token::Separator('[')), just(Token::Separator(']')))
+            .recover_with(nested_delimiters(
+                Token::Separator('('),
+                Token::Separator(')'),
+                [
+                    (Token::Separator('{'), Token::Separator('}')),
+                ],
+                |span| (Expr::Error, span),
+            ));
+
+        let member_access = just(Token::Separator('.'))
+            .ignore_then(choice((
+                ident.clone(),
+                just(Token::K(Keyword::Parent)).map_with_span(|_, span| ("parent".to_string(), span))
+            ))).map_with_span(|a, span| (Expr::Local(a), span))
+            .repeated()
+            .at_least(1)
+            .map_with_span(|a, span| {
+                (Expr::ExprList(Box::new(a)), span)
             });
+        
+        let namespace_access = namespace_access
+            .then(
+                ident.clone().map_with_span(|a, span| (Expr::Local(a), span))
+            ).map_with_span(|(a, b), span| (Expr::Access(Box::new(a), Box::new(b)), span))
+            .then(
+                member_access.clone()
+                    .or(array_access.clone())
+                    .repeated()
+            ).foldl(|(a, a_span), (b, b_span)| {
+                let span = a_span.start..b_span.end;
+                (Expr::Access(Box::new((a, a_span)), Box::new((b, b_span))), span)
+            });
+
+        let access = namespace_access
+            .or(
+                choice((
+                    ident.clone().map_with_span(|a, span| (Expr::Local(a), span)),
+                    just(Token::K(Keyword::This)).map_with_span(|_, span: Span| (Expr::Local(("this".to_string(), span.clone())), span)),
+                    just(Token::K(Keyword::Parent)).map_with_span(|_, span: Span| (Expr::Local(("parent".to_string(), span.clone())), span))
+                )).then(
+                    member_access
+                        .or(array_access)
+                        .repeated()
+                ).foldl(|(a, a_span), (b, b_span)| {
+                    let span = a_span.start..b_span.end;
+                    (Expr::Access(Box::new((a, a_span)), Box::new((b, b_span))), span)
+                })
+            );
 
         // 'Atoms' are expressions that contain no ambiguity
         let atom = choice((
             val.map_with_span(|expr, span| (expr, span)),
-            array_access.clone(),
-            namespace_access.clone(),
-            member_access.clone(),
+            access.clone(),
             ident.clone().map_with_span(|a, span| (Expr::Local(a), span)),
             just(Token::Op("$".to_string()))
                 .map_with_span(|_, span: Range<usize>| (Expr::Local(("$".to_string(), span.clone())), span)),
@@ -376,46 +385,44 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
             ));
 
         let definition = ident.clone()
-                .then(ident.clone())
-                .then_ignore(
-                    array_definition.clone()
-                    .or(
-                        just(Token::Separator('['))
-                        .ignore_then(just(Token::Separator(']')))
-                        .ignored()
-                        .map_with_span(|(), span| (Expr::Value(Value::Null), span))
-                    ).or_not()
-                    .then_ignore(
-                        just(Token::K(Keyword::Out))
-                        .or(just(Token::K(Keyword::In)))
-                        .or_not()
-                    )
-                )
-                .then(just(Token::Op("@".to_string())).ignore_then(raw_expr.clone()).or_not())
-                .then_ignore(
+            .then(ident.clone())
+            .then_ignore(
+                array_definition.clone()
+                .or(
                     just(Token::Separator('['))
-                        .then(just(Token::Separator('[')))
-                        .then(take_until(just(Token::Separator(']')).then(just(Token::Separator(']')))))
-                        .or_not()
+                    .ignore_then(just(Token::Separator(']')))
+                    .ignored()
+                    .map_with_span(|(), span| (Expr::Value(Value::Null), span))
+                ).or_not()
+                .then_ignore(
+                    just(Token::K(Keyword::Out))
+                    .or(just(Token::K(Keyword::In)))
+                    .or_not()
                 )
-                //.map(|((name, val), body)| {
-                .map_with_span(|((type_, name), val), span| {
-                    let val = match val {
-                        Some(val) => Box::new(val),
-                        None => Box::new((Expr::Value(Value::Null), span.clone()))
-                    };
-                    (
-                        Expr::Definition(type_, name, val),
-                        span
-                    )
-                });
+            )
+            .then(just(Token::Op("@".to_string())).ignore_then(raw_expr.clone()).or_not())
+            .then_ignore(
+                just(Token::Separator('['))
+                    .then(just(Token::Separator('[')))
+                    .then(take_until(just(Token::Separator(']')).then(just(Token::Separator(']')))))
+                    .or_not()
+            )
+            //.map(|((name, val), body)| {
+            .map_with_span(|((type_, name), val), span| {
+                let val = match val {
+                    Some(val) => Box::new(val),
+                    None => Box::new((Expr::Value(Value::Null), span.clone()))
+                };
+                (
+                    Expr::Definition(type_, name, val),
+                    span
+                )
+            });
         
         let assignable = choice((
             just(Token::Op("$".to_string()))
                 .map_with_span(|_, span| (Expr::Dollar, span)),
-            array_access.clone(),
-            namespace_access.clone(),
-            member_access.clone(),
+            access,
             ident.clone()
                 .map_with_span(|a, span| (Expr::Local(a), span))
         ));
@@ -565,26 +572,12 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
                 )
             });
 
-        let func_body = recursive(|func_body| {
-            choice((
+        let func_body = choice((
                 func_definition_alternative,
                 expr.clone(),
                 just(Token::K(Keyword::Return)).ignore_then(expr.clone()).map_with_span(|e, span| (Expr::Return(Box::new(e)), span)),
-            )).then(just(Token::Separator(';')).ignore_then(func_body.or_not()).repeated())
-            .map(|(a, b)| {
-                let span = a.1.clone(); // TODO: Not correct
-                ((vec![a], span), b)
-            }).foldl(|(mut a, span), b| {
-                match b {
-                    Some(b) => match b {
-                        (Expr::ExprList(b), _) => a.extend((*b).into_iter()),
-                        _ => unreachable!()
-                    },
-                    None => ()
-                }
-                (a, span)
-            }).map(|(a, span)| (Expr::ExprList(Box::new(a)), span))
-        });
+            )).separated_by(just(Token::Separator(';'))).then_ignore(just(Token::Separator(';')))
+            .map_with_span(|a, span| (Expr::ExprList(Box::new(a)), span));
 
         let func = just(Token::K(Keyword::Fn))
             .ignore_then(
@@ -790,54 +783,21 @@ fn bitfield_entries_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple
         Token::Num(_) => Ok((Expr::Value(Value::Num(42342.0)), span)),// TODO: change 42342.0 to a proper (hex, bin, oct, dec) str->f64
         _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
     });
-    recursive(|entry| {
-        ident
-            .then_ignore(just(Token::Op(":".to_string())))
-            .then(val)
-            .then_ignore(just(Token::Separator(';')))
-            .then(entry.or_not())
-            .map_with_span(|((name, value), next), span| {
-                (
-                    Expr::BitFieldEntry(
-                        name,
-                        Box::new(value),
-                        Box::new(match next {
-                            Some(b) => b,
-                            None => (Expr::Value(Value::Null), span.clone()),
-                        }),
-                    ),
-                    span,
-                )
-            })
-    }).then(ident
-                .then_ignore(just(Token::Op(":".to_string())))
-                .then(val)
-                .or_not()
-                .map_with_span(|a, span| {
-                    match a {
-                        Some((name, val)) => (Some(Expr::BitFieldEntry(
-                            name,
-                            Box::new(val),
-                            Box::new((Expr::Value(Value::Null), span.clone())))),
-                            span
-                        ),
-                        None => (None, span),
-                    }
-                })
-    ).map(|(a, b)| {
-        if let (Expr::BitFieldEntry(name, val, next), span) = a {
-            match b {
-                (Some(c), spanb) => (Expr::BitFieldEntry(
+    ident
+        .then_ignore(just(Token::Op(":".to_string())))
+        .then(val)
+        .map_with_span(|(name, value), span| {
+            (
+                Expr::BitFieldEntry(
                     name,
-                    val,
-                    Box::new((c, spanb))
-                ), span),
-                (None, span) => (Expr::BitFieldEntry(name, val, next), span)
-            }
-        } else {
-            a
-        }
-    })
+                    Box::new(value),
+                ),
+                span,
+            )
+        })
+        .separated_by(just(Token::Separator(';')))
+        .allow_trailing()
+        .map_with_span(|a, span| (Expr::ExprList(Box::new(a)), span))
 }
 
 fn ident() -> impl Parser<Token, Spanned<String>, Error = Simple<Token>> + Clone {
@@ -954,21 +914,16 @@ fn register_defined_names(named_nodes: &mut HashMap<String, Spanned<NamedNode>>,
             Err(e) => Err(e),
         },
         Expr::Definition(_, (name, name_span), body) => {
-            if named_nodes.insert(name.clone(), (NamedNode::Variable, name_span.clone())).is_some() {
-                return Err(Simple::custom(
+            if named_nodes.insert(name.clone(), (NamedNode::Variable, name_span.clone())).is_some() { // TODO: Take into account that the same name can be used in 2 different local scopes
+                /* return Err(Simple::custom(
                     name_span.clone(),
                     format!("Variable '{}' already exists", name),
-                ));
+                )); */
             }
             register_defined_names(named_nodes, &body.0)
         },
-        Expr::BitFieldEntry(_, _, _) => Ok(()), // This should never happen
+        Expr::BitFieldEntry(_, _) => Ok(()), // This should never happen
         Expr::EnumEntry(_, _) => Ok(()), // This should never happen
-        Expr::MemberAccess(e, _) => register_defined_names(named_nodes, &e.0),
-        Expr::ArrayAccess(e1, e2) => match register_defined_names(named_nodes, &e1.0) {
-            Ok(_) => register_defined_names(named_nodes, &e2.0),
-            Err(e) => Err(e),
-        },
         Expr::Ternary(e1, e2, e3) => match register_defined_names(named_nodes, &e1.0) {
             Ok(_) => match register_defined_names(named_nodes, &e2.0) {
                 Ok(_) => register_defined_names(named_nodes, &e3.0),
@@ -991,18 +946,23 @@ fn register_defined_names(named_nodes: &mut HashMap<String, Spanned<NamedNode>>,
             };
             Ok(())
         },
-        Expr::Func(_, _, _) => Ok(()), // TODO
-        Expr::Struct(_, _) => Ok(()), // TODO
-        Expr::Namespace(_, _) => Ok(()), // TODO
-        Expr::Enum(_, _, _) => Ok(()), // TODO
-        Expr::Bitfield(_, _) => Ok(()), // TODO
-        Expr::Return(_) => Ok(()), // TODO
+        Expr::Func(_, _, e) => register_defined_names(named_nodes, &e.0),
+        Expr::Struct(_, e) => register_defined_names(named_nodes, &e.0),
+        Expr::Namespace(_, e) => register_defined_names(named_nodes, &e.0),
+        Expr::Enum(_, e, _) => register_defined_names(named_nodes, &e.0),
+        Expr::Bitfield(_, e) => register_defined_names(named_nodes, &e.0),
+        Expr::Return(e) => register_defined_names(named_nodes, &e.0),
+        Expr::Access(e1, e2) => match register_defined_names(named_nodes, &e1.0) {
+            Ok(_) => register_defined_names(named_nodes, &e2.0),
+            Err(e) => Err(e),
+        },
     }
 }
 
 // Hashmap contains the names of named expressions and their clones
 pub fn parser() -> impl Parser<Token, (HashMap<String, Spanned<NamedNode>>, Spanned<Expr>), Error = Simple<Token>> + Clone {
-    expr_parser()
+    dbg!("CREATING PARSER!");
+    let a = expr_parser()
         .try_map(|expr, _| {
             let mut named_exprs = HashMap::new();
             match register_defined_names(&mut named_exprs, &expr.0) {
@@ -1011,5 +971,7 @@ pub fn parser() -> impl Parser<Token, (HashMap<String, Spanned<NamedNode>>, Span
             };
             Ok((named_exprs, expr))
         })
-        .then_ignore(end())
+        .then_ignore(end());
+    dbg!("PARSER CREATED!");
+    a
 }

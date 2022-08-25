@@ -6,6 +6,6 @@ fn test1() {
 a[5];
 ";
     let v = vec![];
-    let (ast, errors, semantic_tokens) = parse(test_str, &v);
+    let (_ast, _errors, _semantic_tokens) = parse(test_str, &v);
     //dbg!(ast.unwrap());
 }

@@ -47,10 +47,8 @@ pub fn type_inference(expr: &Spanned<Expr>, symbol_type_table: &mut HashMap<Span
             type_inference(alternative, symbol_type_table);
         }
         Expr::Definition(_, _, _) => (), // TODO
-        Expr::BitFieldEntry(_, _, _) => (), // TODO
+        Expr::BitFieldEntry(_, _) => (), // TODO
         Expr::EnumEntry(_, _) => (), // TODO
-        Expr::MemberAccess(_, _) => (), // TODO
-        Expr::ArrayAccess(_, _) => (), // TODO
         Expr::Ternary(_, _, _) => (), // TODO
         Expr::NamespaceAccess(_, _) => (), // TODO
         Expr::Dollar => (), // TODO
@@ -65,6 +63,7 @@ pub fn type_inference(expr: &Spanned<Expr>, symbol_type_table: &mut HashMap<Span
         Expr::Enum(_, _, _) => (), // TODO
         Expr::Bitfield(_, _) => (), // TODO
         Expr::Return(_) => (), // TODO
+        Expr::Access(_, _) => (), // TODO
     }
 }
 
@@ -332,6 +331,7 @@ pub fn parse(
         let len = src.chars().count();
         let (ast, parse_errs) = parser()
             .parse_recovery(Stream::from_iter(len..len + 1, tokens.into_iter()));
+        dbg!("PARSED!");
 
         // println!("{:#?}", ast);
         // if let Some(funcs) = ast.filter(|_| errs.len() + parse_errs.len() == 0) {

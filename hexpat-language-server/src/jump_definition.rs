@@ -94,10 +94,8 @@ pub fn get_definition_of_expr(
         Expr::Definition(_, (name, name_span), lhs) => {
             get_definition_of_expr(lhs, definition_ass_list.clone(), ident_offset)
         },
-        Expr::BitFieldEntry(_, _, _) => (false, None), // TODO
+        Expr::BitFieldEntry(_, _) => (false, None), // TODO
         Expr::EnumEntry(_, _) => (false, None), // TODO
-        Expr::MemberAccess(_, _) => (false, None), // TODO
-        Expr::ArrayAccess(_, _) => (false, None), // TODO
         Expr::Ternary(_, _, _) => (false, None), // TODO
         Expr::NamespaceAccess(_, _) => (false, None), // TODO
         Expr::Dollar => (false, None), // TODO
@@ -112,5 +110,6 @@ pub fn get_definition_of_expr(
         Expr::Enum(_, _, _) => (false, None), // TODO
         Expr::Bitfield(_, _) => (false, None), // TODO
         Expr::Return(_) => (false, None), // TODO
+        Expr::Access(_, _) => (false, None), // TODO
     }
 }
