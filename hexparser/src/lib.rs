@@ -1,5 +1,3 @@
-use chumsky::Parser;
-use chumsky::{prelude::*, stream::Stream};
 use m_parser::NamedNode;
 use std::collections::HashMap;
 use std::path::Path;
@@ -12,7 +10,6 @@ use self::m_parser::{parser};
 pub use self::m_parser::{Spanned, Expr, Value};
 pub mod m_lexer;
 pub mod m_parser;
-//pub mod cpp_parser;
 
 use m_lexer::lexer;
 
@@ -78,15 +75,7 @@ pub fn parse(
     let mut cur_start = 0;
     let mut last_indx = 0;
     let len = src.as_bytes().len();
-    let (tokens, mut errs) = lexer().parse_recovery(
-        Stream::from_iter(len..len + 1, src.char_indices()
-        .map(|(index, chr)| {
-            let index = index + 1;
-            let res = (chr, cur_start..index);
-            cur_start += index - last_indx;
-            last_indx = index;
-            res
-        })));
+    let (tokens, mut errs) = lexer(src);
     
     let (tokens, errors) = if let Some(tokens) = tokens {
         let (tokens, errors) = expand_preprocessor_tokens(tokens, includeable_folders);

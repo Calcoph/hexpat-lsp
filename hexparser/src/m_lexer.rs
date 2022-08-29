@@ -1,6 +1,33 @@
 use std::fmt;
 
-use chumsky::{prelude::*,Parser};
+use nom::{
+    IResult,
+    character::complete::{
+        one_of,
+        alpha1,
+        alphanumeric1,
+        space0,
+        newline
+    },
+    branch::alt as choice,
+    bytes::complete::{
+        is_not,
+        tag as just,
+        take_until,
+        tag_no_case as just_no_case, take
+    },
+    combinator::{
+        recognize,
+        eof,
+        map_res
+    },
+    sequence::{pair as then, delimited},
+    multi::{
+        many0_count,
+        many_till as many_until,
+        many1
+    }, Err
+};
 
 use super::Span;
 
@@ -8,7 +35,7 @@ use super::Span;
 pub enum Token {
     K(Keyword),
     Num(String),
-    Char(char),
+    Char(String),
     Str(String),
     Op(String),
     V(ValueType),
@@ -118,87 +145,153 @@ impl ToString for BuiltFunc {
     }
 }
 
-pub fn lexer() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
-    // Integer parsers
-    let hex_num = just('0')
-        .ignore_then(just('x').or(just('X')))
-        .ignore_then(one_of("0123456789ABCDEFabcdef").repeated().at_least(1).collect())
-        .map(Token::Num);
+// Integer parsers
+#[inline(always)]
+fn hex_num(input: &str) -> impl FnMut(&str) -> IResult<&str, Token> {
+    map_res(
+        then(
+            just_no_case("0x"),
+            many1(one_of("0123456789abcdefABCDEF"))
+        ),
+        |(_, s): (_, Vec<char>)| Ok(Token::Num(String::from_iter(s.into_iter())))
+    )
+}
+#[inline(always)]
+fn oct_num(input: &str) -> impl FnMut(&str) -> IResult<&str, Token> {
+    map_res(
+        then(
+            just_no_case("0o"),
+            many1(one_of("01234567"))
+        ),
+        |(_, s): (_, Vec<char>)| Ok(Token::Num(String::from_iter(s.into_iter())))
+    )
+}
+#[inline(always)]
+fn bin_num(input: &str) -> impl FnMut(&str) -> IResult<&str, Token> {
+    map_res(
+        then(
+            just_no_case("0b"),
+            many1(one_of("01"))
+        ),
+        |(_, s): (_, Vec<char>)| Ok(Token::Num(String::from_iter(s.into_iter())))
+    )
+}
+#[inline(always)]
+fn dec_num(input: &str) -> impl FnMut(&str) -> IResult<&str, Token> {
+    map_res(
+        many1(one_of("0123456789abcdefABCDEF")),
+        |s: Vec<char>| Ok(Token::Num(String::from_iter(s.into_iter())))
+    )
+}
 
-    let oct_num = just('0')
-        .ignore_then(just('o').or(just('O')))
-        .ignore_then(one_of("01234567").repeated().at_least(1).collect())
-        .map(Token::Num);
-
-    let bin_num = just('0')
-        .ignore_then(just('b').or(just('B')))
-        .ignore_then(one_of("01").repeated().at_least(1).collect())
-        .map(Token::Num);
-
-    let dec_num = text::int(10) // TODO: differentiate between ints and floats
-        .chain::<char, _, _>(just('.').chain(text::digits(10)).or_not().flatten())
-        .then_ignore(just('U').or_not())
-        .collect::<String>()
-        .map(Token::Num);
-    
-    let num = hex_num
-        .or(oct_num)
-        .or(bin_num)
-        .or(dec_num);
+pub fn lexer(input: &str) -> IResult<&str, Vec<(Token, Span)>> {
+    // TODO: Floats
+    let num = choice((
+        hex_num,
+        oct_num,
+        bin_num,
+        dec_num
+    ));
 
     // A parser for chars
-    let char_ = just('\'')
-        .ignore_then(filter(|c| *c != '\''))
-        .then_ignore(just('\''))
-        .map(Token::Char);
+    let char_ = map_res(
+        then(
+            then(
+                just("\'"),
+                take(1)
+            ),
+            just("\'")
+        ),
+        |((_, c), _)| match c {
+            "'" => Err(Err::Error("Empty char")),
+            _ => Ok(Token::Char(c.to_string()))
+        }
+    );
 
     // A parser for strings
-    let str_ = just('"')
-        .ignore_then(
-            just('\\')
-            .then(just('\\'))
-            .map(|(_,_)| "\\\\".to_string())
-            .or(just('\\')
-                .then(just('"'))
-                .map(|(_,_)| "\\\"".to_string())
-            )
-            .or(filter(|c: &char| *c != '"').map(|c| c.to_string()))
-            .repeated())
-        .then_ignore(just('"'))
-        .collect::<String>()
-        .map(Token::Str);
+    let str_ = map_res(
+        delimited(
+            just("\""),
+            choice((
+                map_res(
+                    then(
+                        just("\\"),
+                        just("\\")
+                    ),
+                    |(_,_)| Ok("\\\\".to_string())
+                ),
+                map_res(
+                    then(
+                        just("\\"),
+                        just("\"")
+                    ),
+                    |(_,_)| Ok("\\\"".to_string())
+                ),
+                map_res(
+                    take(1),
+                    |c| match c {
+                        "\"" => Err(Err::Error("End of String")),
+                        _ => Ok(c.to_string())
+                    }
+                )
+            )),
+            just("\"")
+        ),
+        |s| Ok(Token::Str(s))
+    );
 
     // A parser for operators
-    let op = just("::").map(|_| "::".to_string())
-            .or(one_of("=!><").then(just('=')).map(|(c, _)| c.to_string() + "="))
-            .or(just("&&").map(|_| "&&".to_string()))
-            .or(just("||").map(|_| "||".to_string()))
-            .or(just("^^").map(|_| "^^".to_string()))
-            .or(just("<<").map(|_| "<<".to_string()))
-            .or(just(">>").map(|_| "<<".to_string()))
-            .or(one_of("=:+-*/%@><!|&^~?$").map(|c: char| c.to_string()))
-            .map(Token::Op);
+    let op = map_res(
+        choice((
+            map_res(just("::"), |_| Ok("::".to_string())),
+            map_res(
+                then(
+                    one_of("=!><"),
+                    just("=")
+                ),
+                |(c, _)| Ok(c.to_string() + "=")
+            ),
+            map_res(just("&&"), |_| Ok("&&".to_string())),
+            map_res(just("||"), |_| Ok("||".to_string())),
+            map_res(just("^^"), |_| Ok("^^".to_string())),
+            map_res(just("<<"), |_| Ok("<<".to_string())),
+            map_res(just(">>"), |_| Ok("<<".to_string())),
+            map_res(one_of("=:+-*/%@><!|&^~?$"), |c: char| Ok(c.to_string()))
+        )),
+        |s| Ok(Token::Op(s))
+    );
 
     // A parser for control characters (delimiters, semicolons, etc.)
-    let ctrl = one_of("()[]{};,.")
-        .map(|c| Token::Separator(c));
+    let ctrl = map_res(
+        one_of("()[]{};,."),
+        |c| Ok(Token::Separator(c))
+    );
 
     // A parser for preproccessor directives start
-    let preproc = just("#")
-            .ignore_then(choice((
-                just("include"),
-                just("pragma"),
-                just("define"),
-            ))).then(filter(|c: &char| *c != '\n').repeated().collect())
-            .map(|(command, arg)| {
-                match command {
-                    "include" => PreProc::Include(arg),
-                    "pragma" => PreProc::Pragma(arg),
-                    "define" => PreProc::Define(arg),
-                    _ => unreachable!()
+    let preproc = map_res(
+        then(
+            then(
+                just("#"),
+                choice((
+                    just("include"),
+                    just("pragma"),
+                    just("define"),
+                ))
+            ),
+            map_res(
+                take_until("\n"),
+                |(command, arg)| {
+                    match command {
+                        "include" => Ok(PreProc::Include(arg)),
+                        "pragma" => Ok(PreProc::Pragma(arg)),
+                        "define" => Ok(PreProc::Define(arg)),
+                        _ => unreachable!()
+                    }
                 }
-            })
-        .map(|s| Token::Pre(s));
+            )
+        ),
+        |p| Ok(Token::Pre(p))
+    );
     /*
     let preproc_str = just('<')
         .ignore_then(filter(|c| *c != '>' && *c != '\n').repeated())
@@ -207,52 +300,57 @@ pub fn lexer() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
         .map(Token::PreprocStr);*/
 
     // A parser for identifiers and keywords
-    let ident = text::ident().map(|ident: String| match ident.as_str() {
-        "struct" => Token::K(Keyword::Struct),
-        "bitfield" => Token::K(Keyword::Bitfield),
-        "le" => Token::K(Keyword::LittleEndian),
-        "be" => Token::K(Keyword::BigEndian),
-        "union" => Token::K(Keyword::Union),
-        "enum" => Token::K(Keyword::Enum),
-        "namespace" => Token::K(Keyword::Namespace),
-        "fn" => Token::K(Keyword::Fn),
-        "if" => Token::K(Keyword::If),
-        "else" => Token::K(Keyword::Else),
-        "while" => Token::K(Keyword::While),
-        "for" => Token::K(Keyword::For),
-        "break" => Token::K(Keyword::Break),
-        "continue" => Token::K(Keyword::Continue),
-        "in" => Token::K(Keyword::In),
-        "out" => Token::K(Keyword::Out),
-        "return" => Token::K(Keyword::Return),
-        "using" => Token::K(Keyword::Using),
-        "parent" => Token::K(Keyword::Parent),
-        "this" => Token::K(Keyword::This),
-        "addressof" => Token::B(BuiltFunc::AddressOf),
-        "sizeof" => Token::B(BuiltFunc::SizeOf),
-        "true" => Token::Bool(true),
-        "false" => Token::Bool(false),
-        _ => Token::Ident(ident),
-    });
+    let ident = map_res(
+        recognize(
+            then(
+                choice((alpha1, just("_"))),
+                many0_count(choice((alphanumeric1, just("_"))))
+            )
+        ),
+        |s| match s {
+            "struct" => Ok(Token::K(Keyword::Struct)),
+            "bitfield" => Ok(Token::K(Keyword::Bitfield)),
+            "le" => Ok(Token::K(Keyword::LittleEndian)),
+            "be" => Ok(Token::K(Keyword::BigEndian)),
+            "union" => Ok(Token::K(Keyword::Union)),
+            "enum" => Ok(Token::K(Keyword::Enum)),
+            "namespace" => Ok(Token::K(Keyword::Namespace)),
+            "fn" => Ok(Token::K(Keyword::Fn)),
+            "if" => Ok(Token::K(Keyword::If)),
+            "else" => Ok(Token::K(Keyword::Else)),
+            "while" => Ok(Token::K(Keyword::While)),
+            "for" => Ok(Token::K(Keyword::For)),
+            "break" => Ok(Token::K(Keyword::Break)),
+            "continue" => Ok(Token::K(Keyword::Continue)),
+            "in" => Ok(Token::K(Keyword::In)),
+            "out" => Ok(Token::K(Keyword::Out)),
+            "return" => Ok(Token::K(Keyword::Return)),
+            "using" => Ok(Token::K(Keyword::Using)),
+            "parent" => Ok(Token::K(Keyword::Parent)),
+            "this" => Ok(Token::K(Keyword::This)),
+            "addressof" => Ok(Token::B(BuiltFunc::AddressOf)),
+            "sizeof" => Ok(Token::B(BuiltFunc::SizeOf)),
+            "true" => Ok(Token::Bool(true)),
+            "false" => Ok(Token::Bool(false)),
+            _ => Ok(Token::Ident(s.to_string())),
+        }
+    );
 
     // A single token can be one of the above
-    let token = num
-        .or(char_)
-        .or(str_)
-        //.or(preproc_str)
-        .or(op)
-        .or(ctrl)
-        .or(ident)
-        .or(preproc)
-        .recover_with(skip_then_retry_until([]));
+    let token = choice ((
+        num,
+        char_,
+        str_,
+        //.or(preproc_str
+        op,
+        ctrl,
+        ident,
+        preproc,
+    ));
 
-    let comment = just("//").then(take_until(text::newline())).padded();
+    let comment = then(just("//"), take_until(newline));
     //let directive = just("#").then(take_until(just('\n'))).padded();
+    let padding = choice((comment, space0));
 
-    token
-        .map_with_span(|tok, span| (tok, span))
-        //.padded_by(comment.or(directive).repeated())
-        .padded_by(comment.repeated())
-        .padded()
-        .repeated()
+    many_until(choice((token, padding)), eof)(input)
 }

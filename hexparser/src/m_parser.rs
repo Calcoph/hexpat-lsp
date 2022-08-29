@@ -1,6 +1,33 @@
 use std::{collections::HashMap, ops::Range};
 
-use chumsky::{prelude::*,Parser};
+use nom::{
+    IResult,
+    character::complete::{
+        one_of,
+        alpha1,
+        alphanumeric1,
+        space0,
+        newline
+    },
+    branch::alt as choice,
+    bytes::complete::{
+        is_not,
+        tag as just,
+        take_until,
+        tag_no_case as just_no_case
+    },
+    combinator::{
+        recognize,
+        eof,
+        map_res
+    },
+    sequence::pair as then,
+    multi::{
+        many0_count,
+        many_till as many_until,
+        many1
+    }
+};
 use serde::{Deserialize, Serialize};
 
 use super::{m_lexer::{Token, Keyword}, Span};
@@ -100,7 +127,7 @@ pub enum UnaryOp {
     BNot,
 }
 
-fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone {
+/* /* fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone {
     recursive(|expr: Recursive<Token, Spanned<Expr>, Simple<Token>>| {
         let val = filter_map(|span, tok| match tok {
             Token::Bool(x) => Ok(Expr::Value(Value::Bool(x))),
@@ -720,8 +747,9 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
             }).map(|(a, span)| (Expr::ExprList(Box::new(a)), span))
     })
 }
+ */
 
-fn enum_entries_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone {
+ fn enum_entries_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone {
     let ident = filter_map(|span: Span, tok| match tok {
         Token::Ident(ident) => Ok((ident.clone(), span)),
         _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
@@ -867,7 +895,7 @@ fn bitfield_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>>
             )
         })
 }
-
+ */
 #[derive(Debug, Clone)]
 pub struct Declaration {
     pub type_: Spanned<String>,
@@ -960,7 +988,7 @@ fn register_defined_names(named_nodes: &mut HashMap<String, Spanned<NamedNode>>,
 }
 
 // Hashmap contains the names of named expressions and their clones
-pub fn parser() -> impl Parser<Token, (HashMap<String, Spanned<NamedNode>>, Spanned<Expr>), Error = Simple<Token>> + Clone {
+/* pub fn parser() -> impl Parser<Token, (HashMap<String, Spanned<NamedNode>>, Spanned<Expr>), Error = Simple<Token>> + Clone {
     dbg!("CREATING PARSER!");
     let a = expr_parser()
         .try_map(|expr, _| {
@@ -975,3 +1003,4 @@ pub fn parser() -> impl Parser<Token, (HashMap<String, Spanned<NamedNode>>, Span
     dbg!("PARSER CREATED!");
     a
 }
+ */
