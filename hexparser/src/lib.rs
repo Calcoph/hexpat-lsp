@@ -5,14 +5,12 @@ use tower_lsp::lsp_types::SemanticTokenType;
 
 use parserlib::LEGEND_TYPE;
 
-use self::m_lexer::{Token, Keyword, BuiltFunc};
-use self::m_parser::{parser};
+use crate::{m_lexer::{lex, Token, Keyword, BuiltFunc}, recovery_err::RecoveredError, m_parser::placeholder_parser};
+
 pub use self::m_parser::{Spanned, Expr, Value};
 pub mod m_lexer;
 pub mod m_parser;
-mod recovery_err;
-
-use m_lexer::lexer;
+pub mod recovery_err;
 
 
 pub type Span = std::ops::Range<usize>;
@@ -69,25 +67,17 @@ pub fn parse(
     src: &str,
     includeable_folders: &Vec<String>
 ) -> (
-    Option<(HashMap<String, Spanned<NamedNode>>, Spanned<Expr>)>,
-    Vec<Simple<String>>,
+    (HashMap<String, Spanned<NamedNode>>, Spanned<Expr>),
+    Vec<RecoveredError>,
     Vec<ImCompleteSemanticToken>,
 ) {
-    let mut cur_start = 0;
-    let mut last_indx = 0;
-    let len = src.as_bytes().len();
-    let (tokens, mut errs) = lexer(src);
-    
-    let (tokens, errors) = if let Some(tokens) = tokens {
-        let (tokens, errors) = expand_preprocessor_tokens(tokens, includeable_folders);
-        (Some(tokens), errors)
-    } else {
-        (None, vec![])
-    };
+    let (tokens, errs) = lex(src);
+    let mut errs = errs.into_inner();
+    //let (tokens, errors) = expand_preprocessor_tokens(tokens, includeable_folders);
 
-    errs.extend(errors.into_iter());
+    //errs.borrow_mut().extend(errors.into_iter());
 
-    let (ast, tokenize_errors, semantic_tokens) = if let Some(tokens) = tokens {
+    let (ast, parse_errs, semantic_tokens) = { // TODO: Do it without a code block
         // info!("Tokens = {:?}", tokens);
         let semantic_tokens = tokens
             .iter()
@@ -316,12 +306,11 @@ pub fn parse(
                     }),
                 },
                 Token::Pre(_) => None,
+                Token::Comment(_) => None,
+                Token::Err => None,
             })
             .collect::<Vec<_>>();
-        let len = src.chars().count();
-        let (ast, parse_errs) = parser()
-            .parse_recovery(Stream::from_iter(len..len + 1, tokens.into_iter()));
-        dbg!("PARSED!");
+        let (ast, parse_errs) = placeholder_parser(tokens);
 
         // println!("{:#?}", ast);
         // if let Some(funcs) = ast.filter(|_| errs.len() + parse_errs.len() == 0) {
@@ -337,21 +326,11 @@ pub fn parse(
         // }
 
         (ast, parse_errs, semantic_tokens)
-    } else {
-        (None, Vec::new(), vec![])
     };
 
-    let parse_errors = errs
-        .into_iter()
-        .map(|e| e.map(|c| c.to_string()))
-        .chain(
-            tokenize_errors
-                .into_iter()
-                .map(|e| e.map(|tok| tok.to_string())),
-        )
-        .collect::<Vec<_>>();
+    errs.extend(parse_errs.into_iter());
 
-    (ast, parse_errors, semantic_tokens)
+    (ast, errs, semantic_tokens)
     // .for_each(|e| {
     //     let report = match e.reason() {
     //         chumsky::error::SimpleReason::Unclosed { span, delimiter } => {}
@@ -361,7 +340,7 @@ pub fn parse(
     // });
 }
 
-fn expand_preprocessor_tokens(tokens: Vec<(Token, std::ops::Range<usize>)>, includeable_folders: &Vec<String>) -> (Vec<(Token, std::ops::Range<usize>)>, Vec<Simple<char>>) {
+/* fn expand_preprocessor_tokens(tokens: Vec<(Token, std::ops::Range<usize>)>, includeable_folders: &Vec<String>) -> (Vec<(Token, std::ops::Range<usize>)>, Vec<RecoveredError>) {
     let mut errors = vec![];
     let mut defines = HashMap::new();
     let v = expand_preprocessor_tokens_recursive(tokens, &mut errors, &mut defines, includeable_folders);
@@ -370,7 +349,7 @@ fn expand_preprocessor_tokens(tokens: Vec<(Token, std::ops::Range<usize>)>, incl
 
 fn expand_preprocessor_tokens_recursive(
         tokens: Vec<(Token, std::ops::Range<usize>)>,
-        errors: &mut Vec<Simple<char>>,
+        errors: &mut Vec<RecoveredError>,
         defines: &mut HashMap<String, Vec<Token>>,
         includeable_folders: &Vec<String>
     ) -> Vec<(Token, std::ops::Range<usize>)> {
@@ -411,7 +390,7 @@ fn try_define(i: String, defines: &HashMap<String, Vec<Token>>) -> Vec<Token> {
     }
 }
 
-fn add_include(i: Spanned<String>, includeable_folders: &Vec<String>) -> (Option<Vec<Spanned<Token>>>, Vec<Simple<char>>) {
+fn add_include(i: Spanned<String>, includeable_folders: &Vec<String>) -> (Option<Vec<Spanned<Token>>>, Vec<RecoveredError>) {
     let quote_parser = just::<_, _, Simple<char>>('"').ignore_then(take_until(just('"'))).map(|(a,_)| a).collect::<String>();
     let angle_parser = just('<').ignore_then(take_until(just('>'))).map(|(a,_)| a).collect::<String>();
     let include_parser = choice((
@@ -485,3 +464,4 @@ fn add_define(defines: &mut HashMap<String, Vec<Token>>, new_define: Spanned<Str
 
     errors
 }
+ */

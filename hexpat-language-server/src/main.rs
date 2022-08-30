@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use dashmap::DashMap;
 use hexparser::m_parser::{NamedNode};
+use hexparser::recovery_err::RecoveredError;
 use hexparser::{parse, type_inference, ImCompleteSemanticToken, Value, Spanned, Expr};
 use hexpat_language_server::completion::completion;
 use hexpat_language_server::jump_definition::get_definition;
@@ -496,36 +497,7 @@ impl Backend {
             .await;
         let diagnostics = errors
             .into_iter()
-            .filter_map(|item| {
-                let (message, span) = match item.reason() {
-                    chumsky::error::SimpleReason::Unclosed { span, delimiter } => {
-                        (format!("Unclosed delimiter {}", delimiter), span.clone())
-                    }
-                    chumsky::error::SimpleReason::Unexpected => (
-                        format!(
-                            "{}, expected {}",
-                            if item.found().is_some() {
-                                "Unexpected token in input"
-                            } else {
-                                "Unexpected end of input"
-                            },
-                            if item.expected().len() == 0 {
-                                "something else".to_string()
-                            } else {
-                                item.expected()
-                                    .map(|expected| match expected {
-                                        Some(expected) => expected.to_string(),
-                                        None => "end of input".to_string(),
-                                    })
-                                    .collect::<Vec<_>>()
-                                    .join(", ")
-                            }
-                        ),
-                        item.span(),
-                    ),
-                    chumsky::error::SimpleReason::Custom(msg) => (msg.to_string(), item.span()),
-                };
-
+            .filter_map(|RecoveredError(span, message)| {
                 let diagnostic = || -> Option<Diagnostic> {
                     // let start_line = rope.try_char_to_line(span.start)?;
                     // let first_char = rope.try_line_to_char(start_line)?;
@@ -548,9 +520,7 @@ impl Backend {
             .publish_diagnostics(params.uri.clone(), diagnostics, Some(params.version))
             .await;
 
-        if let Some(ast) = ast {
-            self.ast_map.insert(params.uri.to_string(), ast);
-        }
+        self.ast_map.insert(params.uri.to_string(), ast);
         self.client
             .log_message(MessageType::INFO, &format!("{:?}", semantic_tokens))
             .await;

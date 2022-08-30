@@ -30,6 +30,8 @@ use nom::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::recovery_err::RecoveredError;
+
 use super::{m_lexer::{Token, Keyword}, Span};
 
 pub type Spanned<T> = (T, Span);
@@ -912,7 +914,7 @@ pub enum NamedNode {
     NameSpace,
     BitField
 }
-
+/* 
 fn register_defined_names(named_nodes: &mut HashMap<String, Spanned<NamedNode>>, e: &Expr) -> Result<(), Simple<Token>> {
     match e {
         Expr::Error => Ok(()),
@@ -985,7 +987,7 @@ fn register_defined_names(named_nodes: &mut HashMap<String, Spanned<NamedNode>>,
             Err(e) => Err(e),
         },
     }
-}
+} */
 
 // Hashmap contains the names of named expressions and their clones
 /* pub fn parser() -> impl Parser<Token, (HashMap<String, Spanned<NamedNode>>, Spanned<Expr>), Error = Simple<Token>> + Clone {
@@ -1004,3 +1006,11 @@ fn register_defined_names(named_nodes: &mut HashMap<String, Spanned<NamedNode>>,
     a
 }
  */
+
+// Hashmap contains the names of named expressions and their clones
+pub fn placeholder_parser(tokens: Vec<Spanned<Token>>) -> ((HashMap<String, Spanned<NamedNode>>, Spanned<Expr>), Vec<RecoveredError>) {
+    let hmap = HashMap::new();
+    let ex = (Expr::Dollar, 0..1);
+    let errs = Vec::new();
+    ((hmap, ex), errs)
+}

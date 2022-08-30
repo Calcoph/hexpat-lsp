@@ -1,43 +1,44 @@
-use std::{fmt, ops::Range, intrinsics::unreachable};
+use std::{fmt, cell::RefCell, ops::Range};
 
 use nom::{
-    character::{complete::{
-        one_of,
+    character::complete::{
         alpha1,
         alphanumeric1,
         space0,
-        newline, hex_digit1, oct_digit1, digit1
-    }, is_newline},
+        hex_digit1,
+        oct_digit1,
+        digit1, newline, space1
+    },
     branch::alt as choice,
     bytes::complete::{
-        is_not,
         tag as just,
         take_until,
-        tag_no_case as just_no_case, take, take_till, is_a
+        tag_no_case as just_no_case,
+        take,
+        is_a
     },
     combinator::{
         recognize,
         eof,
-        map, map_res
+        map
     },
-    sequence::{pair as then, delimited},
+    sequence::pair as then,
     multi::{
         many0_count,
         many_till as many_until,
-        many1
-    }, Err
+    }, InputTake, InputLength
 };
-use nom_supreme::error::GenericErrorTree;
+use nom_supreme::error::{GenericErrorTree, ErrorTree};
 
-use crate::recovery_err::IResult;
+use crate::{recovery_err::{IResult, StrSpan, RecoveredError, ParseState, ToRange}, Span};
 
-use super::Span;
+pub type Spanned<T> = (T, Range<usize>);
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Token {
     K(Keyword),
     Num(String),
-    Char(String),
+    Char(char),
     Str(String),
     Op(String),
     V(ValueType),
@@ -47,7 +48,6 @@ pub enum Token {
     Bool(bool),
     Pre(PreProc),
     Comment(String),
-    PreprocStr(String),
     Err
 }
 
@@ -96,9 +96,10 @@ impl fmt::Display for Token {
             }
             Token::V(_) => write!(f, "V"), // TODO
             Token::Pre(_) => write!(f, "PreProc"),
-            Token::Comment(s) => write!(f, "{}", s), // TODO
-            //Token::PreprocStart(s) => write!(f, "{}", s),
-            //Token::PreprocStr(s) => write!(f, "{}", s),
+            Token::Comment(s) => write!(f, "{}", s),
+            Token::Err => todo!(), // TODO
+            //TokenType::PreprocStart(s) => write!(f, "{}", s),
+            //TokenType::PreprocStr(s) => write!(f, "{}", s),
         }
     }
 }
@@ -155,162 +156,144 @@ impl ToString for BuiltFunc {
     }
 }
 
-/// Error containing a text span and an error message to display.
-#[derive(Debug)]
-struct Error(Range<usize>, String);
-
-/* fn expect<F, E, T, O>(parser: F, error_msg: E) -> impl Fn(&str) -> IResult<Option<T>>
-where
-    F: Fn(&str) -> IResult<T>,
-    E: ToString,
-{
-    move |input| match parser(input) {
-        Ok((remaining, out)) => Ok((remaining, Some(out))),
-        Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => {
-            let err = Error(e.input.to_range(), error_msg.to_string());
-            e.input.extra.report_error(err); // Push error onto stack.
-            Ok((input, None)) // Parsing failed, but keep going.
-        }
-        Err(err) => Err(err),
-    }
-} */
-
-fn hex_num(input: &str) -> IResult<&str, Token> {
+fn hex_num<'a>(input: StrSpan<'a>) -> IResult<StrSpan, Spanned<Token>> {
     map(
         then(
             just_no_case("0x"),
-            |input: &str| match hex_digit1(input) {
-                Ok((p, s)) => Ok((p, Token::Num(s.to_string()))),
+            |input: StrSpan<'a>| match hex_digit1(input) {
+                Ok((p, s)) => Ok((p, (Token::Num(s.to_string()), s.span()))),
                 Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => {
                     let input = match e {
                         GenericErrorTree::Base { location, kind } => match kind {
                             nom_supreme::error::BaseErrorKind::Expected(ex) => match ex {
                                 nom_supreme::error::Expectation::HexDigit => {
-                                    input // TODO: Error message
+                                    location.extra.report_error(RecoveredError(location.span(), "Expected hexadecimal number after \"0x\"".to_string()));
+                                    location
                                 },
                                 _ => unreachable!(),
                             },
                             _ => unreachable!(),
                         },
-                        GenericErrorTree::Stack { base, contexts } => todo!(),
-                        GenericErrorTree::Alt(_) => unreachable!(),
+                        _ => unreachable!(),
                     };
-                    Ok((input, Token::Err))
+                    let span = input.span();
+                    Ok((input, (Token::Err, span)))
                 },
-                Err(_) => unreachable!()
+                Err(e) => Err(e)
             }
         ),
         |(_, t)| t
     )(input)
 }
 
-fn oct_num(input: &str) -> IResult<&str, Token> {
+fn oct_num<'a>(input: StrSpan<'a>) -> IResult<StrSpan, Spanned<Token>> {
     map(
         then(
             just_no_case("0o"),
-            |input: &str| match oct_digit1(input) {
-                Ok((p, s)) => Ok((p, Token::Num(s.to_string()))),
+            |input: StrSpan<'a>| match oct_digit1(input) {
+                Ok((p, s)) => Ok((p, (Token::Num(s.to_string()), s.span()))),
                 Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => {
                     let input = match e {
                         GenericErrorTree::Base { location, kind } => match kind {
                             nom_supreme::error::BaseErrorKind::Expected(ex) => match ex {
                                 nom_supreme::error::Expectation::OctDigit => {
-                                    input // TODO: Error message
+                                    location.extra.report_error(RecoveredError(location.span(), "Expected octal number after \"0o\"".to_string()));
+                                    location
                                 },
                                 _ => unreachable!(),
                             },
                             _ => unreachable!(),
                         },
-                        GenericErrorTree::Stack { base, contexts } => todo!(),
-                        GenericErrorTree::Alt(_) => unreachable!(),
+                        _ => unreachable!(),
                     };
-                    Ok((input, Token::Err))
+                    let span = input.span();
+                    Ok((input, (Token::Err, span)))
                 },
-                Err(_) => unreachable!()
+                Err(e) => Err(e)
             }
         ),
         |(_, t)| t
     )(input)
 }
 
-fn bin_num(input: &str) -> IResult<&str, Token> {
+fn bin_num<'a>(input: StrSpan<'a>) -> IResult<StrSpan, Spanned<Token>> {
     map(
         then(
             just_no_case("0b"),
-            |input: &str| match is_a("01")(input) {
-                Ok((p, s)) => Ok((p, Token::Num(s.to_string()))),
+            |input: StrSpan<'a>| match is_a("01")(input) {
+                Ok((p, s)) => Ok((p, (Token::Num(s.to_string()), s.span()))),
                 Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => {
                     let input = match e {
                         GenericErrorTree::Base { location, kind } => match kind {
                             nom_supreme::error::BaseErrorKind::Kind(k) => match k {
-                                nom::error::ErrorKind::Many1 => {
-                                    input // TODO: Error message
+                                nom::error::ErrorKind::IsA => {
+                                    location.extra.report_error(RecoveredError(location.span(), "Expected binary number after \"0b\"".to_string()));
+                                    location
                                 },
                                 _ => unreachable!()
                             },
-                            _ => unreachable!(),
+                            _ => unreachable!()
                         },
-                        GenericErrorTree::Stack { base, contexts } => todo!(),
-                        GenericErrorTree::Alt(_) => unreachable!(),
+                        _ => unreachable!()
                     };
-                    Ok((input, Token::Err))
+                    let span = input.span();
+                    Ok((input, (Token::Err, span)))
                 },
-                Err(_) => unreachable!()
+                Err(e) => Err(e)
             }
         ),
-        |(_, t)| t
+        |(head, t)| (t.0, head.span().start..t.1.end)
     )(input)
 }
 
-fn dec_num(input: &str) -> IResult<&str, Token> {
+fn dec_num(input: StrSpan) -> IResult<StrSpan, Spanned<Token>> {
     match digit1(input) {
-        Ok((p, s)) => Ok((p, Token::Num(s.to_string()))),
+        Ok((p, s)) => Ok((p, (Token::Num(s.to_string()), s.span()))),
         Err(e) => Err(e),
     }
 }
 
-fn lexer(input: &str) -> IResult<&str, Vec<Token>> {
-    // Integer parser
-    // TODO: Floats
-    let num = choice((
-        hex_num,
-        map(
-            then(
-                just_no_case("0o"),
-                many1(oct_digit1)
-            ),
-            |(_, s)| Token::Num(String::from_iter(s.into_iter()))
-        ),
-        map(
-            then(
-                just_no_case("0b"),
-                many1(one_of("01"))
-            ),
-            |(_, s)| Token::Num(String::from_iter(s.into_iter()))
-        ),
-        map(
-            many1(one_of("0123456789abcdefABCDEF")),
-            |s| Token::Num(String::from_iter(s.into_iter()))
-        )
-    ));
+// A parser for chars
+fn char_<'a>(input: StrSpan<'a>) -> IResult<StrSpan, Spanned<Token>> {
+    match then(
+        just("\'"),
+        take(1 as u8) // TODO: parse also \'
+    )(input) {
+        Ok((p, (head, c))) => match *c.fragment() {
+            "'" => {
+                let span = head.span().start..c.span().end;
+                c.extra.report_error(RecoveredError(span.clone(), "Missing closing `'`".to_string()));
+                Ok((p, (Token::Err, span)))
+            },
+            _ => match just("\'")(p) {
+                Ok((p, tail)) => Ok((p, (Token::Char(c.fragment().chars().next().unwrap()), head.span().start..tail.span().end))),
+                Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => {
+                    let input = match e {
+                        GenericErrorTree::Base {location, kind} => match kind {
+                            nom_supreme::error::BaseErrorKind::Kind(k) => match k {
+                                nom::error::ErrorKind::Tag => {
+                                    location.extra.report_error(RecoveredError(location.span(), "Missing closing `'` before this character".to_string()));
+                                    location
+                                }
+                                _ => unreachable!()
+                            }
+                            _ => unreachable!()
+                        }
+                        _ => unreachable!()
+                    };
+                    let span = input.span();
+                    Ok((input, (Token::Err, span)))
+                },
+                Err(e) => Err(e),
+            }
+        },
+        Err(e) => Err(e),
+    }
+}
 
-    // A parser for chars
-    let char_ = map_res(
-        then(
-            then(
-                just("\'"),
-                take(1 as u8)
-            ),
-            just("\'")
-        ),
-        |((_, c), _)| match c {
-            "'" => Err(Err::Error("Empty char")),
-            _ => Ok(Token::Char(c.to_string()))
-        }
-    );
-
+/* fn str_<'a>(input: &'a str) -> IResult<&str, TokenType> {
     // A parser for strings
-    let str_ = map(
+    map(
         delimited(
             just("\""),
             choice((
@@ -336,36 +319,78 @@ fn lexer(input: &str) -> IResult<&str, Vec<Token>> {
                     }
                 )
             )),
-            just("\"")
+            |input: &'a str| match just("\"")(input) {
+                Ok(_) => todo!(),
+                Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => todo!(),
+                Err(_) => todo!(),
+            }
         ),
-        Token::Str
-    );
+        TokenType::Str
+    )(input)
+} */
+
+fn lexer<'a>(input: StrSpan<'a>) -> IResult<StrSpan, Vec<Spanned<Token>>> {
+    // Integer parser
+    // TODO: Floats
+    let num = choice((
+        hex_num,
+        oct_num,
+        bin_num,
+        dec_num
+    )); // dec_num can return an error
 
     // A parser for operators
     let op = map(
         choice((
-            map(just("::"), |_| "::".to_string()),
-            map(
-                then(
-                    one_of("=!><"),
-                    just("=")
-                ),
-                |(c, _)| c.to_string() + "="
-            ),
-            map(just("&&"), |_| "&&".to_string()),
-            map(just("||"), |_| "||".to_string()),
-            map(just("^^"), |_| "^^".to_string()),
-            map(just("<<"), |_| "<<".to_string()),
-            map(just(">>"), |_| "<<".to_string()),
-            map(one_of("=:+-*/%@><!|&^~?$"), |c| c.to_string())
+            just("::"),
+            choice((
+                just("=="),
+                just("!="),
+                just("<="),
+                just(">="),
+            )),
+            just("&&"),
+            just("||"),
+            just("^^"),
+            just("<<"),
+            just(">>"),
+            choice((
+                just("="),
+                just(":"),
+                just("+"),
+                just("-"),
+                just("*"),
+                just("/"),
+                just("%"),
+                just("@"),
+                just(">"),
+                just("<"),
+                just("!"),
+                just("|"),
+                just("&"),
+                just("^"),
+                just("~"),
+                just("?"),
+                just("$"),
+            ))
         )),
-        Token::Op
+        |s: StrSpan| (Token::Op(s.fragment().to_string()), s.span())
     );
 
     // A parser for control characters (delimiters, semicolons, etc.)
     let ctrl = map(
-        one_of("()[]{};,."),
-        Token::Separator
+        choice((
+            just("("),
+            just(")"),
+            just("["),
+            just("]"),
+            just("{"),
+            just("}"),
+            just(";"),
+            just(","),
+            just("."),
+        )),
+        |s: StrSpan| (Token::Separator(s.fragment().chars().next().unwrap()), s.span())
     );
 
     // A parser for preproccessor directives start
@@ -374,7 +399,7 @@ fn lexer(input: &str) -> IResult<&str, Vec<Token>> {
             then(
                 then(
                     just("#"),
-                    choice((
+                    choice(( // TODO: Error recovery here
                         just("include"),
                         just("pragma"),
                         just("define"),
@@ -382,23 +407,25 @@ fn lexer(input: &str) -> IResult<&str, Vec<Token>> {
                 ),
                 take_until("\n"),
             ),
-            |((_, command), arg)| {
-                match command {
+            |((pound, command), arg): ((StrSpan, StrSpan), StrSpan)| {
+                let token = match *command.fragment() {
                     "include" => PreProc::Include(arg.to_string()),
                     "pragma" => PreProc::Pragma(arg.to_string()),
                     "define" => PreProc::Define(arg.to_string()),
                     _ => unreachable!()
-                }
+                };
+                let span = pound.span().start..arg.span().end;
+                (token, span)
             }
         ),
-        Token::Pre
+        |(pre, span)| (Token::Pre(pre), span)
     );
     /*
     let preproc_str = just('<')
         .ignore_then(filter(|c| *c != '>' && *c != '\n').repeated())
         .then_ignore(just('>'))
         .collect::<String>()
-        .map(Token::PreprocStr);*/
+        .map(TokenType::PreprocStr);*/
 
     // A parser for identifiers and keywords
     let ident = map(
@@ -408,32 +435,36 @@ fn lexer(input: &str) -> IResult<&str, Vec<Token>> {
                 many0_count(choice((alphanumeric1, just("_"))))
             )
         ),
-        |s| match s {
-            "struct" => Token::K(Keyword::Struct),
-            "bitfield" => Token::K(Keyword::Bitfield),
-            "le" => Token::K(Keyword::LittleEndian),
-            "be" => Token::K(Keyword::BigEndian),
-            "union" => Token::K(Keyword::Union),
-            "enum" => Token::K(Keyword::Enum),
-            "namespace" => Token::K(Keyword::Namespace),
-            "fn" => Token::K(Keyword::Fn),
-            "if" => Token::K(Keyword::If),
-            "else" => Token::K(Keyword::Else),
-            "while" => Token::K(Keyword::While),
-            "for" => Token::K(Keyword::For),
-            "break" => Token::K(Keyword::Break),
-            "continue" => Token::K(Keyword::Continue),
-            "in" => Token::K(Keyword::In),
-            "out" => Token::K(Keyword::Out),
-            "return" => Token::K(Keyword::Return),
-            "using" => Token::K(Keyword::Using),
-            "parent" => Token::K(Keyword::Parent),
-            "this" => Token::K(Keyword::This),
-            "addressof" => Token::B(BuiltFunc::AddressOf),
-            "sizeof" => Token::B(BuiltFunc::SizeOf),
-            "true" => Token::Bool(true),
-            "false" => Token::Bool(false),
-            _ => Token::Ident(s.to_string()),
+        |s: StrSpan| {
+            let token = match *s.fragment() {
+                "struct" => Token::K(Keyword::Struct),
+                "bitfield" => Token::K(Keyword::Bitfield),
+                "le" => Token::K(Keyword::LittleEndian),
+                "be" => Token::K(Keyword::BigEndian),
+                "union" => Token::K(Keyword::Union),
+                "enum" => Token::K(Keyword::Enum),
+                "namespace" => Token::K(Keyword::Namespace),
+                "fn" => Token::K(Keyword::Fn),
+                "if" => Token::K(Keyword::If),
+                "else" => Token::K(Keyword::Else),
+                "while" => Token::K(Keyword::While),
+                "for" => Token::K(Keyword::For),
+                "break" => Token::K(Keyword::Break),
+                "continue" => Token::K(Keyword::Continue),
+                "in" => Token::K(Keyword::In),
+                "out" => Token::K(Keyword::Out),
+                "return" => Token::K(Keyword::Return),
+                "using" => Token::K(Keyword::Using),
+                "parent" => Token::K(Keyword::Parent),
+                "this" => Token::K(Keyword::This),
+                "addressof" => Token::B(BuiltFunc::AddressOf),
+                "sizeof" => Token::B(BuiltFunc::SizeOf),
+                "true" => Token::Bool(true),
+                "false" => Token::Bool(false),
+                s => Token::Ident(s.to_string()),
+            };
+
+            (token, s.span())
         }
     );
 
@@ -441,7 +472,7 @@ fn lexer(input: &str) -> IResult<&str, Vec<Token>> {
     let token = choice ((
         num,
         char_,
-        str_,
+        //str_,
         //.or(preproc_str
         op,
         ctrl,
@@ -451,20 +482,53 @@ fn lexer(input: &str) -> IResult<&str, Vec<Token>> {
 
     let comment = map(
         then(just("//"), take_until("\n")),
-        |(_, s): (&str, &str)| s
-    );
-    //let directive = just("#").then(take_until(just('\n'))).padded();
-    let padding = map(
-        choice((comment, space0)),
-        |s| Token::Comment(s.to_string())
+        |(_, s): (StrSpan, StrSpan)| s
     );
 
+    let padding = map(
+        choice((
+            comment,
+            just("\n"),
+            just("\r"),
+            space1
+        )),
+        |s| (Token::Comment(s.to_string()), s.span())
+    );
+
+    let mut pos_inputs = choice((token, padding));
+
     map(
-        many_until(choice((token, padding)), eof),
+        many_until(
+            move |input: StrSpan<'a>| match pos_inputs(input) {
+                Ok(r) => Ok(r),
+                Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => {
+                    let input = recover_err(&e);
+                    let len = input.fragment().chars().next().unwrap().len_utf8();
+                    let (rest, input) = input.take_split(len);
+                    let span = input.span();
+                    input.extra.report_error(RecoveredError(span.clone(), "Unkown (non-ASCII) character".to_string()));
+                    Ok((rest, (Token::Err, span)))
+                },
+                Err(e) => Err(e)
+            },
+            eof
+        ),
         |(v, _)| v
     )(input)
 }
 
-pub fn lex(input: &str) -> (Vec<Token>, Vec<Error>) {
-    lex(input)
+fn recover_err<'a>(e: &ErrorTree<StrSpan<'a>>) -> StrSpan<'a> {
+    match e {
+        GenericErrorTree::Base { location, kind } => location.clone(),
+        GenericErrorTree::Stack { base, contexts } => recover_err(base),
+        GenericErrorTree::Alt(v) => recover_err(v.get(0).unwrap()),
+    }
+}
+
+pub fn lex(input: &str) -> (Vec<Spanned<Token>>, RefCell<Vec<RecoveredError>>) {
+    let errors = RefCell::new(Vec::new());
+    let input = StrSpan::new_extra(input, ParseState(&errors));
+    let (_, tokens) = lexer(input).expect("Unrecovered error happen");
+
+    (tokens, errors)
 }
