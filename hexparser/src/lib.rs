@@ -10,6 +10,7 @@ use self::m_parser::{parser};
 pub use self::m_parser::{Spanned, Expr, Value};
 pub mod m_lexer;
 pub mod m_parser;
+mod recovery_err;
 
 use m_lexer::lexer;
 
