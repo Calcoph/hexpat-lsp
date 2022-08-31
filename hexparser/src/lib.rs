@@ -6,7 +6,7 @@ use tower_lsp::lsp_types::SemanticTokenType;
 
 use parserlib::LEGEND_TYPE;
 
-use crate::{m_lexer::{lex, Token, Keyword, BuiltFunc}, recovery_err::RecoveredError, m_parser::placeholder_parser, token::Spanned};
+use crate::{m_lexer::{lex, Token, Keyword, BuiltFunc}, recovery_err::RecoveredError, m_parser::placeholder_parse, token::Spanned};
 
 pub use self::m_parser::{Expr, Value};
 pub mod m_lexer;
@@ -315,7 +315,7 @@ pub fn parse(
                 Token::Err => None,
             })
             .collect::<Vec<_>>();
-        let ast = placeholder_parser(tokens);
+        let ast = placeholder_parse(tokens);
 
         // println!("{:#?}", ast);
         // if let Some(funcs) = ast.filter(|_| errs.len() + parse_errs.len() == 0) {

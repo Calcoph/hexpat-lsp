@@ -551,7 +551,7 @@ fn recover_err<'a>(e: &ErrorTree<StrSpan<'a>>) -> StrSpan<'a> {
 
 pub fn lex<'a>(input: &'a str, errors: &'a RefCell<Vec<RecoveredError>>) -> Vec<TokSpan<'a>> {
     let input = StrSpan::new_extra(input, ParseState(errors));
-    let (_, tokens) = lexer(input).expect("Unrecovered error happen");
+    let (_, tokens) = lexer(input).expect("Unrecovered error happenned in lexer");
 
     tokens
 }

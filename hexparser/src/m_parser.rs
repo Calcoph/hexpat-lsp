@@ -14,12 +14,12 @@ use nom::{
         is_not,
         tag as just,
         take_until,
-        tag_no_case as just_no_case
+        tag_no_case as just_no_case, take_while
     },
     combinator::{
         recognize,
         eof,
-        map_res
+        map_res, map
     },
     sequence::pair as then,
     multi::{
@@ -30,7 +30,7 @@ use nom::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{recovery_err::RecoveredError, token::{Spanned, TokSpan}};
+use crate::{recovery_err::{RecoveredError, ParseState}, token::{Spanned, TokSpan, Tokens}};
 
 use super::m_lexer::{Token, Keyword};
 
@@ -912,6 +912,7 @@ pub enum NamedNode {
     NameSpace,
     BitField
 }
+
 /* 
 fn register_defined_names(named_nodes: &mut HashMap<String, Spanned<NamedNode>>, e: &Expr) -> Result<(), Simple<Token>> {
     match e {
@@ -1005,9 +1006,15 @@ fn register_defined_names(named_nodes: &mut HashMap<String, Spanned<NamedNode>>,
 }
  */
 
+type StateExpr<'a> = (Spanned<Expr>, ParseState<'a>);
+
+fn placeholder_parser<'a>(input: Tokens) -> IResult<Tokens, StateExpr<'a>> {
+    
+}
+
 // Hashmap contains the names of named expressions and their clones
-pub fn placeholder_parser(tokens: Vec<TokSpan>) -> (HashMap<String, Spanned<NamedNode>>, Spanned<Expr>) {
+pub fn placeholder_parse(tokens: Vec<TokSpan>) -> (HashMap<String, Spanned<NamedNode>>, Spanned<Expr>) {
     let hmap = HashMap::new();
-    let ex = (Expr::Dollar, 0..1);
+    let (_, (ex, _)) = placeholder_parser(Tokens{tokens: &tokens}).expect("Unrecovered error happenned in parser");
     (hmap, ex)
 }
