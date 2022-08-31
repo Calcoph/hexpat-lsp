@@ -30,9 +30,9 @@ use nom::{
     },
     InputTake
 };
-use nom_supreme::error::{GenericErrorTree, ErrorTree, Expectation};
+use nom_supreme::error::{GenericErrorTree, ErrorTree};
 
-use crate::{recovery_err::{IResult, StrSpan, RecoveredError, ParseState, ToRange}, Span};
+use crate::recovery_err::{IResult, StrSpan, RecoveredError, ParseState, ToRange};
 
 pub type Spanned<T> = (T, Range<usize>);
 
@@ -256,7 +256,7 @@ fn dec_num(input: StrSpan) -> IResult<StrSpan, Spanned<Token>> {
 }
 
 // A parser for chars
-fn char_<'a>(input: StrSpan<'a>) -> IResult<StrSpan, Spanned<Token>> {
+fn char_<'a>(input: StrSpan<'a>) -> IResult<StrSpan, Spanned<Token>> { // TODO: Better handling of whitespaces (for example require (whitespace|operator|separator) between tokens)
     match then(
         just("\'"),
         take(1 as u8) // TODO: parse also \'
@@ -327,7 +327,7 @@ fn str_<'a>(input: StrSpan<'a>) -> IResult<StrSpan, Spanned<Token>> {
 fn lexer<'a>(input: StrSpan<'a>) -> IResult<StrSpan, Vec<Spanned<Token>>> {
     // Integer parser
     // TODO: Floats
-    let num = choice((
+    let num = choice(( // TODO: Better error highlighting for hex, oct and bin
         hex_num,
         oct_num,
         bin_num,
@@ -507,8 +507,8 @@ fn lexer<'a>(input: StrSpan<'a>) -> IResult<StrSpan, Vec<Spanned<Token>>> {
 
 fn recover_err<'a>(e: &ErrorTree<StrSpan<'a>>) -> StrSpan<'a> {
     match e {
-        GenericErrorTree::Base { location, kind } => location.clone(),
-        GenericErrorTree::Stack { base, contexts } => recover_err(base),
+        GenericErrorTree::Base { location, kind: _ } => location.clone(),
+        GenericErrorTree::Stack { base, contexts: _ } => recover_err(base),
         GenericErrorTree::Alt(v) => recover_err(v.get(0).unwrap()),
     }
 }

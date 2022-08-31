@@ -36,29 +36,3 @@ impl<'a> ToRange for StrSpan<'a> {
         start..start+self.fragment().chars().count()
     }
 }
-
-/* struct HexErr<I> {
-    input: I,
-    code: ErrorKind
-}
-
-impl<I> ParseError<I> for HexErr<I> {
-    fn from_error_kind(input: I, kind: ErrorKind) -> Self {
-        HexErr { input, code: kind }
-    }
-
-    fn append(input: I, kind: ErrorKind, other: Self) -> Self {
-        other
-    }
-
-    fn from_char(input: I, _: char) -> Self {
-        Self::from_error_kind(input, ErrorKind::Char)
-    }
-
-    fn or(self, other: Self) -> Self {
-        other
-      }
-}
-
-impl<I> FromExternalError<I> for HexErr<I> {
-} */
