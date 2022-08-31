@@ -302,8 +302,8 @@ version = "0.1.0"
 dependencies = [
  "expand_str",
  "nom",
+ "nom-locate",
  "nom-supreme",
- "nom_locate",
  "parserlib",
  "serde",
  "shellexpand",
@@ -477,6 +477,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "nom-locate"
+version = "4.0.0"
+source = "git+https://github.com/Calcoph/nom_locate#18912fc1dbd0a34c43cb0ccb980296b0656e897d"
+dependencies = [
+ "bytecount",
+ "memchr",
+ "nom",
+]
+
+[[package]]
 name = "nom-supreme"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -485,17 +495,6 @@ dependencies = [
  "brownstone",
  "indent_write",
  "joinery",
- "memchr",
- "nom",
-]
-
-[[package]]
-name = "nom_locate"
-version = "4.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37794436ca3029a3089e0b95d42da1f0b565ad271e4d3bb4bad0c7bb70b10605"
-dependencies = [
- "bytecount",
  "memchr",
  "nom",
 ]

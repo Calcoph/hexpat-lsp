@@ -8,7 +8,6 @@ edition = "2021"
 [dependencies]
 nom = "7.1.1"
 nom-supreme = "0.8.0"
-nom_locate = "4.0.0"
 serde = { version = "1.0", features = ["derive"] }
 tower-lsp = { version = "0.17.0"}
 shellexpand = "2.1.2"
@@ -16,6 +15,9 @@ expand_str = "0.1.1"
 
 [dependencies.parserlib]
 path = "../parserlib"
+
+[dependencies.nom-locate]
+git = "https://github.com/Calcoph/nom_locate"
 
 [debug]
 incremental = true

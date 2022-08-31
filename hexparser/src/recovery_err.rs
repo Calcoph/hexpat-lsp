@@ -1,5 +1,6 @@
 use std::{cell::RefCell, ops::Range};
 
+use nom::Offset;
 use nom_locate::LocatedSpan;
 //use nom::error::{ParseError, ErrorKind, FromExternalError};
 use nom_supreme::error::ErrorTree;
@@ -31,7 +32,8 @@ pub trait ToRange {
 
 impl<'a> ToRange for StrSpan<'a> {
     fn span(&self) -> Range<usize> {
-        self.location_offset()..self.location_offset()+self.fragment().len()
+        let start = self.get_utf8_column_first_line()-1;
+        start..start+self.fragment().chars().count()
     }
 }
 
