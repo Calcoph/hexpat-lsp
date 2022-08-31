@@ -4,10 +4,10 @@ use nom::{
     character::complete::{
         alpha1,
         alphanumeric1,
-        space0,
         hex_digit1,
         oct_digit1,
-        digit1, newline, space1
+        digit1,
+        space1
     },
     branch::alt as choice,
     bytes::complete::{
@@ -20,15 +20,17 @@ use nom::{
     combinator::{
         recognize,
         eof,
-        map
+        map,
+        map_opt
     },
-    sequence::pair as then,
+    sequence::{pair as then, delimited},
     multi::{
         many0_count,
-        many_till as many_until,
-    }, InputTake, InputLength
+        many_till as many_until, many0,
+    },
+    InputTake
 };
-use nom_supreme::error::{GenericErrorTree, ErrorTree};
+use nom_supreme::error::{GenericErrorTree, ErrorTree, Expectation};
 
 use crate::{recovery_err::{IResult, StrSpan, RecoveredError, ParseState, ToRange}, Span};
 
@@ -262,18 +264,19 @@ fn char_<'a>(input: StrSpan<'a>) -> IResult<StrSpan, Spanned<Token>> {
         Ok((p, (head, c))) => match *c.fragment() {
             "'" => {
                 let span = head.span().start..c.span().end;
-                c.extra.report_error(RecoveredError(span.clone(), "Missing closing `'`".to_string()));
+                c.extra.report_error(RecoveredError(span.clone(), "Characters cannot be empty".to_string()));
                 Ok((p, (Token::Err, span)))
             },
             _ => match just("\'")(p) {
                 Ok((p, tail)) => Ok((p, (Token::Char(c.fragment().chars().next().unwrap()), head.span().start..tail.span().end))),
                 Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => {
-                    let input = match e {
+                    let (input, span) = match e {
                         GenericErrorTree::Base {location, kind} => match kind {
                             nom_supreme::error::BaseErrorKind::Kind(k) => match k {
                                 nom::error::ErrorKind::Tag => {
-                                    location.extra.report_error(RecoveredError(location.span(), "Missing closing `'` before this character".to_string()));
-                                    location
+                                    let span = head.span().start..c.span().end;
+                                    location.extra.report_error(RecoveredError(span.clone(), "Missing closing `'`".to_string()));
+                                    (location, span)
                                 }
                                 _ => unreachable!()
                             }
@@ -281,7 +284,6 @@ fn char_<'a>(input: StrSpan<'a>) -> IResult<StrSpan, Spanned<Token>> {
                         }
                         _ => unreachable!()
                     };
-                    let span = input.span();
                     Ok((input, (Token::Err, span)))
                 },
                 Err(e) => Err(e),
@@ -291,43 +293,36 @@ fn char_<'a>(input: StrSpan<'a>) -> IResult<StrSpan, Spanned<Token>> {
     }
 }
 
-/* fn str_<'a>(input: &'a str) -> IResult<&str, TokenType> {
+fn str_<'a>(input: StrSpan<'a>) -> IResult<StrSpan, Spanned<Token>> {
     // A parser for strings
-    map(
+    let inp_start = input.span().start;
+    map( // TODO: Match for the Error of "delimited" (missing closing '"'")
         delimited(
             just("\""),
-            choice((
-                map(
-                    then(
-                        just("\\"),
-                        just("\\")
-                    ),
-                    |(_,_)| "\\\\".to_string()
-                ),
-                map(
-                    then(
-                        just("\\"),
-                        just("\"")
-                    ),
-                    |(_,_)| "\\\"".to_string()
-                ),
-                map_res(
+            many0(choice((
+                just("\\\\"),
+                just("\\\""),
+                map_opt(
                     take(1 as u8),
-                    |c| match c {
-                        "\"" => Err(Err::Error("End of String")),
-                        _ => Ok(c.to_string())
+                    |c: StrSpan| match *c.fragment() {
+                        "\"" => None,
+                        _ => Some(c)
                     }
                 )
-            )),
-            |input: &'a str| match just("\"")(input) {
-                Ok(_) => todo!(),
-                Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => todo!(),
-                Err(_) => todo!(),
-            }
+            ))),
+            just("\"")
         ),
-        TokenType::Str
+        move |s: Vec<StrSpan<'a>>| {
+            let span = if s.len() > 0 {
+                s.get(0).unwrap().span().start-1..s.get(s.len()-1).unwrap().span().end+1
+            } else {
+                inp_start..inp_start+2
+            };
+            let string = String::from_iter(s.into_iter().map(|s| *s.fragment()));
+            (Token::Str(string), span)
+        }
     )(input)
-} */
+}
 
 fn lexer<'a>(input: StrSpan<'a>) -> IResult<StrSpan, Vec<Spanned<Token>>> {
     // Integer parser
@@ -420,12 +415,6 @@ fn lexer<'a>(input: StrSpan<'a>) -> IResult<StrSpan, Vec<Spanned<Token>>> {
         ),
         |(pre, span)| (Token::Pre(pre), span)
     );
-    /*
-    let preproc_str = just('<')
-        .ignore_then(filter(|c| *c != '>' && *c != '\n').repeated())
-        .then_ignore(just('>'))
-        .collect::<String>()
-        .map(TokenType::PreprocStr);*/
 
     // A parser for identifiers and keywords
     let ident = map(
@@ -472,8 +461,7 @@ fn lexer<'a>(input: StrSpan<'a>) -> IResult<StrSpan, Vec<Spanned<Token>>> {
     let token = choice ((
         num,
         char_,
-        //str_,
-        //.or(preproc_str
+        str_,
         op,
         ctrl,
         ident,
