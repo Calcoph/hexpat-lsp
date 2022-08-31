@@ -32,9 +32,7 @@ use nom::{
 };
 use nom_supreme::error::{GenericErrorTree, ErrorTree};
 
-use crate::recovery_err::{IResult, StrSpan, RecoveredError, ParseState, ToRange};
-
-pub type Spanned<T> = (T, Range<usize>);
+use crate::{recovery_err::{IResult, StrSpan, RecoveredError, ParseState, ToRange}, token::{TokSpan, FromStrSpan}};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Token {
@@ -158,12 +156,15 @@ impl ToString for BuiltFunc {
     }
 }
 
-fn hex_num<'a>(input: StrSpan<'a>) -> IResult<StrSpan, Spanned<Token>> {
+fn hex_num<'a>(input: StrSpan<'a>) -> IResult<StrSpan, TokSpan> {
     map(
         then(
             just_no_case("0x"),
             |input: StrSpan<'a>| match hex_digit1(input) {
-                Ok((p, s)) => Ok((p, (Token::Num(s.to_string()), s.span()))),
+                Ok((p, s)) => {
+                    let state = s.extra.clone();
+                    Ok((p, TokSpan::from_strspan(Token::Num(s.to_string()), state, s.span())))
+                },
                 Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => {
                     let input = match e {
                         GenericErrorTree::Base { location, kind } => match kind {
@@ -179,7 +180,8 @@ fn hex_num<'a>(input: StrSpan<'a>) -> IResult<StrSpan, Spanned<Token>> {
                         _ => unreachable!(),
                     };
                     let span = input.span();
-                    Ok((input, (Token::Err, span)))
+                    let state = input.extra.clone();
+                    Ok((input, TokSpan::from_strspan(Token::Err, state, span)))
                 },
                 Err(e) => Err(e)
             }
@@ -188,12 +190,15 @@ fn hex_num<'a>(input: StrSpan<'a>) -> IResult<StrSpan, Spanned<Token>> {
     )(input)
 }
 
-fn oct_num<'a>(input: StrSpan<'a>) -> IResult<StrSpan, Spanned<Token>> {
+fn oct_num<'a>(input: StrSpan<'a>) -> IResult<StrSpan, TokSpan> {
     map(
         then(
             just_no_case("0o"),
             |input: StrSpan<'a>| match oct_digit1(input) {
-                Ok((p, s)) => Ok((p, (Token::Num(s.to_string()), s.span()))),
+                Ok((p, s)) => {
+                    let state = s.extra.clone();
+                    Ok((p, TokSpan::from_strspan(Token::Num(s.to_string()), state, s.span())))
+                },
                 Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => {
                     let input = match e {
                         GenericErrorTree::Base { location, kind } => match kind {
@@ -209,7 +214,8 @@ fn oct_num<'a>(input: StrSpan<'a>) -> IResult<StrSpan, Spanned<Token>> {
                         _ => unreachable!(),
                     };
                     let span = input.span();
-                    Ok((input, (Token::Err, span)))
+                    let state = input.extra.clone();
+                    Ok((input, TokSpan::from_strspan(Token::Err, state, span)))
                 },
                 Err(e) => Err(e)
             }
@@ -218,12 +224,15 @@ fn oct_num<'a>(input: StrSpan<'a>) -> IResult<StrSpan, Spanned<Token>> {
     )(input)
 }
 
-fn bin_num<'a>(input: StrSpan<'a>) -> IResult<StrSpan, Spanned<Token>> {
+fn bin_num<'a>(input: StrSpan<'a>) -> IResult<StrSpan, TokSpan> {
     map(
         then(
             just_no_case("0b"),
             |input: StrSpan<'a>| match is_a("01")(input) {
-                Ok((p, s)) => Ok((p, (Token::Num(s.to_string()), s.span()))),
+                Ok((p, s)) => {
+                    let state = s.extra.clone();
+                    Ok((p, (Token::Num(s.to_string()), state, s.span())))
+                },
                 Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => {
                     let input = match e {
                         GenericErrorTree::Base { location, kind } => match kind {
@@ -239,24 +248,28 @@ fn bin_num<'a>(input: StrSpan<'a>) -> IResult<StrSpan, Spanned<Token>> {
                         _ => unreachable!()
                     };
                     let span = input.span();
-                    Ok((input, (Token::Err, span)))
+                    let state = input.extra.clone();
+                    Ok((input, (Token::Err, state, span)))
                 },
                 Err(e) => Err(e)
             }
         ),
-        |(head, t)| (t.0, head.span().start..t.1.end)
+        |(head, t)| TokSpan::from_strspan(t.0, t.1, head.span().start..t.2.end)
     )(input)
 }
 
-fn dec_num(input: StrSpan) -> IResult<StrSpan, Spanned<Token>> {
+fn dec_num(input: StrSpan) -> IResult<StrSpan, TokSpan> {
     match digit1(input) {
-        Ok((p, s)) => Ok((p, (Token::Num(s.to_string()), s.span()))),
+        Ok((p, s)) => {
+            let state = s.extra.clone();
+            Ok((p, TokSpan::from_strspan(Token::Num(s.to_string()), state, s.span())))
+        },
         Err(e) => Err(e),
     }
 }
 
 // A parser for chars
-fn char_<'a>(input: StrSpan<'a>) -> IResult<StrSpan, Spanned<Token>> { // TODO: Better handling of whitespaces (for example require (whitespace|operator|separator) between tokens)
+fn char_<'a>(input: StrSpan<'a>) -> IResult<StrSpan, TokSpan> { // TODO: Better handling of whitespaces (for example require (whitespace|operator|separator) between tokens)
     match then(
         just("\'"),
         take(1 as u8) // TODO: parse also \'
@@ -264,11 +277,19 @@ fn char_<'a>(input: StrSpan<'a>) -> IResult<StrSpan, Spanned<Token>> { // TODO: 
         Ok((p, (head, c))) => match *c.fragment() {
             "'" => {
                 let span = head.span().start..c.span().end;
+                let state = c.extra.clone();
                 c.extra.report_error(RecoveredError(span.clone(), "Characters cannot be empty".to_string()));
-                Ok((p, (Token::Err, span)))
+                Ok((p, TokSpan::from_strspan(Token::Err, state, span)))
             },
             _ => match just("\'")(p) {
-                Ok((p, tail)) => Ok((p, (Token::Char(c.fragment().chars().next().unwrap()), head.span().start..tail.span().end))),
+                Ok((p, tail)) => {
+                    let state = tail.extra.clone();
+                    Ok((p, TokSpan::from_strspan(
+                        Token::Char(c.fragment().chars().next().unwrap()),
+                        state,
+                        head.span().start..tail.span().end
+                    )))
+                },
                 Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => {
                     let (input, span) = match e {
                         GenericErrorTree::Base {location, kind} => match kind {
@@ -284,7 +305,8 @@ fn char_<'a>(input: StrSpan<'a>) -> IResult<StrSpan, Spanned<Token>> { // TODO: 
                         }
                         _ => unreachable!()
                     };
-                    Ok((input, (Token::Err, span)))
+                    let state = input.extra.clone();
+                    Ok((input, TokSpan::from_strspan(Token::Err, state, span)))
                 },
                 Err(e) => Err(e),
             }
@@ -293,9 +315,10 @@ fn char_<'a>(input: StrSpan<'a>) -> IResult<StrSpan, Spanned<Token>> { // TODO: 
     }
 }
 
-fn str_<'a>(input: StrSpan<'a>) -> IResult<StrSpan, Spanned<Token>> {
+fn str_<'a>(input: StrSpan<'a>) -> IResult<StrSpan, TokSpan> {
     // A parser for strings
     let inp_start = input.span().start;
+    let state = input.extra.clone();
     map( // TODO: Match for the Error of "delimited" (missing closing '"'")
         delimited(
             just("\""),
@@ -319,12 +342,12 @@ fn str_<'a>(input: StrSpan<'a>) -> IResult<StrSpan, Spanned<Token>> {
                 inp_start..inp_start+2
             };
             let string = String::from_iter(s.into_iter().map(|s| *s.fragment()));
-            (Token::Str(string), span)
+            TokSpan::from_strspan(Token::Str(string), state.clone(), span)
         }
     )(input)
 }
 
-fn lexer<'a>(input: StrSpan<'a>) -> IResult<StrSpan, Vec<Spanned<Token>>> {
+fn lexer<'a>(input: StrSpan<'a>) -> IResult<StrSpan, Vec<TokSpan>> {
     // Integer parser
     // TODO: Floats
     let num = choice(( // TODO: Better error highlighting for hex, oct and bin
@@ -369,7 +392,10 @@ fn lexer<'a>(input: StrSpan<'a>) -> IResult<StrSpan, Vec<Spanned<Token>>> {
                 just("$"),
             ))
         )),
-        |s: StrSpan| (Token::Op(s.fragment().to_string()), s.span())
+        |s: StrSpan| {
+            let state = s.extra.clone();
+            TokSpan::from_strspan(Token::Op(s.fragment().to_string()), state, s.span())
+        }
     );
 
     // A parser for control characters (delimiters, semicolons, etc.)
@@ -385,11 +411,18 @@ fn lexer<'a>(input: StrSpan<'a>) -> IResult<StrSpan, Vec<Spanned<Token>>> {
             just(","),
             just("."),
         )),
-        |s: StrSpan| (Token::Separator(s.fragment().chars().next().unwrap()), s.span())
+        |s: StrSpan| {
+            let state = s.extra.clone();
+            TokSpan::from_strspan(
+                Token::Separator(s.fragment().chars().next().unwrap()),
+                state,
+                s.span()
+            )
+        }
     );
 
     // A parser for preproccessor directives start
-    let preproc = map(
+    let preproc =
         map(
             then(
                 then(
@@ -403,18 +436,17 @@ fn lexer<'a>(input: StrSpan<'a>) -> IResult<StrSpan, Vec<Spanned<Token>>> {
                 take_until("\n"),
             ),
             |((pound, command), arg): ((StrSpan, StrSpan), StrSpan)| {
-                let token = match *command.fragment() {
+                let pre = match *command.fragment() {
                     "include" => PreProc::Include(arg.to_string()),
                     "pragma" => PreProc::Pragma(arg.to_string()),
                     "define" => PreProc::Define(arg.to_string()),
                     _ => unreachable!()
                 };
                 let span = pound.span().start..arg.span().end;
-                (token, span)
+                let state = command.extra.clone();
+                TokSpan::from_strspan(Token::Pre(pre), state, span)
             }
-        ),
-        |(pre, span)| (Token::Pre(pre), span)
-    );
+        );
 
     // A parser for identifiers and keywords
     let ident = map(
@@ -452,8 +484,8 @@ fn lexer<'a>(input: StrSpan<'a>) -> IResult<StrSpan, Vec<Spanned<Token>>> {
                 "false" => Token::Bool(false),
                 s => Token::Ident(s.to_string()),
             };
-
-            (token, s.span())
+            let state = s.extra.clone();
+            TokSpan::from_strspan(token, state, s.span())
         }
     );
 
@@ -480,7 +512,10 @@ fn lexer<'a>(input: StrSpan<'a>) -> IResult<StrSpan, Vec<Spanned<Token>>> {
             just("\r"),
             space1
         )),
-        |s| (Token::Comment(s.to_string()), s.span())
+        |s| {
+            let state = s.extra.clone();
+            TokSpan::from_strspan(Token::Comment(s.to_string()), state, s.span())
+        }
     );
 
     let mut pos_inputs = choice((token, padding));
@@ -495,7 +530,8 @@ fn lexer<'a>(input: StrSpan<'a>) -> IResult<StrSpan, Vec<Spanned<Token>>> {
                     let (rest, input) = input.take_split(len);
                     let span = input.span();
                     input.extra.report_error(RecoveredError(span.clone(), "Unkown (non-ASCII) character".to_string()));
-                    Ok((rest, (Token::Err, span)))
+                    let state = rest.extra.clone();
+                    Ok((rest, TokSpan::from_strspan(Token::Err, state, span)))
                 },
                 Err(e) => Err(e)
             },
@@ -513,10 +549,9 @@ fn recover_err<'a>(e: &ErrorTree<StrSpan<'a>>) -> StrSpan<'a> {
     }
 }
 
-pub fn lex(input: &str) -> (Vec<Spanned<Token>>, RefCell<Vec<RecoveredError>>) {
-    let errors = RefCell::new(Vec::new());
-    let input = StrSpan::new_extra(input, ParseState(&errors));
+pub fn lex<'a>(input: &'a str, errors: &'a RefCell<Vec<RecoveredError>>) -> Vec<TokSpan<'a>> {
+    let input = StrSpan::new_extra(input, ParseState(errors));
     let (_, tokens) = lexer(input).expect("Unrecovered error happen");
 
-    (tokens, errors)
+    tokens
 }

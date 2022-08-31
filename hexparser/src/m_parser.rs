@@ -30,11 +30,9 @@ use nom::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::recovery_err::RecoveredError;
+use crate::{recovery_err::RecoveredError, token::{Spanned, TokSpan}};
 
-use super::{m_lexer::{Token, Keyword}, Span};
-
-pub type Spanned<T> = (T, Span);
+use super::m_lexer::{Token, Keyword};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Value {
@@ -1008,9 +1006,8 @@ fn register_defined_names(named_nodes: &mut HashMap<String, Spanned<NamedNode>>,
  */
 
 // Hashmap contains the names of named expressions and their clones
-pub fn placeholder_parser(tokens: Vec<Spanned<Token>>) -> ((HashMap<String, Spanned<NamedNode>>, Spanned<Expr>), Vec<RecoveredError>) {
+pub fn placeholder_parser(tokens: Vec<TokSpan>) -> (HashMap<String, Spanned<NamedNode>>, Spanned<Expr>) {
     let hmap = HashMap::new();
     let ex = (Expr::Dollar, 0..1);
-    let errs = Vec::new();
-    ((hmap, ex), errs)
+    (hmap, ex)
 }

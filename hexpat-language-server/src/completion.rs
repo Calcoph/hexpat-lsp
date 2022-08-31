@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use hexparser::m_parser::{Spanned, Expr, NamedNode};
+use hexparser::{m_parser::{Expr, NamedNode}, token::Spanned};
 
 pub enum ImCompleteCompletionItem {
     Variable(String),

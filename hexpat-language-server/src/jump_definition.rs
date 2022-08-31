@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use im_rc::Vector;
 
-use hexparser::m_parser::{Spanned, Expr, NamedNode};
+use hexparser::{m_parser::{Expr, NamedNode}, token::Spanned};
 
 /// return (need_to_continue_search, founded reference)
 pub fn get_definition(ast: &(HashMap<String, Spanned<NamedNode>>, Spanned<Expr>), ident_offset: usize) -> Option<Spanned<String>> {

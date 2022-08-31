@@ -1,19 +1,20 @@
 use m_parser::NamedNode;
-use std::collections::HashMap;
+use std::cell::RefCell;
+use std::{collections::HashMap, ops::Range};
 use std::path::Path;
 use tower_lsp::lsp_types::SemanticTokenType;
 
 use parserlib::LEGEND_TYPE;
 
-use crate::{m_lexer::{lex, Token, Keyword, BuiltFunc}, recovery_err::RecoveredError, m_parser::placeholder_parser};
+use crate::{m_lexer::{lex, Token, Keyword, BuiltFunc}, recovery_err::RecoveredError, m_parser::placeholder_parser, token::Spanned};
 
-pub use self::m_parser::{Spanned, Expr, Value};
+pub use self::m_parser::{Expr, Value};
 pub mod m_lexer;
 pub mod m_parser;
 pub mod recovery_err;
+pub mod token;
 
 
-pub type Span = std::ops::Range<usize>;
 #[derive(Debug)]
 pub struct ImCompleteSemanticToken {
     pub start: usize,
@@ -31,7 +32,7 @@ pub enum BinaryOp {
     NotEq,
 }
 
-pub fn type_inference(expr: &Spanned<Expr>, symbol_type_table: &mut HashMap<Span, Value>) {
+pub fn type_inference(expr: &Spanned<Expr>, symbol_type_table: &mut HashMap<Range<usize>, Value>) {
     match &expr.0 {
         Expr::Error => {}
         Expr::Value(_) => {}
@@ -71,16 +72,20 @@ pub fn parse(
     Vec<RecoveredError>,
     Vec<ImCompleteSemanticToken>,
 ) {
-    let (tokens, errs) = lex(src);
-    let mut errs = errs.into_inner();
+    let errs = RefCell::new(Vec::new());
+    let tokens = lex(src, &errs);
     //let (tokens, errors) = expand_preprocessor_tokens(tokens, includeable_folders);
 
     //errs.borrow_mut().extend(errors.into_iter());
 
-    let (ast, parse_errs, semantic_tokens) = { // TODO: Do it without a code block
+    let (ast, semantic_tokens) = { // TODO: Do it without a code block
         // info!("Tokens = {:?}", tokens);
         let semantic_tokens = tokens
             .iter()
+            .map(|tok| {
+                let off = tok.location_offset();
+                (tok.fragment(), off..off+tok.extra.1)
+            })
             .filter_map(|(token, span)| match token {
                 Token::Bool(_) => None,
                 Token::Num(_) => Some(ImCompleteSemanticToken {
@@ -310,7 +315,7 @@ pub fn parse(
                 Token::Err => None,
             })
             .collect::<Vec<_>>();
-        let (ast, parse_errs) = placeholder_parser(tokens);
+        let ast = placeholder_parser(tokens);
 
         // println!("{:#?}", ast);
         // if let Some(funcs) = ast.filter(|_| errs.len() + parse_errs.len() == 0) {
@@ -325,12 +330,10 @@ pub fn parse(
         //     }
         // }
 
-        (ast, parse_errs, semantic_tokens)
+        (ast, semantic_tokens)
     };
 
-    errs.extend(parse_errs.into_iter());
-
-    (ast, errs, semantic_tokens)
+    (ast, errs.into_inner(), semantic_tokens)
     // .for_each(|e| {
     //     let report = match e.reason() {
     //         chumsky::error::SimpleReason::Unclosed { span, delimiter } => {}
