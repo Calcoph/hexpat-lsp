@@ -30,9 +30,7 @@ use nom::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{recovery_err::{RecoveredError, ParseState}, token::{Spanned, TokSpan, Tokens}};
-
-use super::m_lexer::{Token, Keyword};
+use crate::{recovery_err::{RecoveredError, ParseState}, token::{Spanned, TokSpan, Tokens, Token, Keyword}};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Value {
@@ -1006,15 +1004,272 @@ fn register_defined_names(named_nodes: &mut HashMap<String, Spanned<NamedNode>>,
 }
  */
 
+fn function_call<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn string_literal<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn namespace_resolution<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn scope_resolution<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn r_value<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn factor<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn cast_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn unary_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn multiplicative_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn additive_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn shift_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn binary_and_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn binary_xor_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn binary_or_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn relation_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn equality_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn boolean_and<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn boolean_xor<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn boolean_or<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn ternary_conditional<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn mathematical_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn function_definition<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn function_variable_decl<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn function_statement<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn function_variable_assignment<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn function_variable_compound_assignment<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn function_controlflow_statement<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn statement_body<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn function_conditional<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn function_while_loop<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn function_for_loop<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn conditional<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn while_statement<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn parse_type<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn using_declaration<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn padding<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn member_variable<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn member_array_variable<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn pointer_size_type<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn member_pointer_variable<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn member_pointer_array_variable<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn member<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn parse_struct<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn parse_union<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn parse_enum<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn bitfield_entry<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn parse_bitfield<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn forward_declaration<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn variable_placement<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn array_variable_placement<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn pointer_variable_placement<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn pointer_array_variable_placement<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn parse_namespace<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn placement<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn statements<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+    todo!()
+}
+
+fn add_type<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, StateExpr<'a>> {
+   choice((
+        map(
+            then(
+                then(
+                    just(Token::K(Keyword::Using)),
+                    then(
+                        just(Token::Ident("")),
+                        just(Token::Op("="))
+                    )
+                ),
+                using_declaration
+            ),
+            |(_, a)| a
+        ),
+        map(
+            then(
+                then(
+                    just(Token::K(Keyword::Using)),
+                    just(Token::Ident(""))
+                ),
+                forward_declaration
+            ),
+            |(_, a)| a
+        )
+    ));
+
+    todo!()
+}
+
 type StateExpr<'a> = (Spanned<Expr>, ParseState<'a>);
 
-fn placeholder_parser<'a>(input: Tokens) -> IResult<Tokens, StateExpr<'a>> {
-    
+fn placeholder_parser<'a>(input: Tokens<'a>) -> IResult<Tokens, StateExpr<'a>> {
+    map(
+        many_until(
+            statements,
+            eof
+        ),
+        |(v, _)| v.into_iter().next().unwrap() // TODO: Fold into ExprList instead of return first element
+    )(input)
 }
 
 // Hashmap contains the names of named expressions and their clones
 pub fn placeholder_parse(tokens: Vec<TokSpan>) -> (HashMap<String, Spanned<NamedNode>>, Spanned<Expr>) {
     let hmap = HashMap::new();
     let (_, (ex, _)) = placeholder_parser(Tokens{tokens: &tokens}).expect("Unrecovered error happenned in parser");
+    //let ex = (Expr::Dollar, 0..1);
     (hmap, ex)
 }

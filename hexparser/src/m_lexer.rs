@@ -1,4 +1,4 @@
-use std::{fmt, cell::RefCell, ops::Range};
+use std::{cell::RefCell, slice};
 
 use nom::{
     character::complete::{
@@ -32,129 +32,7 @@ use nom::{
 };
 use nom_supreme::error::{GenericErrorTree, ErrorTree};
 
-use crate::{recovery_err::{IResult, StrSpan, RecoveredError, ParseState, ToRange}, token::{TokSpan, FromStrSpan}};
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum Token {
-    K(Keyword),
-    Num(String),
-    Char(char),
-    Str(String),
-    Op(String),
-    V(ValueType),
-    B(BuiltFunc),
-    Ident(String),
-    Separator(char),
-    Bool(bool),
-    Pre(PreProc),
-    Comment(String),
-    Err
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum PreProc {
-    Include(String),
-    Define(String),
-    Pragma(String)
-}
-
-impl fmt::Display for Token {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Token::Bool(x) => write!(f, "{}", x),
-            Token::Num(n) => write!(f, "{}", n),
-            Token::Str(s) => write!(f, "{}", s),
-            Token::Char(s) => write!(f, "{}", s),
-            Token::Op(s) => write!(f, "{}", s),
-            Token::Separator(c) => write!(f, "{}", c),
-            Token::Ident(s) => write!(f, "{}", s),
-            Token::K(k) => match k {
-                Keyword::Struct => write!(f, "struct"),
-                Keyword::Bitfield => write!(f, "bitfield"),
-                Keyword::Union => write!(f, "union"),
-                Keyword::Enum => write!(f, "enum"),
-                Keyword::Namespace => write!(f, "namespace"),
-                Keyword::Fn => write!(f, "fn"),
-                Keyword::If => write!(f, "if"),
-                Keyword::Else => write!(f, "else"),
-                Keyword::While => write!(f, "while"),
-                Keyword::For => write!(f, "for"),
-                Keyword::Break => write!(f, "break"),
-                Keyword::Continue => write!(f, "continue"),
-                Keyword::In => write!(f, "in"),
-                Keyword::Out => write!(f, "out"),
-                Keyword::Return => write!(f, "return"),
-                Keyword::Using => write!(f, "using"),
-                Keyword::Parent => write!(f, "parent"),
-                Keyword::This => write!(f, "this"),
-                Keyword::LittleEndian => write!(f, "le"),
-                Keyword::BigEndian => write!(f, "be"),
-            },
-            Token::B(b) => match b {
-                BuiltFunc::AddressOf => write!(f, "addressof"),
-                BuiltFunc::SizeOf => write!(f, "sizeof"),
-            }
-            Token::V(_) => write!(f, "V"), // TODO
-            Token::Pre(_) => write!(f, "PreProc"),
-            Token::Comment(s) => write!(f, "{}", s),
-            Token::Err => todo!(), // TODO
-            //TokenType::PreprocStart(s) => write!(f, "{}", s),
-            //TokenType::PreprocStr(s) => write!(f, "{}", s),
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum Keyword {
-    Struct,
-    Union,
-    Using,
-    Enum,
-    Bitfield,
-    LittleEndian,
-    BigEndian,
-    Fn,
-    If,
-    Else,
-    Parent,
-    This,
-    While,
-    For,
-    Return,
-    Namespace,
-    In,
-    Out,
-    Break,
-    Continue
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum ValueType {
-    Boolean,
-    String,
-    CustomType,
-    Padding,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum BuiltFunc {
-    AddressOf,
-    SizeOf,
-}
-
-pub enum LexResult {
-    Ok(Token),
-    Err(String)
-}
-
-impl ToString for BuiltFunc {
-    fn to_string(&self) -> String {
-        match self {
-            BuiltFunc::AddressOf => "addressof".to_string(),
-            BuiltFunc::SizeOf => "sizeof".to_string(),
-        }
-    }
-}
+use crate::{recovery_err::{IResult, StrSpan, RecoveredError, ParseState, ToRange}, token::{TokSpan, FromStrSpan, Token, PreProc, Keyword, BuiltFunc}};
 
 fn hex_num<'a>(input: StrSpan<'a>) -> IResult<StrSpan, TokSpan> {
     map(
@@ -163,7 +41,7 @@ fn hex_num<'a>(input: StrSpan<'a>) -> IResult<StrSpan, TokSpan> {
             |input: StrSpan<'a>| match hex_digit1(input) {
                 Ok((p, s)) => {
                     let state = s.extra.clone();
-                    Ok((p, TokSpan::from_strspan(Token::Num(s.to_string()), state, s.span())))
+                    Ok((p, TokSpan::from_strspan(Token::Num(s.fragment()), state, s.span())))
                 },
                 Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => {
                     let input = match e {
@@ -197,7 +75,7 @@ fn oct_num<'a>(input: StrSpan<'a>) -> IResult<StrSpan, TokSpan> {
             |input: StrSpan<'a>| match oct_digit1(input) {
                 Ok((p, s)) => {
                     let state = s.extra.clone();
-                    Ok((p, TokSpan::from_strspan(Token::Num(s.to_string()), state, s.span())))
+                    Ok((p, TokSpan::from_strspan(Token::Num(s.fragment()), state, s.span())))
                 },
                 Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => {
                     let input = match e {
@@ -231,7 +109,7 @@ fn bin_num<'a>(input: StrSpan<'a>) -> IResult<StrSpan, TokSpan> {
             |input: StrSpan<'a>| match is_a("01")(input) {
                 Ok((p, s)) => {
                     let state = s.extra.clone();
-                    Ok((p, (Token::Num(s.to_string()), state, s.span())))
+                    Ok((p, (Token::Num(s.fragment()), state, s.span())))
                 },
                 Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => {
                     let input = match e {
@@ -262,7 +140,7 @@ fn dec_num(input: StrSpan) -> IResult<StrSpan, TokSpan> {
     match digit1(input) {
         Ok((p, s)) => {
             let state = s.extra.clone();
-            Ok((p, TokSpan::from_strspan(Token::Num(s.to_string()), state, s.span())))
+            Ok((p, TokSpan::from_strspan(Token::Num(s.fragment()), state, s.span())))
         },
         Err(e) => Err(e),
     }
@@ -336,13 +214,22 @@ fn str_<'a>(input: StrSpan<'a>) -> IResult<StrSpan, TokSpan> {
             just("\"")
         ),
         move |s: Vec<StrSpan<'a>>| {
-            let span = if s.len() > 0 {
-                s.get(0).unwrap().span().start-1..s.get(s.len()-1).unwrap().span().end+1
+            let (span, s) = if s.len() > 0 {
+                let start = s.get(0).unwrap().span().start;
+                let end = s.get(s.len()-1).unwrap().span().end;
+                let span = start-1..end+1; // -1 and +1 to also take the " delimeters
+
+                let first_ptr = s.get(0).unwrap().as_ptr();
+                let len = end - start;
+                
+                let s = unsafe {slice::from_raw_parts(first_ptr, len)};
+                let s = std::str::from_utf8(s).unwrap();
+
+                (span, s)
             } else {
-                inp_start..inp_start+2
+                (inp_start..inp_start+2, "")
             };
-            let string = String::from_iter(s.into_iter().map(|s| *s.fragment()));
-            TokSpan::from_strspan(Token::Str(string), state.clone(), span)
+            TokSpan::from_strspan(Token::Str(s), state.clone(), span) // TODO: Don't return empty str
         }
     )(input)
 }
@@ -394,7 +281,7 @@ fn lexer<'a>(input: StrSpan<'a>) -> IResult<StrSpan, Vec<TokSpan>> {
         )),
         |s: StrSpan| {
             let state = s.extra.clone();
-            TokSpan::from_strspan(Token::Op(s.fragment().to_string()), state, s.span())
+            TokSpan::from_strspan(Token::Op(s.fragment()), state, s.span())
         }
     );
 
@@ -437,9 +324,9 @@ fn lexer<'a>(input: StrSpan<'a>) -> IResult<StrSpan, Vec<TokSpan>> {
             ),
             |((pound, command), arg): ((StrSpan, StrSpan), StrSpan)| {
                 let pre = match *command.fragment() {
-                    "include" => PreProc::Include(arg.to_string()),
-                    "pragma" => PreProc::Pragma(arg.to_string()),
-                    "define" => PreProc::Define(arg.to_string()),
+                    "include" => PreProc::Include(arg.fragment()),
+                    "pragma" => PreProc::Pragma(arg.fragment()),
+                    "define" => PreProc::Define(arg.fragment()),
                     _ => unreachable!()
                 };
                 let span = pound.span().start..arg.span().end;
@@ -482,7 +369,7 @@ fn lexer<'a>(input: StrSpan<'a>) -> IResult<StrSpan, Vec<TokSpan>> {
                 "sizeof" => Token::B(BuiltFunc::SizeOf),
                 "true" => Token::Bool(true),
                 "false" => Token::Bool(false),
-                s => Token::Ident(s.to_string()),
+                s => Token::Ident(s),
             };
             let state = s.extra.clone();
             TokSpan::from_strspan(token, state, s.span())
@@ -514,7 +401,7 @@ fn lexer<'a>(input: StrSpan<'a>) -> IResult<StrSpan, Vec<TokSpan>> {
         )),
         |s| {
             let state = s.extra.clone();
-            TokSpan::from_strspan(Token::Comment(s.to_string()), state, s.span())
+            TokSpan::from_strspan(Token::Comment(s.fragment()), state, s.span())
         }
     );
 

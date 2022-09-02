@@ -9,7 +9,7 @@ pub type IResult<I, O, E=ErrorTree<I>> = Result<(I, O), nom::Err<E>>;
 
 /// Carried around in the `LocatedSpan::extra` field in
 /// between `nom` parsers.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct ParseState<'a>(pub &'a RefCell<Vec<RecoveredError>>);
 
 impl<'a> ParseState<'a> {

@@ -6,7 +6,8 @@ use tower_lsp::lsp_types::SemanticTokenType;
 
 use parserlib::LEGEND_TYPE;
 
-use crate::{m_lexer::{lex, Token, Keyword, BuiltFunc}, recovery_err::RecoveredError, m_parser::placeholder_parse, token::Spanned};
+use crate::token::{Token, Keyword, BuiltFunc};
+use crate::{m_lexer::lex, recovery_err::RecoveredError, m_parser::placeholder_parse, token::Spanned};
 
 pub use self::m_parser::{Expr, Value};
 pub mod m_lexer;
