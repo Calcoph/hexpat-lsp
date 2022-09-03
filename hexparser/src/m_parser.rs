@@ -14,12 +14,17 @@ use nom::{
         is_not,
         tag as just,
         take_until,
-        tag_no_case as just_no_case, take_while
+        tag_no_case as just_no_case,
+        take_while
     },
     combinator::{
         recognize,
         eof,
-        map_res, map
+        map_res,
+        map,
+        peek,
+        not,
+        opt
     },
     sequence::pair as then,
     multi::{
@@ -1088,6 +1093,10 @@ fn mathematical_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned
     todo!()
 }
 
+fn attribute<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+    todo!()
+}
+
 fn function_definition<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
     todo!()
 }
@@ -1220,37 +1229,175 @@ fn placement<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
     todo!()
 }
 
-fn statements<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
-}
-
-fn add_type<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-   choice((
+fn statements_choice<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+    choice((
         map(
             then(
                 then(
                     just(Token::K(Keyword::Using)),
                     then(
-                        just(Token::Ident("")),
+                        ident,
                         just(Token::Op("="))
                     )
                 ),
                 using_declaration
             ),
-            |(_, a)| a
+            |((a, (b,c)), d)| b // TODO
         ),
         map(
             then(
                 then(
                     just(Token::K(Keyword::Using)),
-                    just(Token::Ident(""))
+                    ident
                 ),
                 forward_declaration
             ),
-            |(_, a)| a
-        )
-    ));
+            |((a, b), c)| b //TODO
+        ),
+        map(
+            then(
+                peek(
+                    choice((
+                            just(Token::K(Keyword::BigEndian)),
+                            just(Token::K(Keyword::LittleEndian)),
+                            value_type_any,
+                    )) 
+                ),
+                placement
+            ),
+            |(a, b)| b // TODO
+        ),
+        map(
+            then(
+                then(
+                    then(
+                        then(
+                            then(
+                                peek(ident),
+                                not(just(Token::Op("=")))
+                            ),
+                            not(just(Token::Separator('.')))
+                        ),
+                        not(just(Token::Separator('[')))
+                    ),
+                    namespace_resolution
+                ),
+                choice((
+                    map(
+                        then(
+                            peek(just(Token::Separator('('))),
+                            function_call
+                        ),
+                        |(a, b)| b // TODO
+                    ),
+                    placement
+                ))
+            ),
+            |(((((a, _), _), _), b), c)| a // TODO
+        ),
+        map(
+            then(
+                then(
+                    just(Token::K(Keyword::Struct)),
+                    ident
+                ),
+                parse_struct
+            ),
+            |((a, b), c)| b // TODO
+        ),
+        map(
+            then(
+                then(
+                    then(
+                        just(Token::K(Keyword::Union)),
+                        just(Token::Separator('{'))
+                    ),
+                    ident
+                ),
+                parse_union
+            ),
+            |(((a, b), c), d)| c // TODO
+        ),
+        map(
+            then(
+                then(
+                    then(
+                        just(Token::K(Keyword::Enum)),
+                        just(Token::Separator(':'))
+                    ),
+                    ident
+                ),
+                parse_enum
+            ),
+            |(((a, b), c), d)| c // TODO
+        ),
+        map(
+            then(
+                then(
+                    then(
+                        just(Token::K(Keyword::Bitfield)),
+                        just(Token::Separator('{'))
+                    ),
+                    ident
+                ),
+                parse_bitfield
+            ),
+            |(((a, b), c), d)| c // TODO
+        ),
+        map(
+            then(
+                then(
+                    then(
+                        just(Token::K(Keyword::Fn)),
+                        just(Token::Separator('('))
+                    ),
+                    ident
+                ),
+                function_definition
+            ),
+            |(((a, b), c), d)| c // TODO
+        ),
+        map(
+            then(
+                then(
+                    just(Token::K(Keyword::Namespace)),
+                    ident
+                ),
+                parse_namespace
+            ),
+            |((a, b), c)| b // TODO
+        ),
+        function_statement
+    ))(input)
+}
 
+fn statements<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+    map(
+        then(
+            statements_choice,
+            opt(
+                then(
+                    then(
+                        just(Token::Separator('[')),
+                        just(Token::Separator('['))
+                    ),
+                    attribute
+                )
+            ),
+        ),
+        |(a, b)| a // TODO
+    )(input)// TODO: Consume all semicolons with nothing in between
+}
+
+fn add_type<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+   todo!()
+}
+
+fn ident<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+    todo!()
+}
+
+fn value_type_any<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Tokens<'a>> {
     todo!()
 }
 
