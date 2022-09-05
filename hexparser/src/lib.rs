@@ -14,6 +14,7 @@ pub mod m_lexer;
 pub mod m_parser;
 pub mod recovery_err;
 pub mod token;
+mod combinators;
 
 
 #[derive(Debug)]
