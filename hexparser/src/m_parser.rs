@@ -50,39 +50,80 @@ impl std::fmt::Display for Value {
 #[derive(Debug, Clone)]
 pub enum Expr {
     Error,
-    Value(Value),
+    Value{val: Value},
     Dollar,
-    ExprList(Box<Vec<Spanned<Self>>>),
-    Local(Spanned<String>),
-    Unary(UnaryOp, Box<Spanned<Self>>), // something
-    Binary(Box<Spanned<Self>>, BinaryOp, Box<Spanned<Self>>), // something operator something_else
-    Ternary(Box<Spanned<Self>>, Box<Spanned<Self>>, Box<Spanned<Self>>), // something ? something_else : something_else_else
-    Call(Box<Spanned<Self>>, Spanned<Vec<Spanned<Self>>>), // name arguments
-    If(Box<Spanned<Self>>, Box<Spanned<Self>>, Box<Spanned<Self>>), // if condition body
-    Definition(Spanned<String>, Spanned<String>, Box<Spanned<Self>>), // type name everything_else
-    BitFieldEntry(Spanned<String>, Box<Spanned<Self>>), // name length
-    EnumEntry(Spanned<String>, Box<Spanned<Self>>), // name value
-    NamespaceAccess(Box<Spanned<Self>>, Spanned<String>),
-    Using(Box<Spanned<Self>>),
-    Return(Box<Spanned<Self>>),
+    ExprList {list: Box<Vec<Spanned<Self>>> },
+    Local { name: Spanned<String> },
+    Unary {
+        operation: UnaryOp,
+        operand: Box<Spanned<Self>>
+    },
+    Binary {
+        loperand: Box<Spanned<Self>>,
+        operation: BinaryOp,
+        roperand: Box<Spanned<Self>>
+    },
+    Ternary {
+        loperand: Box<Spanned<Self>>,
+        moperand: Box<Spanned<Self>>,
+        roperand: Box<Spanned<Self>>
+    },
+    Call {
+        func_name: Box<Spanned<Self>>,
+        arguments: Spanned<Vec<Spanned<Self>>>
+    },
+    If { // TODO: See what is up with unkown
+        unkown: Box<Spanned<Self>>,
+        condition: Box<Spanned<Self>>,
+        body: Box<Spanned<Self>>
+    },
+    Definition {
+        value_type: Spanned<String>,
+        name: Spanned<String>,
+        body: Box<Spanned<Self>>
+    },
+    BitFieldEntry {
+        name: Spanned<String>,
+        length: Box<Spanned<Self>>
+    },
+    EnumEntry {
+        name: Spanned<String>,
+        value: Box<Spanned<Self>>
+    },
+    NamespaceAccess {
+        previous: Box<Spanned<Self>>,
+        name: Spanned<String>
+    },
+    Using { type_name: Box<Spanned<Self>> },
+    Return { unkown: Box<Spanned<Self>> }, // TODO: See what's up with unkown
     Continue,
     Break,
-    Func(Spanned<String>, Vec<(Spanned<String>, Spanned<String>)>, Box<Spanned<Self>>), // name args body
-    Struct(Spanned<String>, Box<Spanned<Self>>), // name body
-    Namespace(Spanned<String>, Box<Spanned<Self>>), // name body
-    Enum(Spanned<String>, Box<Spanned<Self>>, Spanned<String>), // name body type
-    Bitfield(Spanned<String>, Box<Spanned<Self>>), // name body
-    Access(Box<Spanned<Self>>, Box<Spanned<Self>>),
-}
-
-impl Expr {
-    pub fn as_value(&self) -> Option<&Value> {
-        if let Self::Value(v) = self {
-            Some(v)
-        } else {
-            None
-        }
-    }
+    Func {
+        name: Spanned<String>,
+        args: Vec<(Spanned<String>, Spanned<String>)>,
+        body: Box<Spanned<Self>>
+    },
+    Struct {
+        name: Spanned<String>,
+        body: Box<Spanned<Self>>
+    },
+    Namespace {
+        name: Spanned<String>,
+        body: Box<Spanned<Self>>
+    },
+    Enum {
+        name: Spanned<String>,
+        body: Box<Spanned<Self>>,
+        value_type: Spanned<String>
+    },
+    Bitfield {
+        name: Spanned<String>,
+        body: Box<Spanned<Self>>
+    },
+    Access { // TODO: See what's up with unkown
+        unkown: Box<Spanned<Self>>,
+        unkown2: Box<Spanned<Self>>
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -117,18 +158,21 @@ pub enum UnaryOp {
 }
 
 fn function_call<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    then(
-        namespace_resolution,
+    map(
         then(
-            just(Token::Separator('(')),
-            terminated(
-                many0(then(
-                    mathematical_expression,
-                    just(Token::Separator(')'))
-                )),
-                just(Token::Separator(')')),
+            namespace_resolution,
+            then(
+                just(Token::Separator('(')),
+                terminated(
+                    many0(then(
+                        mathematical_expression,
+                        just(Token::Separator(')'))
+                    )),
+                    just(Token::Separator(')')),
+                )
             )
-        )
+        ),
+        |a| Expr::Call((), ()) // TODO
     )(input)
 }
 
