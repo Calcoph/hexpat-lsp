@@ -2,7 +2,7 @@ use nom::{error::ParseError, Parser};
 
 use crate::{token::Spanned, recovery_err::{IResult, ToRange}};
 
-pub fn map_with_span<I, O, E: ParseError<I>, F>(
+pub fn spanned<I, O, E: ParseError<I>, F>(
     mut parser: F
 ) -> impl FnMut(I) -> IResult<I, Spanned<O>, E>
 where
