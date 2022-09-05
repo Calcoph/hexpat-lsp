@@ -1,41 +1,27 @@
-use std::{collections::HashMap, ops::Range};
+use std::collections::HashMap;
 
 use nom::{
     IResult,
-    character::complete::{
-        one_of,
-        alpha1,
-        alphanumeric1,
-        space0,
-        newline
-    },
     branch::alt as choice,
     bytes::complete::{
-        is_not,
         tag as just,
-        take_until,
-        tag_no_case as just_no_case,
-        take_while
     },
     combinator::{
-        recognize,
         eof,
-        map_res,
         map,
         peek,
         not,
         opt
     },
-    sequence::pair as then,
+    sequence::{pair as then, terminated},
     multi::{
-        many0_count,
         many_till as many_until,
-        many1
+        many1, many0
     }
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{recovery_err::{RecoveredError, ParseState}, token::{Spanned, TokSpan, Tokens, Token, Keyword}};
+use crate::{token::{Spanned, TokSpan, Tokens, Token, Keyword, ValueType, BuiltFunc}};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Value {
@@ -130,887 +116,20 @@ pub enum UnaryOp {
     BNot,
 }
 
-/* /* fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone {
-    recursive(|expr: Recursive<Token, Spanned<Expr>, Simple<Token>>| {
-        let val = filter_map(|span, tok| match tok {
-            Token::Bool(x) => Ok(Expr::Value(Value::Bool(x))),
-            Token::Num(_) => Ok(Expr::Value(Value::Num(42342.0))),// TODO: change 42342.0 to a proper (hex, bin, oct, dec) str->f64
-            Token::Str(s) => Ok(Expr::Value(Value::Str(s))),
-            Token::Char(c) => Ok(Expr::Value(Value::Char(c))),
-            _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
-        })
-        .labelled("value");
-
-        let ident = ident();
-
-        let builtin_func = filter_map(|span, tok| match tok {
-            Token::B(func) => Ok((func.clone(), span)),
-            _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
-        })
-        .labelled("built in function");
-
-        // A list of expressions
-        let items = expr.clone()
-            .chain(just(Token::Separator(',')).ignore_then(expr.clone()).repeated())
-            .then_ignore(just(Token::Separator(',')).or_not())
-            .or_not()
-            .map(|item| item.unwrap_or_else(Vec::new));
-
-        let namespace_access = ident.clone()
-            .map_with_span(|a, span| (Expr::Local(a), span))
-            .then_ignore(just(Token::Op("::".to_string())))
-            .repeated()
-            .at_least(1)
-            .map_with_span(|a, span| {
-                (Expr::ExprList(Box::new(a)), span)
-            });
-
-        let array_access = expr.clone().delimited_by(just(Token::Separator('[')), just(Token::Separator(']')))
-            .recover_with(nested_delimiters(
-                Token::Separator('('),
-                Token::Separator(')'),
-                [
-                    (Token::Separator('{'), Token::Separator('}')),
-                ],
-                |span| (Expr::Error, span),
-            ));
-
-        let member_access = just(Token::Separator('.'))
-            .ignore_then(choice((
-                ident.clone(),
-                just(Token::K(Keyword::Parent)).map_with_span(|_, span| ("parent".to_string(), span))
-            ))).map_with_span(|a, span| (Expr::Local(a), span))
-            .repeated()
-            .at_least(1)
-            .map_with_span(|a, span| {
-                (Expr::ExprList(Box::new(a)), span)
-            });
-        
-        let namespace_access = namespace_access
-            .then(
-                ident.clone().map_with_span(|a, span| (Expr::Local(a), span))
-            ).map_with_span(|(a, b), span| (Expr::Access(Box::new(a), Box::new(b)), span))
-            .then(
-                member_access.clone()
-                    .or(array_access.clone())
-                    .repeated()
-            ).foldl(|(a, a_span), (b, b_span)| {
-                let span = a_span.start..b_span.end;
-                (Expr::Access(Box::new((a, a_span)), Box::new((b, b_span))), span)
-            });
-
-        let access = namespace_access
-            .or(
-                choice((
-                    ident.clone().map_with_span(|a, span| (Expr::Local(a), span)),
-                    just(Token::K(Keyword::This)).map_with_span(|_, span: Span| (Expr::Local(("this".to_string(), span.clone())), span)),
-                    just(Token::K(Keyword::Parent)).map_with_span(|_, span: Span| (Expr::Local(("parent".to_string(), span.clone())), span))
-                )).then(
-                    member_access
-                        .or(array_access)
-                        .repeated()
-                ).foldl(|(a, a_span), (b, b_span)| {
-                    let span = a_span.start..b_span.end;
-                    (Expr::Access(Box::new((a, a_span)), Box::new((b, b_span))), span)
-                })
-            );
-
-        // 'Atoms' are expressions that contain no ambiguity
-        let atom = choice((
-            val.map_with_span(|expr, span| (expr, span)),
-            access.clone(),
-            ident.clone().map_with_span(|a, span| (Expr::Local(a), span)),
-            just(Token::Op("$".to_string()))
-                .map_with_span(|_, span: Range<usize>| (Expr::Local(("$".to_string(), span.clone())), span)),
-            //.or(ident.map(Expr::Local).map_with_span(|expr, span| (expr, span)))
-            builtin_func
-                .map_with_span(|a, span| (Expr::Local((a.0.to_string(), a.1)), span)),
-            // Atoms can also just be normal expressions, but surrounded with parentheses
-            expr.clone()
-                .delimited_by(just(Token::Separator('(')), just(Token::Separator(')'))),
-        ))
-        // Attempt to recover anything that looks like a parenthesised expression but contains errors
-        .recover_with(nested_delimiters(
-            Token::Separator('('),
-            Token::Separator(')'),
-            [
-                (Token::Separator('['), Token::Separator(']')),
-                (Token::Separator('{'), Token::Separator('}')),
-            ],
-            |span| (Expr::Error, span),
-        ));
-
-        // Function calls have very high precedence so we prioritise them
-        let call = atom
-            .then(
-                items
-                    .delimited_by(just(Token::Separator('(')), just(Token::Separator(')')))
-                    .map_with_span(|args, span| (args, span))
-                    .repeated(),
-            )
-            .foldl(|f, args| {
-                let span = f.1.start..args.1.end;
-                (Expr::Call(Box::new(f), args), span)
-            });
-
-        let unary = choice((
-            just(Token::Op("+".to_string())).to(UnaryOp::Add),
-            just(Token::Op("-".to_string())).to(UnaryOp::Sub),
-            just(Token::Op("~".to_string())).to(UnaryOp::LNot),
-            just(Token::Op("!".to_string())).to(UnaryOp::BNot),
-        )).or_not().then(call)
-            .map_with_span(|(op, a), span| {
-            match op {
-                Some(o) => (Expr::Unary(o, Box::new(a)), span),
-                None => a,
-            }
-            });
-
-        // Product ops (multiply and divide) have equal precedence
-        let op = choice((
-            just(Token::Op("*".to_string())).to(BinaryOp::Mul),
-            just(Token::Op("/".to_string())).to(BinaryOp::Div),
-            just(Token::Op("%".to_string())).to(BinaryOp::Mod),
-        ));
-
-        let product = unary.clone()
-            .then(op.then(unary).repeated())
-            .foldl(|a, (op, b)| {
-                let span = a.1.start..b.1.end;
-                (Expr::Binary(Box::new(a), op, Box::new(b)), span)
-            });
-
-        // Sum ops (add and subtract) have equal precedence
-        let op = just(Token::Op("+".to_string()))
-            .to(BinaryOp::Add)
-            .or(just(Token::Op("-".to_string())).to(BinaryOp::Sub));
-        let sum = product
-            .clone()
-            .then(op.then(product).repeated())
-            .foldl(|a, (op, b)| {
-                let span = a.1.start..b.1.end;
-                (Expr::Binary(Box::new(a), op, Box::new(b)), span)
-            });
-
-        // Shift ops
-        let op = just(Token::Op("<<".to_string()))
-            .to(BinaryOp::LShift)
-            .or(just(Token::Op(">>".to_string())).to(BinaryOp::RShift));
-        let shift = sum.clone()
-            .then(op.then(sum).repeated())
-            .foldl(|a, (op, b)| {
-                let span = a.1.start..b.1.end;
-                (Expr::Binary(Box::new(a), op, Box::new(b)), span)
-            });
-        
-        // Binary and
-        let op = just(Token::Op("&".to_string()))
-            .to(BinaryOp::BAnd);
-        let b_and = shift.clone()
-            .then(op.then(shift).repeated())
-            .foldl(|a, (op, b)| {
-                let span = a.1.start..b.1.end;
-                (Expr::Binary(Box::new(a), op, Box::new(b)), span)
-            }).boxed();
-        
-        // Binary xor
-        let op = just(Token::Op("^".to_string()))
-            .to(BinaryOp::BXor);
-        let b_xor = b_and.clone()
-            .then(op.then(b_and).repeated())
-            .foldl(|a, (op, b)| {
-                let span = a.1.start..b.1.end;
-                (Expr::Binary(Box::new(a), op, Box::new(b)), span)
-            });
-        
-        // Binary or
-        let op = just(Token::Op("|".to_string()))
-            .to(BinaryOp::BOr);
-        let b_or = b_xor.clone()
-            .then(op.then(b_xor).repeated())
-            .foldl(|a, (op, b)| {
-                let span = a.1.start..b.1.end;
-                (Expr::Binary(Box::new(a), op, Box::new(b)), span)
-            });
-        
-        // Relationship
-        let op = choice((
-            just(Token::Op(">=".to_string())).to(BinaryOp::GreaterEqual),
-            just(Token::Op("<=".to_string())).to(BinaryOp::LessEqual),
-            just(Token::Op(">".to_string())).to(BinaryOp::Greater),
-            just(Token::Op("<".to_string())).to(BinaryOp::Less)
-        ));
-        
-        let relation = b_or.clone()
-            .then(op.then(b_or).repeated())
-            .foldl(|a, (op, b)| {
-                let span = a.1.start..b.1.end;
-                (Expr::Binary(Box::new(a), op, Box::new(b)), span)
-            });
-
-        // Comparison ops (equal, not-equal) have equal precedence
-        let op = just(Token::Op("==".to_string()))
-            .to(BinaryOp::Eq)
-            .or(just(Token::Op("!=".to_string())).to(BinaryOp::NotEq));
-        let comp = relation
-            .clone()
-            .then(op.then(relation).repeated())
-            .foldl(|a, (op, b)| {
-                let span = a.1.start..b.1.end;
-                (Expr::Binary(Box::new(a), op, Box::new(b)), span)
-            });
-        
-        // Logical and
-        let op = just(Token::Op("&&".to_string()))
-            .to(BinaryOp::LAnd);
-        let l_and = comp.clone()
-            .then(op.then(comp).repeated())
-            .foldl(|a, (op, b)| {
-                let span = a.1.start..b.1.end;
-                (Expr::Binary(Box::new(a), op, Box::new(b)), span)
-            });
-
-        // Logical xor
-        let op = just(Token::Op("^^".to_string()))
-            .to(BinaryOp::LXor);
-        let l_xor = l_and.clone()
-            .then(op.then(l_and).repeated())
-            .foldl(|a, (op, b)| {
-                let span = a.1.start..b.1.end;
-                (Expr::Binary(Box::new(a), op, Box::new(b)), span)
-            });
-
-        // Logical or
-        let op = just(Token::Op("||".to_string()))
-            .to(BinaryOp::LOr);
-        let l_or = l_xor.clone()
-            .then(op.then(l_xor).repeated())
-            .foldl(|a, (op, b)| {
-                let span = a.1.start..b.1.end;
-                (Expr::Binary(Box::new(a), op, Box::new(b)), span)
-            });
-
-        let raw_expr = l_or.clone()
-            .then(
-                just(Token::Op("?".to_string()))
-                    .ignore_then(l_or.clone())
-                    .then_ignore(just(Token::Op(":".to_string())))
-                    .then(l_or)
-                    .repeated()
-            ).foldl(|a, (b, c)| {
-                let span = a.1.start..c.1.end;
-                (Expr::Ternary(Box::new(a), Box::new(b), Box::new(c)), span)
-            });
-
-        let array_definition = expr.clone()
-            .or(just(Token::K(Keyword::While)).ignore_then(expr.clone().delimited_by(just(Token::Separator('(')), just(Token::Separator(')'))))) // TODO: Custom parser instead of "expr"
-            .delimited_by(just(Token::Separator('[')), just(Token::Separator(']')))
-            .recover_with(nested_delimiters(
-                Token::Separator('('),
-                Token::Separator(')'),
-                [
-                    (Token::Separator('{'), Token::Separator('}')),
-                ],
-                |span| (Expr::Error, span),
-            ));
-
-        let definition = ident.clone()
-            .then(ident.clone())
-            .then_ignore(
-                array_definition.clone()
-                .or(
-                    just(Token::Separator('['))
-                    .ignore_then(just(Token::Separator(']')))
-                    .ignored()
-                    .map_with_span(|(), span| (Expr::Value(Value::Null), span))
-                ).or_not()
-                .then_ignore(
-                    just(Token::K(Keyword::Out))
-                    .or(just(Token::K(Keyword::In)))
-                    .or_not()
-                )
-            )
-            .then(just(Token::Op("@".to_string())).ignore_then(raw_expr.clone()).or_not())
-            .then_ignore(
-                just(Token::Separator('['))
-                    .then(just(Token::Separator('[')))
-                    .then(take_until(just(Token::Separator(']')).then(just(Token::Separator(']')))))
-                    .or_not()
-            )
-            //.map(|((name, val), body)| {
-            .map_with_span(|((type_, name), val), span| {
-                let val = match val {
-                    Some(val) => Box::new(val),
-                    None => Box::new((Expr::Value(Value::Null), span.clone()))
-                };
-                (
-                    Expr::Definition(type_, name, val),
-                    span
-                )
-            });
-        
-        let assignable = choice((
-            just(Token::Op("$".to_string()))
-                .map_with_span(|_, span| (Expr::Dollar, span)),
-            access,
-            ident.clone()
-                .map_with_span(|a, span| (Expr::Local(a), span))
-        ));
-        
-        let assignment = assignable.then(
-            choice((
-                just(Token::Op("+".to_string())),
-                just(Token::Op("-".to_string())),
-                just(Token::Op("*".to_string())),
-                just(Token::Op("/".to_string())),
-                just(Token::Op("%".to_string())),
-                just(Token::Op("|".to_string())),
-                just(Token::Op("&".to_string())),
-                just(Token::Op("^".to_string())),
-            )).or_not()
-        ).ignore_then(just(Token::Op("=".to_string())))
-        .ignore_then(expr.clone());
-
-        // Blocks are expressions but delimited with braces
-        let block = expr.clone()
-            .delimited_by(just(Token::Separator('{')), just(Token::Separator('}')))
-            .or(just(Token::Separator('{')).ignore_then(just(Token::Separator('}'))).ignored().map_with_span(|_, span| (Expr::Value(Value::Null), span)))
-            // Attempt to recover anything that looks like a block but contains errors
-            .recover_with(nested_delimiters(
-                Token::Separator('{'),
-                Token::Separator('}'),
-                [
-                    (Token::Separator('('), Token::Separator(')')),
-                    (Token::Separator('['), Token::Separator(']')),
-                ],
-                |span| (Expr::Error, span),
-            ));
-
-        let if_ = recursive(|if_| {
-            just(Token::K(Keyword::If))
-                .ignore_then(expr.clone())
-                .then(block.clone())
-                .then(
-                    just(Token::K(Keyword::Else))
-                        .ignore_then(block.clone().or(if_))
-                        .or_not(),
-                )
-                .map_with_span(|((cond, a), b), span| {
-                    (
-                        Expr::If(
-                            Box::new(cond),
-                            Box::new(a),
-                            Box::new(match b {
-                                Some(b) => b,
-                                // If an `if` expression has no trailing `else` block, we magic up one that just produces null
-                                None => (Expr::Value(Value::Null), span.clone()),
-                            }),
-                        ),
-                        span,
-                    )
-                })
-        });
-
-        // Both blocks and `if` are 'block expressions' and can appear in the place of statements
-        let block_expr = block.or(if_).labelled("block");
-
-        let block_chain = block_expr
-            .clone()
-            .then(block_expr.clone().repeated())
-            .map(|(a, b)| {
-                let span = if b.len() > 0 {
-                    a.1.start..b.get(b.len()-1).unwrap().1.end
-                } else {
-                    a.1.clone()
-                };
-
-                let mut a = vec![a];
-                a.extend(b);
-                (Expr::ExprList(Box::new(a)), span)
-            });
-        
-        let using = just(Token::K(Keyword::Using))
-            .ignore_then(ident.clone())
-            .then(
-                just(Token::Op("=".to_string()))
-                    .ignore_then(ident.clone()).or_not()
-            ).map_with_span(|(new_type, old_type), span| {
-                let new_type = match old_type {
-                    Some(s) => (Expr::Definition(new_type.clone(), s, Box::new((Expr::Value(Value::Null), span.clone()))), new_type.1),
-                    None => (Expr::Definition(new_type.clone(), new_type.clone(), Box::new((Expr::Value(Value::Null), span.clone()))), new_type.1),
-                };
-                (
-                    Expr::Using(
-                        Box::new(new_type)
-                    ),
-                    span
-                )
-            });
-        
-        let control_flow = just(Token::K(Keyword::Break)).map_with_span(|_, span| (Expr::Break, span))
-            .or(just(Token::K(Keyword::Continue)).map_with_span(|_, span| (Expr::Continue, span)));
-
-        let arg_definition = ident.clone()
-            .then(ident.clone())
-            .or(
-                just(Token::Ident("auto".to_string())).map_with_span(|_, span| ("auto".to_string(), span))
-                    .then_ignore(just(Token::Separator('.')))
-                    .then_ignore(just(Token::Separator('.')))
-                    .then_ignore(just(Token::Separator('.')))
-                    .then(ident.clone())
-            );
-
-        // Argument lists are just identifiers separated by commas, surrounded by parentheses
-        let args = arg_definition
-            .separated_by(just(Token::Separator(',')))
-            .allow_trailing()
-            .delimited_by(just(Token::Separator('(')), just(Token::Separator(')')))
-            .labelled("function args");
-
-        let func_definition_alternative = ident.clone()
-            .then(ident.clone())
-            .then_ignore(
-                array_definition
-                .or(
-                    just(Token::Separator('['))
-                    .ignore_then(just(Token::Separator(']')))
-                    .ignored()
-                    .map_with_span(|(), span| (Expr::Value(Value::Null), span))
-                ).or_not()
-                .then_ignore(
-                    just(Token::K(Keyword::Out))
-                    .or(just(Token::K(Keyword::In)))
-                    .or_not()
-                )
-            )
-            .then(just(Token::Op("@".to_string())).or(just(Token::Op("=".to_string()))).ignore_then(raw_expr.clone()).or_not())
-            .then_ignore(
-                just(Token::Separator('['))
-                    .then(just(Token::Separator('[')))
-                    .then(take_until(just(Token::Separator(']')).then(just(Token::Separator(']')))))
-                    .or_not()
-            )
-            //.map(|((name, val), body)| {
-            .map_with_span(|((type_, name), val), span| {
-                let val = match val {
-                    Some(val) => Box::new(val),
-                    None => Box::new((Expr::Value(Value::Null), span.clone()))
-                };
-                (
-                    Expr::Definition(type_, name, val),
-                    span
-                )
-            });
-
-        let func_body = choice((
-                func_definition_alternative,
-                expr.clone(),
-                just(Token::K(Keyword::Return)).ignore_then(expr.clone()).map_with_span(|e, span| (Expr::Return(Box::new(e)), span)),
-            )).separated_by(just(Token::Separator(';'))).then_ignore(just(Token::Separator(';')))
-            .map_with_span(|a, span| (Expr::ExprList(Box::new(a)), span));
-
-        let func = just(Token::K(Keyword::Fn))
-            .ignore_then(
-                ident.clone()
-                    .labelled("function name"),
-            )
-            .then(args)
-            .then(
-                func_body
-                    .delimited_by(just(Token::Separator('{')), just(Token::Separator('}')))
-                    .or(just(Token::Separator('{')).ignore_then(just(Token::Separator('}'))).ignored().map_with_span(|_, span| (Expr::Value(Value::Null), span)))
-                    // Attempt to recover anything that looks like a function body but contains errors
-                    .recover_with(nested_delimiters(
-                        Token::Separator('{'),
-                        Token::Separator('}'),
-                        [
-                            (Token::Separator('('), Token::Separator(')')),
-                            (Token::Separator('['), Token::Separator(']')),
-                        ],
-                        |span| (Expr::Error, span),
-                    )),
-            ).map_with_span(|((name, args), body), span| {
-                (
-                    Expr::Func(
-                        name,
-                        args,
-                        Box::new(body),
-                    ),
-                    span
-                )
-            }).labelled("function");
-        
-        let strct = just(Token::K(Keyword::Struct))
-            .ignore_then(
-                ident.clone()
-                    .labelled("struct name"),
-            )
-            .then(
-                expr.clone()
-                    .delimited_by(just(Token::Separator('{')), just(Token::Separator('}')))
-                    .or(just(Token::Separator('{')).ignore_then(just(Token::Separator('}'))).ignored().map_with_span(|_, span| (Expr::Value(Value::Null), span)))
-                    // Attempt to recover anything that looks like a function body but contains errors
-                    .recover_with(nested_delimiters(
-                        Token::Separator('{'),
-                        Token::Separator('}'),
-                        [
-                            (Token::Separator('('), Token::Separator(')')),
-                            (Token::Separator('['), Token::Separator(']')),
-                        ],
-                        |span| (Expr::Error, span),
-                    )),
-            ).map_with_span(|(name, body), span| {
-                (
-                    Expr::Struct(
-                        name.clone(),
-                        Box::new(body),
-                    ),
-                    span
-                )
-            }).labelled("struct");
-
-        let namespace_name = ident.clone() // TODO: Rework this parser
-            .then(
-                just(Token::Op("::".to_string()))
-                .ignore_then(ident.clone())
-                .repeated()
-            ).foldl(|a, b| {
-                (a.0 + "::" + &b.0, a.1.start..b.1.end)
-            });
-        
-        let nspace = just(Token::K(Keyword::Namespace))
-            .ignore_then(namespace_name.labelled("namespace name"))
-            .then(
-                expr.clone()
-                    .delimited_by(just(Token::Separator('{')), just(Token::Separator('}')))
-                    .or(just(Token::Separator('{')).ignore_then(just(Token::Separator('}'))).ignored().map_with_span(|_, span| (Expr::Value(Value::Null), span)))
-                    // Attempt to recover anything that looks like a function body but contains errors
-                    .recover_with(nested_delimiters(
-                        Token::Separator('{'),
-                        Token::Separator('}'),
-                        [
-                            (Token::Separator('('), Token::Separator(')')),
-                            (Token::Separator('['), Token::Separator(']')),
-                        ],
-                        |span| (Expr::Error, span),
-                    )),
-            ).map_with_span(|(name, body), span| {
-                (
-                    Expr::Namespace(
-                        name.clone(),
-                        Box::new(body),
-                    ),
-                    span
-                )
-            });
-        
-        let enm = enum_();
-
-        let bitfield = bitfield_parser();
-
-        let semicolon_expr = choice((
-            definition,
-            assignment,
-            using,
-            raw_expr,
-            control_flow,
-            func,
-            strct,
-            enm,
-            bitfield
-        ));
-
-        let not_semicolon_expr = choice((
-            block_chain,
-            nspace
-        ));
-
-        semicolon_expr
-            .then(just(Token::Separator(';')).ignore_then(expr.clone().or_not()).repeated())
-            .or(
-                not_semicolon_expr
-                    .then(
-                        expr.clone()
-                            .map(|a| Some(a))
-                            .or(just(Token::Separator(';')).ignore_then(expr.clone().or_not()))
-                            .repeated()
-                    )
-            ).map(|(a, b)| {
-                let span = a.1.clone(); // TODO: Not correct
-                ((vec![a], span), b)
-            }).foldl(|(mut a, span), b| {
-                match b {
-                    Some(b) => match b {
-                        (Expr::ExprList(b), _) => a.extend((*b).into_iter()),
-                        _ => unreachable!()
-                    },
-                    None => ()
-                }
-                (a, span)
-            }).map(|(a, span)| (Expr::ExprList(Box::new(a)), span))
-    })
-}
- */
-
- fn enum_entries_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone {
-    let ident = filter_map(|span: Span, tok| match tok {
-        Token::Ident(ident) => Ok((ident.clone(), span)),
-        _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
-    });
-
-    let val = filter_map(|span, tok| match tok {
-        Token::Num(_) => Ok((Expr::Value(Value::Num(42342.0)), span)),// TODO: change 42342.0 to a proper (hex, bin, oct, dec) str->f64
-        _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
-    });
-    let entry = ident.clone()
-        .then(
-            just(Token::Op("=".to_string()))
-            .ignore_then(val)
-            .or_not()
-        );
-
-    entry.clone()
-        .map_with_span(|(name, val), span| {
-            (
-                Expr::EnumEntry(
-                    name,
-                    Box::new(match val {
-                        Some(v) => v,
-                        None => (Expr::Value(Value::Null), span.clone()),
-                    }),
-                ),
-                span
-            )
-        })
-        .then(
-            just(Token::Separator(','))
-                .ignore_then(entry)
-                .map_with_span(|(name, val), span| (
-                    Expr::EnumEntry(
-                        name,
-                        Box::new(match val {
-                            Some(v) => v,
-                            None => (Expr::Value(Value::Null), span.clone()),
-                        }),
-                    ),
-                    span
-                ))
-                .repeated()
-                .then_ignore(just(Token::Separator(',')).or_not())
-        ).map_with_span(|(a, b), span| {
-            let mut v = vec![a];
-            v.extend(b.into_iter());
-            (Expr::ExprList(Box::new(v)), span)
-        })
-}
-
-fn bitfield_entries_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone {
-    let ident = filter_map(|span, tok| match tok {
-        Token::Ident(ident) => Ok((ident.clone(), span)),
-        _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
-    });
-
-    let val = filter_map(|span, tok| match tok {
-        Token::Num(_) => Ok((Expr::Value(Value::Num(42342.0)), span)),// TODO: change 42342.0 to a proper (hex, bin, oct, dec) str->f64
-        _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
-    });
-    ident
-        .then_ignore(just(Token::Op(":".to_string())))
-        .then(val)
-        .map_with_span(|(name, value), span| {
-            (
-                Expr::BitFieldEntry(
-                    name,
-                    Box::new(value),
-                ),
-                span,
-            )
-        })
-        .separated_by(just(Token::Separator(';')))
-        .allow_trailing()
-        .map_with_span(|a, span| (Expr::ExprList(Box::new(a)), span))
-}
-
-fn ident() -> impl Parser<Token, Spanned<String>, Error = Simple<Token>> + Clone {
-    filter_map(|span: Range<usize>, tok| match tok {
-        Token::Ident(ident) => Ok((ident.clone(), span)),
-        _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
-    })
-}
-
-fn enum_() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone {
-    let ident = ident();
-    just(Token::K(Keyword::Enum))
-        .ignore_then(ident.clone())
-        .then_ignore(just(Token::Op(":".to_string())))
-        .then(ident)
-        .then(
-            enum_entries_parser()
-                .delimited_by(just(Token::Separator('{')), just(Token::Separator('}')))
-                .or(just(Token::Separator('{')).ignore_then(just(Token::Separator('}'))).ignored().map_with_span(|_, span| (Expr::Value(Value::Null), span)))
-                // Attempt to recover anything that looks like a function body but contains errors
-                .recover_with(nested_delimiters(
-                    Token::Separator('{'),
-                    Token::Separator('}'),
-                    [
-                        (Token::Separator('('), Token::Separator(')')),
-                        (Token::Separator('['), Token::Separator(']')),
-                    ],
-                    |span| (Expr::Error, span),
-                )),
-        )
-        .map_with_span(|((name, type_), body), span| {
-            (
-                Expr::Enum(
-                    name.clone(),
-                    Box::new(body),
-                    type_,
-                ),
-                span
-            )
-        })
-}
-
-fn bitfield_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone {
-    just(Token::K(Keyword::Bitfield))
-        .ignore_then(ident())
-        .then(
-            bitfield_entries_parser()
-                .delimited_by(just(Token::Separator('{')), just(Token::Separator('}')))
-                .or(just(Token::Separator('{')).ignore_then(just(Token::Separator('}'))).ignored().map_with_span(|_, span| (Expr::Value(Value::Null), span)))
-                // Attempt to recover anything that looks like a function body but contains errors
-                .recover_with(nested_delimiters(
-                    Token::Separator('{'),
-                    Token::Separator('}'),
-                    [
-                        (Token::Separator('('), Token::Separator(')')),
-                        (Token::Separator('['), Token::Separator(']')),
-                    ],
-                    |span| (Expr::Error, span),
-                )),
-        ).map_with_span(|(name, body), span| {
-            (
-                Expr::Bitfield(
-                    name.clone(),
-                    Box::new(body),
-                ),
-                span
-            )
-        })
-}
- */
-#[derive(Debug, Clone)]
-pub struct Declaration {
-    pub type_: Spanned<String>,
-    pub name: Spanned<String>,
-    pub body: Spanned<Expr>,
-}
-
-#[derive(Debug)]
-pub enum NamedNode {
-    Variable,
-    Function(Vec<String>),
-    Struct,
-    Enum,
-    NameSpace,
-    BitField
-}
-
-/* 
-fn register_defined_names(named_nodes: &mut HashMap<String, Spanned<NamedNode>>, e: &Expr) -> Result<(), Simple<Token>> {
-    match e {
-        Expr::Error => Ok(()),
-        Expr::Value(_) => Ok(()),
-        Expr::Local(_) => Ok(()),
-        Expr::Binary(e1, _, e2) => match register_defined_names(named_nodes, &e1.0) {
-            Ok(_) => register_defined_names(named_nodes, &e2.0),
-            Err(e) => Err(e),
-        },
-        Expr::Call(e1, e2) => match register_defined_names(named_nodes, &e1.0) {
-            Ok(_) => {
-                for e in &e2.0 {
-                    match register_defined_names(named_nodes, &e.0) {
-                        Ok(_) => (),
-                        Err(e) => return Err(e),
-                    };    
-                };
-                Ok(())
-            },
-            Err(e) => Err(e),
-        },
-        Expr::If(e1, e2, e3) => match register_defined_names(named_nodes, &e1.0) {
-            Ok(_) => match register_defined_names(named_nodes, &e2.0) {
-                Ok(_) => register_defined_names(named_nodes, &e3.0),
-                Err(e) => Err(e),
-            },
-            Err(e) => Err(e),
-        },
-        Expr::Definition(_, (name, name_span), body) => {
-            if named_nodes.insert(name.clone(), (NamedNode::Variable, name_span.clone())).is_some() { // TODO: Take into account that the same name can be used in 2 different local scopes
-                /* return Err(Simple::custom(
-                    name_span.clone(),
-                    format!("Variable '{}' already exists", name),
-                )); */
-            }
-            register_defined_names(named_nodes, &body.0)
-        },
-        Expr::BitFieldEntry(_, _) => Ok(()), // This should never happen
-        Expr::EnumEntry(_, _) => Ok(()), // This should never happen
-        Expr::Ternary(e1, e2, e3) => match register_defined_names(named_nodes, &e1.0) {
-            Ok(_) => match register_defined_names(named_nodes, &e2.0) {
-                Ok(_) => register_defined_names(named_nodes, &e3.0),
-                Err(e) => Err(e),
-            },
-            Err(e) => Err(e),
-        },
-        Expr::NamespaceAccess(e, _) => register_defined_names(named_nodes, &e.0),
-        Expr::Dollar => Ok(()),
-        Expr::Unary(_, e) => register_defined_names(named_nodes, &e.0),
-        Expr::Using(e) => register_defined_names(named_nodes, &e.0),
-        Expr::Continue => Ok(()),
-        Expr::Break => Ok(()),
-        Expr::ExprList(box_) => {
-            for expr in box_.as_ref() {
-                match register_defined_names(named_nodes, &expr.0) {
-                    Ok(_) => (),
-                    Err(e) => return Err(e),
-                }
-            };
-            Ok(())
-        },
-        Expr::Func(_, _, e) => register_defined_names(named_nodes, &e.0),
-        Expr::Struct(_, e) => register_defined_names(named_nodes, &e.0),
-        Expr::Namespace(_, e) => register_defined_names(named_nodes, &e.0),
-        Expr::Enum(_, e, _) => register_defined_names(named_nodes, &e.0),
-        Expr::Bitfield(_, e) => register_defined_names(named_nodes, &e.0),
-        Expr::Return(e) => register_defined_names(named_nodes, &e.0),
-        Expr::Access(e1, e2) => match register_defined_names(named_nodes, &e1.0) {
-            Ok(_) => register_defined_names(named_nodes, &e2.0),
-            Err(e) => Err(e),
-        },
-    }
-} */
-
-// Hashmap contains the names of named expressions and their clones
-/* pub fn parser() -> impl Parser<Token, (HashMap<String, Spanned<NamedNode>>, Spanned<Expr>), Error = Simple<Token>> + Clone {
-    dbg!("CREATING PARSER!");
-    let a = expr_parser()
-        .try_map(|expr, _| {
-            let mut named_exprs = HashMap::new();
-            match register_defined_names(&mut named_exprs, &expr.0) {
-                Ok(_) => (),
-                Err(e) => return Err(e),
-            };
-            Ok((named_exprs, expr))
-        })
-        .then_ignore(end());
-    dbg!("PARSER CREATED!");
-    a
-}
- */
-
 fn function_call<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    then(
+        namespace_resolution,
+        then(
+            just(Token::Separator('(')),
+            terminated(
+                many0(then(
+                    mathematical_expression,
+                    just(Token::Separator(')'))
+                )),
+                just(Token::Separator(')')),
+            )
+        )
+    )(input)
 }
 
 fn string_literal<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
@@ -1018,131 +137,670 @@ fn string_literal<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
 }
 
 fn namespace_resolution<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    many0(
+        then(
+            just(Token::Op("::")),
+            ident
+        )
+    )(input)
 }
 
 fn scope_resolution<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    many0(then(
+        just(Token::Op("::")),
+        then(
+            ident,
+            opt(peek(then(
+                just(Token::Op("::")),
+                ident
+            )))
+        )
+    ))(input)
 }
 
 fn r_value<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    then(
+        opt(then(
+            just(Token::Separator('[')),
+            then(
+                mathematical_expression,
+                just(Token::Separator(']'))
+            )
+        )),
+        opt(then(
+            just(Token::Separator('.')),
+            then(
+                choice((
+                    ident,
+                    just(Token::K(Keyword::Parent))
+                )),
+                r_value
+            )
+        ))
+    )(input)
 }
 
 fn factor<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    choice((
+        just(numeric),
+        then(
+            peek(choice((
+                just(Token::Op("+")),
+                just(Token::Op("-")),
+                just(Token::Op("~")),
+                just(Token::Op("!"))
+            ))),
+            mathematical_expression
+        ),
+        then(
+            just(Token::Separator('(')),
+            then(
+                mathematical_expression,
+                just(Token::Separator(')'))
+            )
+        ),
+        then(
+            ident,
+            then(
+                namespace_resolution,
+                choice((
+                    function_call,
+                    scope_resolution,
+                    r_value
+                ))
+            )
+        ),
+        then(
+            choice((
+                just(Token::K(Keyword::Parent)),
+                just(Token::K(Keyword::This))
+            )),
+            r_value
+        ),
+        just(Token::Op("$")),
+        then(
+            choice((
+                just(Token::B(BuiltFunc::AddressOf)),
+                just(Token::B(BuiltFunc::SizeOf)),
+            )),
+            then(
+                just(Token::Separator('(')),
+                then(
+                    choice((
+                        then(
+                            choice((
+                                ident,
+                                just(Token::K(Keyword::Parent)),
+                                just(Token::K(Keyword::This))
+                            )),
+                            r_value
+                        ),
+                        value_type_any,
+                        just(Token::Op("$"))
+                    )),
+                    just(Token::Separator(')'))
+                )
+            )
+        )
+    ))(input)
 }
 
 fn cast_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    choice((
+        then(
+            peek(choice((
+                just(Token::K(Keyword::BigEndian)),
+                just(Token::K(Keyword::LittleEndian)),
+                value_type_any
+            ))),
+            then(
+                parse_type,
+                then(
+                    peek(just(Token::Separator('('))),
+                    factor
+                )
+            )
+        ),
+        factor
+    ))(input)
 }
 
 fn unary_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    choice((
+        then(
+            choice((
+                just(Token::Op("+")),
+                just(Token::Op("-")),
+                just(Token::Op("!")),
+                just(Token::Op("~"))
+            )),
+            cast_expression
+        ),
+        string_literal,
+        cast_expression
+    ))(input)
 }
 
 fn multiplicative_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    map(
+        then(
+            unary_expression,
+            many0(then(
+                choice((
+                    just(Token::Op("*")),
+                    just(Token::Op("/")),
+                    just(Token::Op("%"))
+                )),
+                unary_expression
+            ))
+        ),
+        |(a, b)| a // TODO
+    )(input)
 }
 
 fn additive_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    map(
+        then(
+            multiplicative_expression,
+            many0(then(
+                choice((
+                    just(Token::Op("+")),
+                    just(Token::Op("-"))
+                )),
+                multiplicative_expression
+            ))
+        ),
+        |(a, b)| a // TODO
+    )(input)
 }
 
 fn shift_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    map(
+        then(
+            additive_expression,
+            many0(then(
+                choice((
+                    just(Token::Op("<<")),
+                    just(Token::Op(">>"))
+                )),
+                additive_expression
+            ))
+        ),
+        |(a, b)| a // TODO
+    )(input)
 }
 
 fn binary_and_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    map(
+        then(
+            shift_expression,
+            many0(then(
+                just(Token::Op("&")),
+                shift_expression
+            ))
+        ),
+        |(a, b)| a // TODO
+    )(input)
 }
 
 fn binary_xor_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    map(
+        then(
+            binary_and_expression,
+            many0(then(
+                just(Token::Op("^")),
+                binary_and_expression
+            ))
+        ),
+        |(a, b)| a // TODO
+    )(input)
 }
 
 fn binary_or_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    map(
+        then(
+            binary_xor_expression,
+            many0(then(
+                just(Token::Op("|")),
+                binary_xor_expression
+            ))
+        ),
+        |(a, b)| a // TODO
+    )(input)
 }
 
 fn relation_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    map(
+        then(
+            binary_or_expression,
+            many0(then(
+                choice((
+                    just(Token::Op(">")),
+                    just(Token::Op("<")),
+                    just(Token::Op(">=")),
+                    just(Token::Op("<="))
+                )),
+                binary_or_expression
+            ))
+        ),
+        |(a, b)| a // TODO
+    )(input)
 }
 
 fn equality_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    map(
+        then(
+            relation_expression,
+            many0(then(
+                choice((
+                    just(Token::Op("==")),
+                    just(Token::Op("!="))
+                )),
+                relation_expression
+            ))
+        ),
+        |(a, b)| a // TODO
+    )(input)
 }
 
 fn boolean_and<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    map(
+        then(
+            equality_expression,
+            many0(then(
+                just(Token::Op("&&")),
+                equality_expression
+            ))
+        ),
+        |(a, b)| a // TODO
+    )(input)
 }
 
 fn boolean_xor<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    map(
+        then(
+            boolean_and,
+            many0(then(
+                just(Token::Op("^^")),
+                boolean_and
+            ))
+        ),
+        |(a, b)| a // TODO
+    )(input)
 }
 
 fn boolean_or<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    map(
+        then(
+            boolean_xor,
+            many0(then(
+                just(Token::Op("||")),
+                boolean_xor
+            ))
+        ),
+        |(a, b)| a // TODO
+    )(input)
 }
 
 fn ternary_conditional<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    map(
+        then(
+            boolean_or,
+            many0(then(
+                just(Token::Op("?")),
+                then(
+                    boolean_or,
+                    then(
+                        just(Token::Op(":")),
+                        boolean_or
+                    )
+                )
+            ))
+        ),
+        |(a, b)| a // TODO
+    )(input)
 }
 
 fn mathematical_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    ternary_conditional(input)
 }
 
 fn attribute<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    map(
+        then(
+            then(
+                ident,
+                then(
+                    just(Token::Separator('(')),
+                    opt(then(
+                        string_literal,
+                        just(Token::Separator(')'))
+                    ))
+                ) // TODO: Comma separated
+            ),
+            then(
+                just(Token::Separator(']')),
+                just(Token::Separator(']'))
+            )
+        ),
+        |((a, b), c)| a // TODO
+    )(input)
 }
 
 fn function_definition<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    then(
+        choice((
+            then(
+                value_type_auto,
+                then(
+                    just(Token::Separator('.')),
+                    then(
+                        just(Token::Separator('.')),
+                        then(
+                            just(Token::Separator('.')),
+                            ident
+                        )
+                    )
+                )
+            ),
+            then(
+                then(
+                    then(
+                        parse_type,
+                        opt(ident)
+                    ),
+                    opt(
+                        then(
+                            just(Token::Op("=")),
+                            mathematical_expression
+                        )
+                    )
+                ),
+                just(Token::Separator(','))
+            )
+        )),
+        then(
+            just(Token::Separator(')')),
+            then(
+                just(Token::Separator('{')),
+                function_statement
+            )
+        )
+    )(input)
 }
 
 fn function_variable_decl<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    then(
+        parse_type,
+        then(
+            ident,
+            choice((
+                then(
+                    just(Token::Separator('{')),
+                    then(
+                        not(peek(just(Token::Separator('{')))),
+                        member_array_variable
+                    )
+                ),
+                then(
+                    member_variable,
+                    opt(then(
+                        just(Token::Op("=")),
+                        mathematical_expression
+                    ))
+                )
+            ))
+        )
+    )(input)
 }
 
 fn function_statement<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    then(
+        choice((
+            then(
+                ident,
+                then(
+                    just(Token::Op("=")),
+                    function_variable_assignment
+                )
+            ),
+            then(
+                just(Token::Op("$")),
+                then(
+                    just(Token::Op("=")),
+                    function_variable_assignment
+                )
+            ),
+            then(
+                ident,
+                then(
+                    choice((
+                        just(Token::Op("+")),
+                        just(Token::Op("-")),
+                        just(Token::Op("*")),
+                        just(Token::Op("/")),
+                        just(Token::Op("%")),
+                        just(Token::Op("<<")),
+                        just(Token::Op(">>")),
+                        just(Token::Op("|")),
+                        just(Token::Op("&")),
+                        just(Token::Op("^")),
+                    )),
+                    then(
+                        just(Token::Op("=")),
+                        function_variable_compound_assignment
+                    )
+                )
+            ),
+            then(
+                just(Token::Op("$")),
+                then(
+                    choice((
+                        just(Token::Op("+")),
+                        just(Token::Op("-")),
+                        just(Token::Op("*")),
+                        just(Token::Op("/")),
+                        just(Token::Op("%")),
+                        just(Token::Op("<<")),
+                        just(Token::Op(">>")),
+                        just(Token::Op("|")),
+                        just(Token::Op("&")),
+                        just(Token::Op("^")),
+                    )),
+                    then(
+                        just(Token::Op("=")),
+                        function_variable_compound_assignment
+                    )
+                )
+            ),
+            then(
+                choice((
+                    just(Token::K(Keyword::Return)),
+                    just(Token::K(Keyword::Break)),
+                    just(Token::K(Keyword::Continue)),
+                )),
+                function_controlflow_statement
+            ),
+            then(
+                just(Token::K(Keyword::If)),
+                then(
+                    just(Token::Separator('(')),
+                    function_conditional
+                )
+            ),
+            then(
+                just(Token::K(Keyword::While)),
+                then(
+                    just(Token::Separator('(')),
+                    function_while_loop
+                )
+            ),
+            then(
+                just(Token::K(Keyword::For)),
+                then(
+                    just(Token::Separator('(')),
+                    function_for_loop
+                )
+            ),
+            then(
+                ident,
+                then(
+                    choice((
+                        peek(just(Token::Separator('.'))),
+                        peek(just(Token::Separator('['))),
+                    )),
+                    then(
+                        r_value,
+                        then(
+                            just(Token::Op('=')),
+                            mathematical_expression
+                        )
+                    )
+                )
+            ),
+            then(
+                ident,
+                then(
+                    namespace_resolution,
+                    choice((
+                        then(
+                            peek(just(Token::Separator('('))),
+                            function_call
+                        ),
+                        function_variable_decl
+                    ))
+                )
+            ),
+            then(
+                peek(choice((
+                    just(Token::K(Keyword::BigEndian)),
+                    just(Token::K(Keyword::LittleEndian)),
+                    value_type_any
+                ))),
+                function_variable_decl
+            )
+        )),
+        just(Token::Separator(';')) // TODO: Remove extra ";"
+    )
 }
 
 fn function_variable_assignment<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    mathematical_expression(input)
 }
 
 fn function_variable_compound_assignment<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    mathematical_expression(input)
 }
 
 fn function_controlflow_statement<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    choice((
+        peek(just(Token::Separator(';'))),
+        mathematical_expression
+    ))(input)
 }
 
 fn statement_body<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    choice((
+        then(
+            just(Token::Separator('{')),
+            terminated(
+                many0(function_statement),
+                just(Token::Separator('}'))
+            )
+        ),
+        function_statement
+    ))
 }
 
 fn function_conditional<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    then(
+        mathematical_expression,
+        then(
+            just(Token::Separator(')')),
+            then(
+                statement_body,
+                opt(then(
+                    just(Token::K(Keyword::Else)),
+                    statement_body
+                ))
+            )
+        )
+    )
 }
 
 fn function_while_loop<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    then(
+        mathematical_expression,
+        then(
+            just(Token::Separator(')')),
+            statement_body
+        )
+    )
 }
 
 fn function_for_loop<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    then(
+        function_statement,
+        then(
+            just(Token::Separator(',')),
+            then(
+                mathematical_expression,
+                then(
+                    just(Token::Separator(',')),
+                    then(
+                        function_statement,
+                        then(
+                            just(Token::Separator(')')),
+                            statement_body
+                        )
+                    )
+                )
+            )
+        )
+    )
 }
 
 fn conditional<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    then(
+        mathematical_expression,
+        then(
+            choice((
+                then(
+                    just(Token::Separator(')')),
+                    then(
+                        just(Token::Separator('{')),
+                        terminated(
+                            many0(member),
+                            just(Token::Separator('}'))
+                        )
+                    )
+                ),
+                then(
+                    just(Token::Separator(')')),
+                    member
+                )
+            )),
+            opt(choice((
+                then(
+                    just(Token::K(Keyword::Else)),
+                    then(
+                        just(Token::Separator('{')),
+                        terminated(
+                            many0(member),
+                            just(Token::Separator('}'))
+                        )
+                    )
+                )
+            )))
+        )
+    )
 }
 
 fn while_statement<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    then(
+        mathematical_expression,
+        just(Token::Separator(')'))
+    )
 }
 
 fn parse_type<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
@@ -1150,55 +808,342 @@ fn parse_type<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
 }
 
 fn using_declaration<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    parse_type(input)
 }
 
 fn padding<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    then(
+        choice((
+            then(
+                just(Token::K(Keyword::While)),
+                then(
+                    just(Token::Separator('(')),
+                    while_statement
+                )
+            ),
+            mathematical_expression
+        )),
+        just(Token::Separator(']'))
+    )(input)
 }
 
 fn member_variable<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    choice((
+        then(
+            peek(Token::Separator(',')),
+            many1(then(
+                just(Token::Separator(',')),
+                ident
+            ))
+        ),
+        just(Token::Op('@'))
+    ))
 }
 
 fn member_array_variable<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    then(
+        opt(then(
+            not(just(Token::Separator(']'))),
+            then(
+                choice((
+                    then(
+                        just(Token::K(Keyword::While)),
+                        then(
+                            just(Token::Separator('(')),
+                            while_statement
+                        )
+                    ),
+                    mathematical_expression
+                )),
+                just(Token::Separator(']'))
+            )
+        )),
+        then(
+            just(Token::Op("@")),
+            mathematical_expression
+        )
+    )
 }
 
 fn pointer_size_type<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    parse_type(input)
 }
 
 fn member_pointer_variable<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    then(
+        pointer_size_type,
+        opt(then(
+            just(Token::Op("@")),
+            mathematical_expression
+        ))
+    )
 }
 
 fn member_pointer_array_variable<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    then(
+        opt(then(
+            just(Token::Separator(']')),
+            then(
+                choice((
+                    then(
+                        just(Token::K(Keyword::While)),
+                        then(
+                            just(Token::Separator(')')),
+                            while_statement
+                        )
+                    ),
+                    mathematical_expression
+                )),
+                just(Token::Separator(']'))
+            )
+        )),
+        then(
+            just(Token::Op(":")),
+            then(
+                pointer_size_type,
+                opt(then(
+                    just(Token::Op('@')),
+                    mathematical_expression
+                ))
+            )
+        )
+    )
 }
 
 fn member<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    then(
+        choice((
+            then(
+                just(Token::Op('$')),
+                then(
+                    just(Token::Op('=')),
+                    function_variable_assignment
+                )
+            ),
+            then(
+                just(Token::Op('$')),
+                then(
+                    choice((
+                        just(Token::Op("+")),
+                        just(Token::Op("-")),
+                        just(Token::Op("*")),
+                        just(Token::Op("/")),
+                        just(Token::Op("%")),
+                        just(Token::Op("<<")),
+                        just(Token::Op(">>")),
+                        just(Token::Op("|")),
+                        just(Token::Op("&")),
+                        just(Token::Op("^")),
+                    )),
+                    then(
+                        just(Token::Op('=')),
+                        function_variable_compound_assignment
+                    )
+                )
+            ),
+            then(
+                ident,
+                then(
+                    just(Token::Op("=")),
+                    function_variable_assignment
+                )
+            ),
+            then(
+                ident,
+                then(
+                    choice((
+                        just(Token::Op("+")),
+                        just(Token::Op("-")),
+                        just(Token::Op("*")),
+                        just(Token::Op("/")),
+                        just(Token::Op("%")),
+                        just(Token::Op("<<")),
+                        just(Token::Op(">>")),
+                        just(Token::Op("|")),
+                        just(Token::Op("&")),
+                        just(Token::Op("^")),
+                    )),
+                    then(
+                        just(Token::Op("=")),
+                        function_variable_compound_assignment
+                    )
+                )
+            ),
+            then(
+                peek(choice((
+                    just(Token::K(Keyword::BigEndian)),
+                    just(Token::K(Keyword::LittleEndian)),
+                    value_type_any,
+                    ident
+                ))),
+                then(
+                    opt(peek(then(
+                        ident,
+                        then(
+                            namespace_resolution,
+                            opt(then(
+                                peek(just(Token::Separator(')'))),
+                                function_call
+                            ))
+                        )
+                    ))),
+                    todo!()
+                )
+            ),
+            then(
+                just(Token::V(ValueType::Padding)),
+                then(
+                    just(Token::Separator('[')),
+                    padding
+                )
+            ),
+            then(
+                just(Token::K(Keyword::If)),
+                then(
+                    just(Token::Separator('(')),
+                    conditional
+                )
+            ),
+            just(Token::K(Keyword::Break)),
+            just(Token::K(Keyword::Continue))
+        )),
+        then(
+            opt(then(
+                just(Token::Separator('[')),
+                then(
+                    just(Token::Separator('[')),
+                    attribute
+                )
+            )),
+            many1(just(Token::Separator(';')))
+        )
+    )
 }
-
+    
 fn parse_struct<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    then(
+        opt(then(
+            just(Token::Op(':')),
+            then(
+                ident,
+                many0(then(
+                    just(Token::Separator(',')),
+                    ident
+                ))
+            )
+        )),
+        then(
+            just(Token::Separator('{')),
+            terminated(
+                many0(member),
+                just(Token::Separator('}'))
+            )
+        )
+    )(input)
 }
 
 fn parse_union<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    terminated(
+        many0(member),
+        just(Token::Separator('}'))
+    )(input)
 }
 
 fn parse_enum<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    then(
+        parse_type,
+        then(
+            just(Token::Separator('{')),
+            terminated(
+                many0(then(
+                    choice((
+                        then(
+                            ident,
+                            then(
+                                just(Token::Op("=")),
+                                mathematical_expression
+                            )
+                        ),
+                        ident
+                    )),
+                    just(Token::Separator(',')) // TODO: , not needed in the last entry
+                )),
+                just(Token::Separator('}'))
+            )
+        )
+    )
 }
 
 fn bitfield_entry<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    then(
+        choice((
+            then(
+                ident,
+                then(
+                    just(Token::Op(":")),
+                    mathematical_expression
+                )
+            ),
+            then(
+                just(Token::V(ValueType::Padding)),
+                then(
+                    just(Token::Op(":")),
+                    mathematical_expression
+                )
+            ),
+            then(
+                just(Token::K(Keyword::If)),
+                then(
+                    just(Token::Separator('(')),
+                    then(
+                        mathematical_expression,
+                        then(
+                            choice((
+                                then(
+                                    just(Token::Separator(')')),
+                                    then(
+                                        just(Token::Separator('{')),
+                                        terminated(
+                                            many0(bitfield_entry),
+                                            just(Token::Separator('}'))
+                                        )
+                                    )
+                                ),
+                                then(
+                                    just(Token::Separator(')')),
+                                    bitfield_entry
+                                )
+                            )),
+                            choice((
+                                then(
+                                    just(Token::K(Keyword::Else)),
+                                    terminated(
+                                        many0(bitfield_entry),
+                                        just(Token::Separator('}'))
+                                    )
+                                ),
+                                then(
+                                    just(Token::K(Keyword::Else)),
+                                    bitfield_entry
+                                )
+                            ))
+                        )
+                    )
+                )
+            )
+        )),
+        just(Token::Separator(';'))
+    )(input)
 }
 
 fn parse_bitfield<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    terminated(
+        many0(then(
+            bitfield_entry,
+            many0(just(Token::Separator(';')))
+        )),
+        just(Token::Separator('}'))
+    )
 }
 
 fn forward_declaration<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
@@ -1206,27 +1151,143 @@ fn forward_declaration<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Exp
 }
 
 fn variable_placement<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    choice((
+        map(
+            then(
+                just(Token::Op("@")),
+                mathematical_expression
+            ),
+            |(a, b)| b // TODO
+        ),
+        just(Token::K(Keyword::In)),
+        just(Token::K(Keyword::Out)),
+    ))(input)
 }
 
 fn array_variable_placement<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    map(
+        then(
+            opt(then(
+                just(Token::Separator(']')),
+                choice((
+                    map(
+                        then(
+                            just(Token::K(Keyword::While)),
+                            then(
+                                just(Token::Separator('(')),
+                                while_statement
+                            )
+                        ),
+                        |(a, (b, c))| c // TODO
+                    ),
+                    mathematical_expression
+                ))
+            )),
+            mathematical_expression
+        ),
+        |(a, b)| b // TODO
+    )(input)
 }
 
 fn pointer_variable_placement<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    map(
+        then(
+            pointer_size_type,
+            mathematical_expression
+        ),
+        |(a, b)| a // TODO
+    )(input)
 }
 
 fn pointer_array_variable_placement<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    map(
+        then(
+            opt(
+                then(
+                    not(just(Token::Separator(']'))),
+                    choice((
+                        map(
+                            then(
+                                then(
+                                    just(Token::K(Keyword::While)),
+                                    just(Token::Separator('('))
+                                ),
+                                while_statement
+                            ),
+                            |(a, b)| b // TODO
+                        ),
+                        mathematical_expression
+                    ))
+                )
+            ),
+            then(
+                pointer_size_type,
+                mathematical_expression
+            )
+        ),
+        |(a, (b, c))| c // TODO
+    )(input)
 }
 
 fn parse_namespace<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    map(
+        then(
+            ident,
+            then( // TODO: This should be inside a many0
+                just(Token::Op("::")),
+                ident
+            )
+        ),
+        |(a, b)| a // TODO
+    )(input)
 }
 
 fn placement<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+    choice((
+        map(
+            then(
+                then(
+                    ident,
+                    just(Token::Separator('['))
+                ),
+                array_variable_placement
+            ),
+            |(a, b)| b // TODO
+        ),
+        map(
+            then(
+                ident,
+                variable_placement
+            ),
+            |(a, b)| b // TODO
+        ),
+        map(
+            then(
+                then(
+                    then(
+                        just(Token::Op("*")),
+                        ident
+                    ),
+                    just(Token::Op(":"))
+                ),
+                pointer_variable_placement
+            ),
+            |(a, b)| b // TODO
+        ),
+        map(
+            then(
+                then(
+                    then(
+                        just(Token::Op("*")),
+                        ident
+                    ),
+                    just(Token::Separator('{'))
+                ),
+                pointer_array_variable_placement
+            ),
+            |(a, b)| b // TODO
+        )
+    ))(input)
 }
 
 fn statements_choice<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
@@ -1398,6 +1459,14 @@ fn ident<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
 }
 
 fn value_type_any<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Tokens<'a>> {
+    todo!()
+}
+
+fn value_type_auto<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Tokens<'a>> {
+    todo!()
+}
+
+fn numeric<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Tokens<'a>> {
     todo!()
 }
 

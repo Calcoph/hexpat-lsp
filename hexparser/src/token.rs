@@ -101,10 +101,30 @@ pub enum Keyword {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ValueType {
-    Boolean,
-    String,
     CustomType,
     Padding,
+    U8,
+    U16,
+    U24,
+    U23,
+    U48,
+    U64,
+    U96,
+    U128,
+    S8,
+    S16,
+    S24,
+    S23,
+    S48,
+    S64,
+    S96,
+    S128,
+    Float,
+    Double,
+    Boolean,
+    Character,
+    Character16,
+    String,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
