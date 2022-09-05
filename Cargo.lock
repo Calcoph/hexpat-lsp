@@ -307,6 +307,7 @@ dependencies = [
  "parserlib",
  "serde",
  "shellexpand",
+ "tokio",
  "tower-lsp",
 ]
 
