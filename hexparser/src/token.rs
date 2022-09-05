@@ -1,9 +1,9 @@
 use std::{ops::Range, cell::RefCell, iter::{Enumerate, Copied}, slice::Iter, fmt};
 
-use nom::{Compare, CompareResult, InputLength, InputIter, InputTake};
+use nom::{Compare, CompareResult, InputLength, InputIter, InputTake, Offset};
 use nom_locate::LocatedSpan;
 
-use crate::recovery_err::{ParseState, RecoveredError};
+use crate::recovery_err::{ParseState, RecoveredError, ToRange};
 
 #[derive(Clone, Debug, Copy, PartialEq, Eq, Hash)]
 pub enum Token<'a> {
@@ -155,6 +155,22 @@ impl<'a> FromStrSpan<'a> for TokSpan<'a> {
     #[inline]
     fn from_strspan(token: Token<'a>, state: ParseState<'a>, span: Range<usize>) -> TokSpan<'a> {
         unsafe{TokSpan::new_from_raw_offset(span.start, 0, token, (state, span.end-span.start))}
+    }
+}
+
+impl<'a> ToRange for TokSpan<'a> {
+    fn span(&self) -> Range<usize> {
+        let start = self.location_offset();
+        start..start+self.extra.1
+    }
+}
+
+impl<'a> ToRange for Tokens<'a> {
+    fn span(&self) -> Range<usize> {
+        let start = self.tokens[0].location_offset();
+        let end = self.tokens[self.tokens.len()-1];
+        let end = end.location_offset()+end.extra.1;
+        start..end
     }
 }
 
