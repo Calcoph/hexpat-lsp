@@ -1,4 +1,3 @@
-use m_parser::NamedNode;
 use std::cell::RefCell;
 use std::{collections::HashMap, ops::Range};
 use std::path::Path;
@@ -6,6 +5,7 @@ use tower_lsp::lsp_types::SemanticTokenType;
 
 use parserlib::LEGEND_TYPE;
 
+use crate::m_parser::NamedNode;
 use crate::token::{Token, Keyword, BuiltFunc};
 use crate::{m_lexer::lex, recovery_err::RecoveredError, m_parser::placeholder_parse, token::Spanned};
 
@@ -37,32 +37,34 @@ pub enum BinaryOp {
 pub fn type_inference(expr: &Spanned<Expr>, symbol_type_table: &mut HashMap<Range<usize>, Value>) {
     match &expr.0 {
         Expr::Error => {}
-        Expr::Value(_) => {}
-        Expr::Local(_) => {}
-        Expr::Binary(_, _, _) => {}
-        Expr::Call(_, _) => {}
-        Expr::If(_test, consequent, alternative) => {
+        Expr::Value {..} => {}
+        Expr::Local {..} => {}
+        Expr::Binary {..} => {}
+        Expr::Call {..} => {}
+        Expr::If { test_, consequent, alternative } => {
             type_inference(consequent, symbol_type_table);
             type_inference(alternative, symbol_type_table);
-        }
-        Expr::Definition(_, _, _) => (), // TODO
-        Expr::BitFieldEntry(_, _) => (), // TODO
-        Expr::EnumEntry(_, _) => (), // TODO
-        Expr::Ternary(_, _, _) => (), // TODO
-        Expr::NamespaceAccess(_, _) => (), // TODO
+        },
+        Expr::Definition {..} => (), // TODO
+        Expr::BitFieldEntry {..} => (), // TODO
+        Expr::EnumEntry {..} => (), // TODO
+        Expr::Ternary {..} => (), // TODO
+        Expr::NamespaceAccess {..} => (), // TODO
         Expr::Dollar => (), // TODO
-        Expr::Unary(_, _) => (), // TODO
-        Expr::Using(_) => (), // TODO
+        Expr::Unary {..} => (), // TODO
+        Expr::Using {..} => (), // TODO
         Expr::Continue => (), // TODO
         Expr::Break => (), // TODO
-        Expr::ExprList(_) => (), // TODO
-        Expr::Func(_, _, _) => (), // TODO
-        Expr::Struct(_, _) => (), // TODO
-        Expr::Namespace(_, _) => (), // TODO
-        Expr::Enum(_, _, _) => (), // TODO
-        Expr::Bitfield(_, _) => (), // TODO
-        Expr::Return(_) => (), // TODO
-        Expr::Access(_, _) => (), // TODO
+        Expr::ExprList {..} => (), // TODO
+        Expr::Func {..} => (), // TODO
+        Expr::Struct {..} => (), // TODO
+        Expr::Namespace {..} => (), // TODO
+        Expr::Enum {..} => (), // TODO
+        Expr::Bitfield {..} => (), // TODO
+        Expr::Return {..} => (), // TODO
+        Expr::Access {..} => (),
+        Expr::Attribute {..} => todo!(),
+        Expr::AttributeArgument {..} => todo!(), // TODO
     }
 }
 
