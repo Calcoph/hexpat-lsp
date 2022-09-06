@@ -78,50 +78,71 @@ pub fn function_definition<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned
 }
 
 pub fn function_variable_decl<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    then(
-        parse_type,
-        then(
-            ident,
-            choice((
+    choice((
+        map_with_span(
+            then(
                 then(
-                    just(Token::Separator('[')),
+                    parse_type,
+                    ident_local
+                ),
+                then(
                     then(
-                        not(peek(just(Token::Separator(']')))),
+                        just(Token::Separator('[')),
+                        not(just(Token::Separator('['))),
+                    ),
+                    opt(map(
                         then(
-                            opt(then(
-                                not(just(Token::Separator(']'))),
-                                then(
-                                    choice((
-                                        map_with_span(
+                            not(just(Token::Separator(']'))),
+                            then(
+                                choice((
+                                    map_with_span(
+                                        then(
+                                            just(Token::K(Keyword::While)),
                                             then(
-                                                just(Token::K(Keyword::While)),
+                                                just(Token::Separator('(')),
                                                 then(
-                                                    just(Token::Separator('(')),
-                                                    then(
-                                                        mathematical_expression,
-                                                        just(Token::Separator(')'))
-                                                    )
+                                                    mathematical_expression,
+                                                    just(Token::Separator(')'))
                                                 )
-                                            ),
-                                            |(_, (_, (condition, _))), span| (
-                                                Expr::WhileLoop {
-                                                    condition: Box::new(condition),
-                                                    body: Box::new((Expr::Value { val: Value::Null }, span))
-                                                },
-                                                span
                                             )
                                         ),
-                                        mathematical_expression
-                                    )),
-                                    just(Token::Separator(']'))
-                                )
-                            )),
-                            then(
-                                just(Token::Op("@")),
-                                mathematical_expression
+                                        |(_, (_, (condition, _))), span| (
+                                            Expr::WhileLoop {
+                                                condition: Box::new(condition),
+                                                body: Box::new((Expr::Value { val: Value::Null }, span))
+                                            },
+                                            span
+                                        )
+                                    ),
+                                    mathematical_expression
+                                )),
+                                just(Token::Separator(']'))
                             )
-                        )
-                    )
+                        ),
+                        |(_, (expr, _))| expr
+                    ))
+                )
+            ),
+            |((value_type, name), (_, body)), span| {
+                let body = Box::new(match body {
+                    Some(expr) => expr,
+                    None => (Expr::Value { val: Value::Null }, span)
+                });
+                (
+                    Expr::Definition {
+                        value_type,
+                        name: Box::new(name),
+                        body
+                    },
+                    span
+                )
+            }
+        ),
+        map_with_span(
+            then(
+                then(
+                    parse_type,
+                    ident_local
                 ),
                 then(
                     many0(then(
@@ -133,10 +154,40 @@ pub fn function_variable_decl<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Span
                         mathematical_expression
                     ))
                 )
-            ))
+            ),
+            |((value_type, name), (names, body)), span| {
+                let body = Box::new(match body {
+                    Some((_, body)) => body,
+                    None => (Expr::Value { val: Value::Null }, span),
+                });
+                let expr = match names.len() {
+                    0 => Expr::Definition {
+                        value_type,
+                        name: Box::new(name),
+                        body
+                    },
+                    _ => {
+                        let names_span = name.1.start..names.get(names.len()-1).unwrap().1.1.end;
+                        let mut names = names.into_iter()
+                            .map(|(_, a)| a)
+                            .collect::<Vec<_>>();
+                        names.insert(0, name);
+
+                        Expr::Definition {
+                            value_type,
+                            name: Box::new((Expr::ExprList { list: names }, names_span)),
+                            body
+                        }
+                    },
+                };
+
+                (
+                    expr,
+                    span
+                )
+            }
         )
-    )(input);
-    todo!()
+    ))(input)
 }
 
 pub fn function_while_loop<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
