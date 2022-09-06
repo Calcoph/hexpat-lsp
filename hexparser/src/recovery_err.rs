@@ -1,6 +1,5 @@
 use std::{cell::RefCell, ops::Range};
 
-use nom::Offset;
 use nom_locate::LocatedSpan;
 //use nom::error::{ParseError, ErrorKind, FromExternalError};
 use nom_supreme::error::ErrorTree;

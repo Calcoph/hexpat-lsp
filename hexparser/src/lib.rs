@@ -62,9 +62,11 @@ pub fn type_inference(expr: &Spanned<Expr>, symbol_type_table: &mut HashMap<Rang
         Expr::Enum {..} => (), // TODO
         Expr::Bitfield {..} => (), // TODO
         Expr::Return {..} => (), // TODO
-        Expr::Access {..} => (),
-        Expr::Attribute {..} => todo!(),
-        Expr::AttributeArgument {..} => todo!(), // TODO
+        Expr::Access {..} => (), // TODO
+        Expr::Attribute {..} => (), // TODO
+        Expr::AttributeArgument {..} => (), // TODO
+        Expr::WhileLoop { .. } => (), // TODO
+        Expr::ForLoop { .. } => (), // TODO
     }
 }
 

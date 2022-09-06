@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use nom::{error::ParseError, Parser};
 
 use crate::{token::Spanned, recovery_err::{IResult, ToRange}};
@@ -15,6 +17,24 @@ where
         let span = full_span.start..remaining.span().start;
 
         Ok((remaining, (o, span)))
+    }
+}
+
+pub fn map_with_span<I, O1, O2, E: ParseError<I>, F, G>(
+    mut parser: F,
+    mut mapper: G
+) -> impl FnMut(I) -> IResult<I, O2, E>
+where
+  F: Parser<I, O1, E>,
+  I: ToRange,
+  G: FnMut(O1, Range<usize>) -> O2,
+{
+    move |i: I| {
+        let full_span = i.span();
+        let (remaining, o) = parser.parse(i)?;
+        let span = full_span.start..remaining.span().start;
+
+        Ok((remaining, mapper(o, span)))
     }
 }
 
@@ -38,13 +58,13 @@ pub fn to<I, O1, O2, E: ParseError<I>, F>(
 where
   F: Parser<I, O1, E>,
   I: ToRange,
-  O2: Copy
+  O2: Clone
 {
     move |i: I| {
         let full_span = i.span();
         let (remaining, _) = parser.parse(i)?;
         let span = full_span.start..remaining.span().start;
 
-        Ok((remaining, (value, span)))
+        Ok((remaining, (value.clone(), span)))
     }
 }

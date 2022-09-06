@@ -1,9 +1,9 @@
-use std::{ops::Range, cell::RefCell, iter::{Enumerate, Copied}, slice::Iter, fmt};
+use std::{ops::Range, iter::{Enumerate, Copied}, slice::Iter, fmt};
 
-use nom::{Compare, CompareResult, InputLength, InputIter, InputTake, Offset};
+use nom::{Compare, CompareResult, InputLength, InputIter, InputTake};
 use nom_locate::LocatedSpan;
 
-use crate::recovery_err::{ParseState, RecoveredError, ToRange};
+use crate::recovery_err::{ParseState, ToRange};
 
 #[derive(Clone, Debug, Copy, PartialEq, Eq, Hash)]
 pub enum Token<'a> {
