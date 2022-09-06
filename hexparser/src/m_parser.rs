@@ -16,13 +16,15 @@ use nom::{
     sequence::{pair as then, terminated},
     multi::{
         many_till as many_until,
-        many1, many0, fold_many0, fold_many1
+        many1,
+        many0,
+        fold_many0
     }
 };
-use nom_supreme::error::{ErrorTree, BaseErrorKind, Expectation};
+use nom_supreme::error::{ErrorTree, BaseErrorKind};
 use serde::{Deserialize, Serialize};
 
-use crate::{token::{Spanned, TokSpan, Tokens, Token, Keyword, ValueType, BuiltFunc}, recovery_err::ToRange, combinators::{spanned, ignore, to, map_with_span}, m_parser::function::{function_statement, function_definition}};
+use crate::{token::{Spanned, TokSpan, Tokens, Token, Keyword, ValueType, BuiltFunc}, combinators::{spanned, ignore, to, map_with_span}, m_parser::function::{function_statement, function_definition}};
 
 mod function;
 
@@ -977,7 +979,7 @@ fn member_pointer_array_variable<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, S
             then(
                 pointer_size_type,
                 opt(then(
-                    just(Token::Op('@')),
+                    just(Token::Op("@")),
                     mathematical_expression
                 ))
             )
@@ -989,14 +991,14 @@ fn member<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
     then(
         choice((
             then(
-                just(Token::Op('$')),
+                just(Token::Op("$")),
                 then(
-                    just(Token::Op('=')),
+                    just(Token::Op("=")),
                     function_variable_assignment
                 )
             ),
             then(
-                just(Token::Op('$')),
+                just(Token::Op("$")),
                 then(
                     choice((
                         just(Token::Op("+")),
@@ -1011,7 +1013,7 @@ fn member<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
                         just(Token::Op("^")),
                     )),
                     then(
-                        just(Token::Op('=')),
+                        just(Token::Op("=")),
                         function_variable_compound_assignment
                     )
                 )
@@ -1179,74 +1181,99 @@ fn parse_enum<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
                 )
             )
         ),
-        |(a, (b, c)), span| (a, span)
+        |(a, (b, c)), span| (a, span) // TODO
+    )(input)
+}
+
+fn bitfield_if<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+    then(
+        just(Token::K(Keyword::If)),
+        then(
+            just(Token::Separator('(')),
+            then(
+                mathematical_expression,
+                then(
+                    choice((
+                        then(
+                            just(Token::Separator(')')),
+                            then(
+                                just(Token::Separator('{')),
+                                terminated(
+                                    many0(bitfield_entry),
+                                    just(Token::Separator('}'))
+                                )
+                            )
+                        ),
+                        then(
+                            just(Token::Separator(')')),
+                            bitfield_entry
+                        )
+                    )),
+                    choice((
+                        then(
+                            just(Token::K(Keyword::Else)),
+                            terminated(
+                                many0(bitfield_entry),
+                                just(Token::Separator('}'))
+                            )
+                        ),
+                        then(
+                            just(Token::K(Keyword::Else)),
+                            bitfield_entry
+                        )
+                    ))
+                )
+            )
+        )
     )(input)
 }
 
 fn bitfield_entry<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    then(
-        choice((
-            then(
-                ident,
-                then(
-                    just(Token::Op(":")),
-                    mathematical_expression
-                )
-            ),
-            then(
-                just(Token::V(ValueType::Padding)),
-                then(
-                    just(Token::Op(":")),
-                    mathematical_expression
-                )
-            ),
-            then(
-                just(Token::K(Keyword::If)),
-                then(
-                    just(Token::Separator('(')),
+    map(
+        then(
+            choice((
+                map_with_span(
                     then(
-                        mathematical_expression,
+                        ident,
                         then(
-                            choice((
-                                then(
-                                    just(Token::Separator(')')),
-                                    then(
-                                        just(Token::Separator('{')),
-                                        terminated(
-                                            many0(bitfield_entry),
-                                            just(Token::Separator('}'))
-                                        )
-                                    )
-                                ),
-                                then(
-                                    just(Token::Separator(')')),
-                                    bitfield_entry
-                                )
-                            )),
-                            choice((
-                                then(
-                                    just(Token::K(Keyword::Else)),
-                                    terminated(
-                                        many0(bitfield_entry),
-                                        just(Token::Separator('}'))
-                                    )
-                                ),
-                                then(
-                                    just(Token::K(Keyword::Else)),
-                                    bitfield_entry
-                                )
-                            ))
+                            just(Token::Op(":")),
+                            mathematical_expression
                         )
+                    ),
+                    |(name, (_, length)), span| (
+                        Expr::BitFieldEntry {
+                            name,
+                            length: Box::new(length)
+                        },
+                        span
                     )
-                )
-            )
-        )),
-        just(Token::Separator(';'))
+                ),
+                map_with_span(
+                    then(
+                        spanned(just(Token::V(ValueType::Padding))),
+                        then(
+                            just(Token::Op(":")),
+                            mathematical_expression
+                        )
+                    ),
+                    |((_, pad_span), (_, length)), span| (
+                        Expr::BitFieldEntry {
+                            name: (String::from("padding"), pad_span),
+                            length: Box::new(length)
+                        },
+                        span
+                    )
+                ),
+                bitfield_if
+            )),
+            many0(just(Token::Separator(';')))
+        ),
+        |(a, _)| a
     )(input)
 }
 
 fn parse_bitfield<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    map(
+    map_with_span(
         then(
             just(Token::K(Keyword::Bitfield)),
             then(
@@ -1263,7 +1290,30 @@ fn parse_bitfield<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
                 )
             )
         ),
-        |(((a, b), c), d)| c // TODO
+        |(_, (_, (name, body))), span| {
+            let body = Box::new({
+                let span = match body.len() {
+                    0 => span,
+                    _ => body.get(0).unwrap().0.1.start..body.get(body.len()-1).unwrap().0.1.end
+                };
+                let body = body.into_iter()
+                    .map(|(a, _)| {
+                        a
+                    }).collect::<Vec<_>>();
+                
+                (
+                    Expr::ExprList { list: body },
+                    span
+                )
+            });
+            (
+                Expr::Bitfield {
+                    name,
+                    body
+                },
+                span
+            )
+        }
     )(input)
 }
 
@@ -1364,10 +1414,10 @@ fn parse_namespace<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> 
                 ident,
                 then(
                     ident,
-                    then( // TODO: This should be inside a many0
+                    many0(then(
                         just(Token::Op("::")),
                         ident
-                    )
+                    ))
                 )
             )
         ),

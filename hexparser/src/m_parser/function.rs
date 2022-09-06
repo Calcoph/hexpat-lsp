@@ -292,101 +292,119 @@ pub fn func_arg<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<FuncArgume
 }
 
 pub fn function_statement<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    then(
-        choice((
-            map_with_span(
-                then(
-                    choice((
-                        ident_local,
-                        map_with_span(
-                            just(Token::Op("$")),
-                            |_, span| (Expr::Local { name: (String::from("$"), span) }, span)
-                        )
-                    )),
-                    then(
-                        opt(choice((
-                            to(just(Token::Op("+")), Assignment::Add),
-                            to(just(Token::Op("-")), Assignment::Sub),
-                            to(just(Token::Op("*")), Assignment::Mul),
-                            to(just(Token::Op("/")), Assignment::Div),
-                            to(just(Token::Op("%")), Assignment::Mod),
-                            to(just(Token::Op("<<")), Assignment::LShift),
-                            to(just(Token::Op(">>")), Assignment::RShift),
-                            to(just(Token::Op("|")), Assignment::BOr),
-                            to(just(Token::Op("&")), Assignment::BAnd),
-                            to(just(Token::Op("^")), Assignment::BXor),
-                        ))),
-                        then(
-                            just(Token::Op("=")),
-                            mathematical_expression
-                        )
-                    )
-                ),
-                |(loperand, (assignment, (_, roperand))), span| {
-                    let assignment = match assignment {
-                        Some((ass, _)) => ass,
-                        None => Assignment::Just
-                    };
-                    let expr = Expr::Binary {
-                        loperand: Box::new(loperand),
-                        operation: BinaryOp::Assign(assignment),
-                        roperand: Box::new(roperand),
-                    };
+    map(
+        then(
+            choice((
+                assignment_expr,
+                function_controlflow_statement,
+                function_conditional,
+                function_while_loop,
+                function_for_loop,
+                todo_name,
+                todo_name2,
+                todo_name3
+            )),
+            many1(just(Token::Separator(';')))
+        ),
+        |(a, _)| a
+    )(input)
+}
 
-                    (expr, span)
-                }
-            ),
-            function_controlflow_statement,
-            function_conditional,
-            function_while_loop,
-            function_for_loop,
-            map_with_span(
-                then(
-                    ident,
-                    then(
-                        peek(choice((
-                            just(Token::Separator('.')),
-                            just(Token::Separator('[')),
-                        ))),
-                        then(
-                            old_member_access,
-                            then(
-                                just(Token::Op("=")),
-                                mathematical_expression
-                            )
-                        )
-                    )
-                ),
-                |a, span| (a, span) // TODO
-            ),
-            then(
-                ident,
-                then(
-                    old_namespace_resolution,
-                    choice((
-                        map(
-                            then(
-                                peek(just(Token::Separator('('))),
-                                old_function_call
-                            ),
-                            |(_, a)| a
-                        ),
-                        function_variable_decl
-                    ))
-                )
-            ),
+fn todo_name<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+    map_with_span(
+        then(
+            ident,
             then(
                 peek(choice((
-                    ignore(just(Token::K(Keyword::BigEndian))),
-                    ignore(just(Token::K(Keyword::LittleEndian))),
-                    ignore(value_type_any)
+                    just(Token::Separator('.')),
+                    just(Token::Separator('[')),
                 ))),
-                function_variable_decl
+                then(
+                    old_member_access,
+                    then(
+                        just(Token::Op("=")),
+                        mathematical_expression
+                    )
+                )
             )
-        )),
-        many1(just(Token::Separator(';')))
-    )(input);
-    todo!()
+        ),
+        |a, span| (a, span) // TODO
+    )
+}
+
+fn todo_name2<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+    then(
+        ident,
+        then(
+            old_namespace_resolution,
+            choice((
+                map(
+                    then(
+                        peek(just(Token::Separator('('))),
+                        old_function_call
+                    ),
+                    |(_, a)| a
+                ),
+                function_variable_decl
+            ))
+        )
+    )
+}
+
+fn todo_name3<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+    then(
+        peek(choice((
+            ignore(just(Token::K(Keyword::BigEndian))),
+            ignore(just(Token::K(Keyword::LittleEndian))),
+            ignore(value_type_any)
+        ))),
+        function_variable_decl
+    )
+}
+
+fn assignment_expr<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+    map_with_span(
+        then(
+            choice((
+                ident_local,
+                map_with_span(
+                    just(Token::Op("$")),
+                    |_, span| (Expr::Local { name: (String::from("$"), span) }, span)
+                )
+            )),
+            then(
+                opt(choice((
+                    to(just(Token::Op("+")), Assignment::Add),
+                    to(just(Token::Op("-")), Assignment::Sub),
+                    to(just(Token::Op("*")), Assignment::Mul),
+                    to(just(Token::Op("/")), Assignment::Div),
+                    to(just(Token::Op("%")), Assignment::Mod),
+                    to(just(Token::Op("<<")), Assignment::LShift),
+                    to(just(Token::Op(">>")), Assignment::RShift),
+                    to(just(Token::Op("|")), Assignment::BOr),
+                    to(just(Token::Op("&")), Assignment::BAnd),
+                    to(just(Token::Op("^")), Assignment::BXor),
+                ))),
+                then(
+                    just(Token::Op("=")),
+                    mathematical_expression
+                )
+            )
+        ),
+        |(loperand, (assignment, (_, roperand))), span| {
+            let assignment = match assignment {
+                Some((ass, _)) => ass,
+                None => Assignment::Just
+            };
+            let expr = Expr::Binary {
+                loperand: Box::new(loperand),
+                operation: BinaryOp::Assign(assignment),
+                roperand: Box::new(roperand),
+            };
+    
+            (expr, span)
+        }
+    )(input)
 }
 
 pub fn function_controlflow_statement<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
