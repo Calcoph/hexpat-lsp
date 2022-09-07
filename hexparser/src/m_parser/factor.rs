@@ -76,7 +76,7 @@ fn builtin_func<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
                     map(
                         value_type_any,
                         |(type_, span)| (
-                            Expr::UnnamedParameter { type_: (type_, span) },
+                            Expr::UnnamedParameter { type_: (type_, span.clone()) },
                             span
                         )
                     ),
@@ -89,8 +89,8 @@ fn builtin_func<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
             )
         ),
         |((name, name_span), (argument, arg_span)), span| {
-            let func_name = Box::new((Expr::Local { name: (name, name_span) }, name_span));
-            (Expr::Call { func_name, arguments: (vec![(argument, arg_span)], arg_span) }, span)
+            let func_name = Box::new((Expr::Local { name: (name, name_span.clone()) }, name_span));
+            (Expr::Call { func_name, arguments: (vec![(argument, arg_span.clone())], arg_span) }, span)
         }
     )(input)
 }
@@ -105,7 +105,7 @@ fn special_variables<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>
             old_member_access
         ),
         |((name, name_span), member_access), span| {
-            let item = Box::new((Expr::Local { name: (name, name_span) }, name_span));
+            let item = Box::new((Expr::Local { name: (name, name_span.clone()) }, name_span));
             (
                 Expr::Access {
                     item,

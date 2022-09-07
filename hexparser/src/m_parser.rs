@@ -26,7 +26,7 @@ use nom::{
 use nom_supreme::error::{ErrorTree, BaseErrorKind};
 use serde::{Deserialize, Serialize};
 
-use crate::{token::{Spanned, TokSpan, Tokens, Token, Keyword, ValueType}, combinators::{spanned, ignore, to, map_with_span}, m_parser::{function::{function_statement, function_definition}, operations::{UnaryOp, mathematical_expression}}};
+use crate::{token::{Spanned, TokSpan, Tokens, Token, Keyword, ValueType}, combinators::{spanned, ignore, to, map_with_span, fold_many0_once}, m_parser::{function::{function_statement, function_definition}, operations::{UnaryOp, mathematical_expression}}};
 
 mod function;
 mod factor;
@@ -230,6 +230,7 @@ fn old_function_call<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>
                 func_name.1.clone()
             };
 
+            let span = func_name.1.start..args_span.end;
             let arguments = (arguments, args_span);
 
             (
@@ -237,7 +238,7 @@ fn old_function_call<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>
                     func_name: Box::new(func_name),
                     arguments
                 },
-                func_name.1.start..args_span.end
+                span
             )
         }
     )(input)
@@ -264,6 +265,7 @@ fn function_call<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
                 func_name.1.clone()
             };
 
+            let span = func_name.1.start..args_span.end;
             let arguments = (arguments, args_span);
 
             (
@@ -271,7 +273,7 @@ fn function_call<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
                     func_name: Box::new(func_name),
                     arguments
                 },
-                func_name.1.start..args_span.end
+                span
             )
         }
     )(input)
@@ -284,7 +286,7 @@ fn string_literal<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
 // TODO: Rework all the parsers so "ident" is not parsed before namespace_resolution.
 fn old_namespace_resolution<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
     let (input, first_name) = ident_local(input).unwrap(); // TODO: Error recovery instead of unwrap
-    fold_many0(
+    fold_many0_once(
         preceded(
             just(Token::Op("::")),
             ident
@@ -305,7 +307,7 @@ fn old_namespace_resolution<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanne
 // exaclty the same as above, but used when the rework has been done
 fn namespace_resolution<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
     let (input, first_name) = ident_local(input).unwrap(); // TODO: Error recovery instead of unwrap
-    fold_many0(
+    fold_many0_once(
         preceded(
             just(Token::Op("::")),
             ident
@@ -415,7 +417,7 @@ fn attribute_arg<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
                     let span = name_span.start..span.end;
                     (Box::new(val), span)
                 },
-                None => (Box::new((Expr::Value { val: Value::Null }, name_span.clone())), name_span),
+                None => (Box::new((Expr::Value { val: Value::Null }, name_span.clone())), name_span.clone()),
             };
             let expr = Expr::AttributeArgument {
                 name: (name, name_span),
@@ -434,10 +436,11 @@ fn attribute<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
             attribute_arg
         ),
         |arguments, span| {
+            let arg_span = arguments.get(0).unwrap().1.start..arguments.get(arguments.len()-1).unwrap().1.end;
             let expr = Expr::Attribute {
                 arguments: (
                     arguments,
-                    arguments.get(0).unwrap().1.start..arguments.get(arguments.len()-1).unwrap().1.end
+                    arg_span
                 )
             };
             (expr, span)
@@ -501,7 +504,7 @@ fn conditional<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
         |(test_, (consequent, alternative)), span| {
             let alternative = Box::new(match alternative {
                 Some(alt) => alt,
-                None => (Expr::Value { val: Value::Null }, span),
+                None => (Expr::Value { val: Value::Null }, span.clone()),
             });
             (
                 Expr::If {
@@ -609,7 +612,7 @@ fn padding<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
             |condition, span| (
                 Expr::WhileLoop {
                     condition: Box::new(condition),
-                    body: Box::new((Expr::Value { val: Value::Null }, span))
+                    body: Box::new((Expr::Value { val: Value::Null }, span.clone()))
                 },
                 span
             )
@@ -629,7 +632,7 @@ fn assignment_expr<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> 
                 ident_local,
                 map_with_span(
                     just(Token::Op("$")),
-                    |_, span| (Expr::Local { name: (String::from("$"), span) }, span)
+                    |_, span| (Expr::Local { name: (String::from("$"), span.clone()) }, span)
                 )
             )),
             then(
@@ -667,7 +670,7 @@ fn assignment_expr<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> 
     )(input)
 }
 
-fn array_declr<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Option<Spanned<Expr>>> { // TODO: make an "array declaration" expression, so the "[","]" is also spanned and this returns Spanned<Expr> instead of Option<Spanned<Expr>>
+fn array_declaration<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Option<Spanned<Expr>>> { // TODO: make an "array declaration" expression, so the "[","]" is also spanned and this returns Spanned<Expr> instead of Option<Spanned<Expr>>
     delimited(
         then(
             just(Token::Separator('[')),
@@ -686,7 +689,7 @@ fn array_declr<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Option<Spanned<Expr
                 |a, span| (
                     Expr::WhileLoop {
                         condition: Box::new(a),
-                        body: Box::new((Expr::Value { val: Value::Null }, span))
+                        body: Box::new((Expr::Value { val: Value::Null }, span.clone()))
                     },
                     span
                 )
@@ -697,8 +700,151 @@ fn array_declr<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Option<Spanned<Expr
     )(input)
 }
 
+fn member_variable<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+    choice((
+        map_with_span(
+            then(
+                then(
+                    parse_type,
+                    namespace_resolution
+                ),
+                then(
+                    array_declaration,
+                    opt(preceded(
+                        just(Token::Op("@")),
+                        mathematical_expression
+                    ))
+                )
+            ),
+            |((value_type, name), (array, body)), span| {
+                let body = Box::new(match body {
+                    Some(body) => body,
+                    None => (Expr::Value { val: Value::Null }, span.clone()),
+                });
+
+                (
+                    Expr::Definition {
+                        value_type,
+                        name: Box::new(name),
+                        body
+                    },
+                    span
+                )
+            }
+        ),
+        map_with_span(
+            then(
+                then(
+                    parse_type,
+                    namespace_resolution
+                ),
+                choice((
+                    preceded(
+                        just(Token::Op("@")),
+                        mathematical_expression
+                    ),
+                    map_with_span(
+                        separated_list1(
+                            just(Token::Separator(',')),
+                            ident_local
+                        ),
+                        |list, span| (Expr::ExprList { list }, span)
+                    )
+                ))
+            ),
+            |((value_type, name), body), span| (
+                Expr::Definition {
+                    value_type,
+                    name: Box::new(name),
+                    body: Box::new(body)
+                },
+                span
+            )
+        ),
+        map_with_span(
+            separated_pair(
+                parse_type,
+                just(Token::Op("*")),
+                then(
+                    separated_pair(
+                        ident_local,
+                        just(Token::Op(":")),
+                        pointer_size_type
+                    ),
+                    opt(preceded(
+                        just(Token::Op("@")),
+                        mathematical_expression
+                    ))
+                )
+            ),
+            |(value_type,
+                ((name, pointer_type),
+                    body
+                )
+            ), span| {
+                let body = Box::new(match body {
+                    Some(body) => body,
+                    None => (Expr::Value { val: Value::Null }, span.clone()),
+                });
+
+                (
+                    Expr::Definition {
+                        value_type,
+                        name: Box::new(name),
+                        body: body
+                    },
+                    span
+                )
+            }
+        ),
+        map_with_span(
+            separated_pair(
+                parse_type,
+                just(Token::Op("*")),
+                then(
+                    ident_local,
+                    then(
+                        array_declaration,
+                        preceded(
+                            just(Token::Op(":")),
+                            then(
+                                pointer_size_type,
+                                opt(preceded(
+                                    just(Token::Op("@")),
+                                    mathematical_expression
+                                ))
+                            )
+                        )
+                    )
+                )
+            ),
+            |(value_type,
+                (name,
+                    (array,
+                        (pointer_type, body)
+                    )
+                )
+            ), span| {
+                let body = Box::new(match body {
+                    Some(body) => body,
+                    None => (Expr::Value { val: Value::Null }, span.clone()),
+                });
+
+                (
+                    Expr::Definition {
+                        value_type,
+                        name: Box::new(name),
+                        body
+                    },
+                    span
+                )
+            }
+        )
+    ))(input)
+}
+
 fn member_declaration<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    then(
+    preceded(
         peek(choice((
             ignore(just(Token::K(Keyword::BigEndian))),
             ignore(just(Token::K(Keyword::LittleEndian))),
@@ -707,69 +853,7 @@ fn member_declaration<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr
         ))),
         choice((
             function_call,
-            choice((
-                then(
-                    namespace_resolution,
-                    then(
-                        array_declr,
-                        opt(preceded(
-                            just(Token::Op("@")),
-                            mathematical_expression
-                        ))
-                    )
-                ),
-                then(
-                    namespace_resolution,
-                    choice((
-                        preceded(
-                            just(Token::Op("@")),
-                            mathematical_expression
-                        ),
-                        map_with_span(
-                            separated_list1(
-                                just(Token::Separator(',')),
-                                ident_local
-                            ),
-                            |list, span| (Expr::ExprList { list }, span)
-                        )
-                    ))
-                ),
-                separated_pair(
-                    parse_type,
-                    just(Token::Op("*")),
-                    then(
-                        separated_pair(
-                            ident,
-                            just(Token::Op(":")),
-                            pointer_size_type
-                        ),
-                        opt(preceded(
-                            just(Token::Op("@")),
-                            mathematical_expression
-                        ))
-                    )
-                ),
-                separated_pair(
-                    parse_type,
-                    just(Token::Op("*")),
-                    then(
-                        ident,
-                        then(
-                            array_declr,
-                            preceded(
-                                just(Token::Op(":")),
-                                then(
-                                    pointer_size_type,
-                                    opt(preceded(
-                                        just(Token::Op("@")),
-                                        mathematical_expression
-                                    ))
-                                )
-                            )
-                        )
-                    )
-                )
-            ))
+            member_variable
         ))
     )(input)
 }
@@ -951,7 +1035,7 @@ fn bitfield_conditional<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Ex
         |(test_, (consequent, alternative)), span| {
             let alternative = Box::new(match alternative {
                 Some(alt) => alt,
-                None => (Expr::Value { val: Value::Null }, span),
+                None => (Expr::Value { val: Value::Null }, span.clone()),
             });
             (
                 Expr::If {
@@ -1024,7 +1108,7 @@ fn parse_bitfield<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
         |(name, body), span| {
             let body = Box::new({
                 let span = match body.len() {
-                    0 => span,
+                    0 => span.clone(),
                     _ => body.get(0).unwrap().1.start..body.get(body.len()-1).unwrap().1.end
                 };
                 
@@ -1044,31 +1128,24 @@ fn parse_bitfield<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
     )(input)
 }
 
-fn array_variable_placement<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    map_with_span(
+fn array_variable_placement<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, (Spanned<Expr>, Spanned<Expr>)> {
+    map(
         then(
             ident_local,
             then(
-                array_declr,
+                array_declaration,
                 preceded(
                     just(Token::Op("@")),
                     mathematical_expression
                 )
             )
         ),
-        |(name, (array, body)), span| { // TODO: Take array into account
+        |(name, (array, (body, fake_span)))| { // TODO: Take array into account
             let array = Box::new(match array {
                 Some(s) => s,
-                None => (Expr::Value { val: Value::Null }, span)
+                None => (Expr::Value { val: Value::Null }, fake_span.clone())
             });
-            (
-                Expr::Definition {
-                    value_type: (HexTypeDef {endianness: Endianness::Unkown, name: (HexType::Null, span)}, span),
-                    name: Box::new(name),
-                    body: Box::new(body)
-                },
-                span
-            )
+            (name, (body, fake_span))
         }
     )(input)
 }
@@ -1126,8 +1203,8 @@ fn parse_namespace<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> 
             let name = Box::new(name.into_iter()
                 .fold((Expr::Value { val: Value::Null }, 0..1), |(accum, acc_span), (next, next_span)| {
                     match accum {
-                        Expr::Value { .. } => (Expr::Local { name: (next, next_span) }, next_span), // first case
-                        _ => (Expr::NamespaceAccess { previous: Box::new((accum, acc_span)), name: (next, next_span) }, acc_span.start..next_span.end)
+                        Expr::Value { .. } => (Expr::Local { name: (next, next_span.clone()) }, next_span), // first case
+                        _ => (Expr::NamespaceAccess { previous: Box::new((accum, acc_span.clone())), name: (next, next_span.clone()) }, acc_span.start..next_span.end)
                     }
                 }));
             (
@@ -1142,72 +1219,75 @@ fn parse_namespace<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> 
 }
 
 fn placement<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    then(
-        parse_type,
-        choice((
-            array_variable_placement,
-            map_with_span(
-                then(
-                    ident_local,
-                    opt(choice((
-                        map(
-                            preceded(
-                                just(Token::Op("@")),
-                                mathematical_expression
-                            ),
-                            |a| Some(a)
-                        ),
-                        map(just(Token::K(Keyword::In)), |_| None),
-                        map(just(Token::K(Keyword::Out)), |_| None),
-                    )))
-                ),
-                |(name, body), span| {
-                    let body = Box::new(match body {
-                        Some(body) => match body {
-                            Some(body) => body,
-                            None => (Expr::Value { val: Value::Null }, span),
-                        },
-                        None => (Expr::Value { val: Value::Null }, span),
-                    });
-    
-                    (
-                        Expr::Definition {
-                            value_type: (HexTypeDef {endianness: Endianness::Unkown, name: (HexType::Null, span)}, span),
-                            name: Box::new(name),
-                            body
-                        },
-                        span
-                    )
-                }
-            ),
-            map(
-                preceded(
-                    just(Token::Op("*")),
-                    separated_pair(
-                        ident,
-                        just(Token::Op(":")),
-                        then(
-                            pointer_size_type,
-                            mathematical_expression
-                        )
-                    )
-                ),
-                |(a, (b, c))| b // TODO
-            ),
-            map(
-                then(
-                    just(Token::Op("*")),
+    map_with_span(
+        then(
+            parse_type,
+            choice((
+                array_variable_placement,
+                map(
                     then(
-                        ident,
-                        then(
-                            just(Token::Separator('{')),
-                            pointer_array_variable_placement
-                        )
-                    )
+                        ident_local,
+                        opt(choice((
+                            map(
+                                preceded(
+                                    just(Token::Op("@")),
+                                    mathematical_expression
+                                ),
+                                |a| Some(a)
+                            ),
+                            map(just(Token::K(Keyword::In)), |_| None),
+                            map(just(Token::K(Keyword::Out)), |_| None),
+                        )))
+                    ),
+                    |((name, fake_span), body)| {
+                        let body = match body {
+                            Some(body) => match body {
+                                Some(body) => body,
+                                None => (Expr::Value { val: Value::Null }, fake_span.clone()),
+                            },
+                            None => (Expr::Value { val: Value::Null }, fake_span.clone()),
+                        };
+        
+                        ((name, fake_span), body)
+                    }
                 ),
-                |(a, b)| b // TODO
-            )
-        ))
+                map(
+                    preceded(
+                        just(Token::Op("*")),
+                        separated_pair(
+                            ident_local,
+                            just(Token::Op(":")),
+                            then(
+                                pointer_size_type,
+                                mathematical_expression
+                            )
+                        )
+                    ),
+                    |(name, (pointer_type, body))| (name, body) // TODO take the type of the pointer into account
+                ),
+                map(
+                    preceded(
+                        just(Token::Op("*")),
+                        then(
+                            ident_local,
+                            preceded( // TODO: This is probably wrong
+                                just(Token::Separator('{')),
+                                pointer_array_variable_placement
+                            )
+                        )
+                    ),
+                    |(name, body)| (name, body)
+                )
+            ))
+        ),
+        |(value_type, (name, body)), span| (
+            Expr::Definition {
+                value_type,
+                name: Box::new(name),
+                body: Box::new(body)
+            },
+            span
+        )
     )(input)
 }
 
@@ -1224,13 +1304,19 @@ fn statements_choice<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>
                     ))
                 )
             ),
-            |(a, b), span| (
-                Expr::Using {
-                    new_name: todo!(),
-                    old_name: todo!()
-                },
-                span
-            )
+            |(new_name, old_name), span| {
+                let old_name = match old_name {
+                    Some(old_name) => old_name,
+                    None => (HexTypeDef{ endianness: Endianness::Unkown, name: (HexType::Null, span.clone()) }, span.clone()),
+                };
+                (
+                    Expr::Using {
+                        new_name,
+                        old_name
+                    },
+                    span
+                )
+            }
         ),
         preceded(
             peek(choice((

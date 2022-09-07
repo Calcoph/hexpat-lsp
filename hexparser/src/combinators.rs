@@ -1,7 +1,7 @@
 use std::ops::Range;
 
-use nom::{error::ParseError, Parser};
-
+use nom::{error::{ParseError, ErrorKind}, Parser, InputLength};
+use nom::Err;
 use crate::{token::Spanned, recovery_err::{IResult, ToRange}};
 
 pub fn spanned<I, O, E: ParseError<I>, F>(
@@ -68,3 +68,43 @@ where
         Ok((remaining, (value.clone(), span)))
     }
 }
+
+pub fn fold_many0_once<I, O, E, F, G, H, R>(
+    mut f: F,
+    init: H,
+    mut g: G,
+  ) -> impl FnOnce(I) -> IResult<I, R, E>
+  where
+    I: Clone + InputLength,
+    F: Parser<I, O, E>,
+    G: FnMut(R, O) -> R,
+    H: FnOnce() -> R,
+    E: ParseError<I>,
+  {
+    move |i: I| {
+      let mut res = init();
+      let mut input = i;
+  
+      loop {
+        let i_ = input.clone();
+        let len = input.input_len();
+        match f.parse(i_) {
+          Ok((i, o)) => {
+            // infinite loop check: the parser must always consume
+            if i.input_len() == len {
+              return Err(Err::Error(E::from_error_kind(input, ErrorKind::Many0)));
+            }
+  
+            res = g(res, o);
+            input = i;
+          }
+          Err(Err::Error(_)) => {
+            return Ok((input, res));
+          }
+          Err(e) => {
+            return Err(e);
+          }
+        }
+      }
+    }
+  }

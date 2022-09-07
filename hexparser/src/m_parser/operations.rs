@@ -11,12 +11,10 @@ use nom::{
     sequence::{
         pair as then, preceded,
     },
-    multi::{
-        many0, fold_many0,
-    }
+    multi::fold_many0
 };
 
-use crate::{token::{Spanned, Tokens, Token, Keyword}, combinators::{ignore, to, map_with_span}, m_parser::{value_type_any, parse_type, factor::factor, string_literal, BinaryOp}, Expr};
+use crate::{token::{Spanned, Tokens, Token, Keyword}, combinators::{ignore, to, map_with_span, fold_many0_once}, m_parser::{value_type_any, parse_type, factor::factor, string_literal, BinaryOp}, Expr};
 
 fn cast_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
     choice((
@@ -68,12 +66,13 @@ fn unary_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>>
                 cast_expression
             ),
             |((operation, op_span), operand)| {
+                let span = op_span.start..operand.1.end;
                 let expr = Expr::Unary {
                     operation,
                     operand: Box::new(operand)
                 };
 
-                (expr, op_span.start..operand.1.end)
+                (expr, span)
             }
         ),
         string_literal,
@@ -84,9 +83,9 @@ fn unary_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>>
 fn binary_fold((loperand, l_span): Spanned<Expr>, ((operator, _), (roperand, r_span)): (Spanned<BinaryOp>, Spanned<Expr>)) -> Spanned<Expr>{
     (
         Expr::Binary {
-            loperand: Box::new((loperand, l_span)),
+            loperand: Box::new((loperand, l_span.clone())),
             operator,
-            roperand: Box::new((roperand, r_span))
+            roperand: Box::new((roperand, r_span.clone()))
         },
         l_span.start..r_span.end
     )
@@ -94,7 +93,7 @@ fn binary_fold((loperand, l_span): Spanned<Expr>, ((operator, _), (roperand, r_s
 
 fn multiplicative_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
     let (input, first_expr) = unary_expression(input)?;
-    fold_many0(
+    fold_many0_once(
         then(
             choice((
                 to(just(Token::Op("*")), BinaryOp::Mul),
@@ -110,7 +109,7 @@ fn multiplicative_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spann
 
 fn additive_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
     let (input, first_expr) = multiplicative_expression(input)?;
-    fold_many0(
+    fold_many0_once(
         then(
             choice((
                 to(just(Token::Op("+")), BinaryOp::Add),
@@ -125,7 +124,7 @@ fn additive_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Exp
 
 fn shift_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
     let (input, first_expr) = additive_expression(input)?;
-    fold_many0(
+    fold_many0_once(
         then(
             choice((
                 to(just(Token::Op("<<")), BinaryOp::LShift),
@@ -140,7 +139,7 @@ fn shift_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>>
 
 fn binary_and_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
     let (input, first_expr) = shift_expression(input)?;
-    fold_many0(
+    fold_many0_once(
         then(
             to(just(Token::Op("&")), BinaryOp::BAnd),
             shift_expression
@@ -152,7 +151,7 @@ fn binary_and_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<E
 
 fn binary_xor_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
     let (input, first_expr) = binary_and_expression(input)?;
-    fold_many0(
+    fold_many0_once(
         then(
             to(just(Token::Op("^")), BinaryOp::BXor),
             binary_and_expression
@@ -164,7 +163,7 @@ fn binary_xor_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<E
 
 fn binary_or_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
     let (input, first_expr) = binary_xor_expression(input)?;
-    fold_many0(
+    fold_many0_once(
         then(
             to(just(Token::Op("|")), BinaryOp::BOr),
             binary_xor_expression
@@ -176,7 +175,7 @@ fn binary_or_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Ex
 
 fn relation_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
     let (input, first_expr) = binary_or_expression(input)?;
-    fold_many0(
+    fold_many0_once(
         then(
             choice((
                 to(just(Token::Op(">")), BinaryOp::Greater),
@@ -193,7 +192,7 @@ fn relation_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Exp
 
 fn equality_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
     let (input, first_expr) = relation_expression(input)?;
-    fold_many0(
+    fold_many0_once(
         then(
             choice((
                 to(just(Token::Op("==")), BinaryOp::Eq),
@@ -208,7 +207,7 @@ fn equality_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Exp
 
 fn boolean_and<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
     let (input, first_expr) = equality_expression(input)?;
-    fold_many0(
+    fold_many0_once(
         then(
             to(just(Token::Op("&&")), BinaryOp::LAnd),
             equality_expression
@@ -220,7 +219,7 @@ fn boolean_and<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
 
 fn boolean_xor<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
     let (input, first_expr) = boolean_and(input)?;
-    fold_many0(
+    fold_many0_once(
         then(
             to(just(Token::Op("^^")), BinaryOp::LXor),
             boolean_and
@@ -232,7 +231,7 @@ fn boolean_xor<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
 
 fn boolean_or<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
     let (input, first_expr) = boolean_xor(input)?;
-    fold_many0(
+    fold_many0_once(
         then(
             to(just(Token::Op("||")), BinaryOp::LOr),
             boolean_xor
@@ -244,7 +243,7 @@ fn boolean_or<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
 
 fn ternary_conditional<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
     let (input, first_expr) = boolean_or(input)?;
-    fold_many0(
+    fold_many0_once(
         preceded(
             just(Token::Op("?")),
             then(
@@ -258,9 +257,9 @@ fn ternary_conditional<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Exp
         || first_expr,
         |(loperand, l_span), (moperand, (roperand, r_span))| (
             Expr::Ternary {
-                loperand: Box::new((loperand, l_span)),
+                loperand: Box::new((loperand, l_span.clone())),
                 moperand: Box::new(moperand),
-                roperand: Box::new((roperand, r_span))
+                roperand: Box::new((roperand, r_span.clone()))
             },
             l_span.start..r_span.end
         )

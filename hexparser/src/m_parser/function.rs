@@ -100,7 +100,7 @@ pub fn function_variable_decl<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Span
                             |condition, span| (
                                 Expr::WhileLoop {
                                     condition: Box::new(condition),
-                                    body: Box::new((Expr::Value { val: Value::Null }, span))
+                                    body: Box::new((Expr::Value { val: Value::Null }, span.clone()))
                                 },
                                 span
                             )
@@ -113,7 +113,7 @@ pub fn function_variable_decl<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Span
             |((value_type, name), body), span| {
                 let body = Box::new(match body {
                     Some(expr) => expr,
-                    None => (Expr::Value { val: Value::Null }, span)
+                    None => (Expr::Value { val: Value::Null }, span.clone())
                 });
                 (
                     Expr::Definition {
@@ -142,7 +142,7 @@ pub fn function_variable_decl<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Span
             |(value_type, (names, body)), span| {
                 let body = Box::new(match body {
                     Some(body) => body,
-                    None => (Expr::Value { val: Value::Null }, span),
+                    None => (Expr::Value { val: Value::Null }, span.clone()),
                 });
                 let names_span = names.get(0).unwrap().1.start..names.get(names.len()-1).unwrap().1.end;
 
@@ -237,15 +237,15 @@ pub fn func_arg<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<FuncArgume
         |((value_type, name), body), span| {
             let name = match name {
                 Some(name) => Box::new(name),
-                None => Box::new((Expr::Value { val: Value::Null }, span)),
+                None => Box::new((Expr::Value { val: Value::Null }, span.clone())),
             };
             let body = match body {
                 Some(body) => Box::new(body),
-                None => Box::new((Expr::Value { val: Value::Null }, span)),
+                None => Box::new((Expr::Value { val: Value::Null }, span.clone())),
             };
             let expr = Expr::Definition { value_type, name, body };
 
-            (FuncArgument::Parameter(Box::new((expr, span))), span)
+            (FuncArgument::Parameter(Box::new((expr, span.clone()))), span)
         }
     )(input)
 }
@@ -306,7 +306,7 @@ pub fn function_controlflow_statement<'a>(input: Tokens<'a>) -> IResult<Tokens<'
             |value, span| {
                 let value = match value {
                     Some(val) => val,
-                    None => (Expr::Value { val: Value::Null }, span),
+                    None => (Expr::Value { val: Value::Null }, span.clone()),
                 };
                 let expr = Expr::Return { value: Box::new(value) };
 
@@ -348,7 +348,7 @@ pub fn function_conditional<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanne
          ), span| {
             let alternative = Box::new(match alternative {
                 Some(alt) => alt,
-                None => (Expr::Value { val: Value::Null }, span),
+                None => (Expr::Value { val: Value::Null }, span.clone()),
             });
             (
                 Expr::If {
