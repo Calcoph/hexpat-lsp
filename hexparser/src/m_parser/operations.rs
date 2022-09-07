@@ -16,7 +16,7 @@ use nom::{
     }
 };
 
-use crate::{token::{Spanned, Tokens, Token, Keyword}, combinators::{ignore, to, map_with_span}, m_parser::{value_type_any, parse_type, factor::factor, string_literal}, Expr};
+use crate::{token::{Spanned, Tokens, Token, Keyword}, combinators::{ignore, to, map_with_span}, m_parser::{value_type_any, parse_type, factor::factor, string_literal, BinaryOp}, Expr};
 
 fn cast_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
     choice((
@@ -81,187 +81,189 @@ fn unary_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>>
     ))(input)
 }
 
+fn binary_fold((loperand, l_span): Spanned<Expr>, ((operator, _), (roperand, r_span)): (Spanned<BinaryOp>, Spanned<Expr>)) -> Spanned<Expr>{
+    (
+        Expr::Binary {
+            loperand: Box::new((loperand, l_span)),
+            operator,
+            roperand: Box::new((roperand, r_span))
+        },
+        l_span.start..r_span.end
+    )
+}
+
 fn multiplicative_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    map(
+    let (input, first_expr) = unary_expression(input)?;
+    fold_many0(
         then(
-            unary_expression,
-            fold_many0(
-                preceded(
-                    choice((
-                        just(Token::Op("*")),
-                        just(Token::Op("/")),
-                        just(Token::Op("%"))
-                    )),
-                    unary_expression
-                ),
-                || 0,
-                |a, b| todo!()
-            )
+            choice((
+                to(just(Token::Op("*")), BinaryOp::Mul),
+                to(just(Token::Op("/")), BinaryOp::Div),
+                to(just(Token::Op("%")), BinaryOp::Mod)
+            )),
+            unary_expression
         ),
-        |(a, b)| a // TODO
+        || first_expr,
+        binary_fold
     )(input)
 }
 
 fn additive_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    map(
+    let (input, first_expr) = multiplicative_expression(input)?;
+    fold_many0(
         then(
-            multiplicative_expression,
-            many0(then(
-                choice((
-                    just(Token::Op("+")),
-                    just(Token::Op("-"))
-                )),
-                multiplicative_expression
-            ))
+            choice((
+                to(just(Token::Op("+")), BinaryOp::Add),
+                to(just(Token::Op("-")), BinaryOp::Sub)
+            )),
+            multiplicative_expression
         ),
-        |(a, b)| a // TODO
+        || first_expr,
+        binary_fold
     )(input)
 }
 
 fn shift_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    map(
+    let (input, first_expr) = additive_expression(input)?;
+    fold_many0(
         then(
-            additive_expression,
-            many0(then(
-                choice((
-                    just(Token::Op("<<")),
-                    just(Token::Op(">>"))
-                )),
-                additive_expression
-            ))
+            choice((
+                to(just(Token::Op("<<")), BinaryOp::LShift),
+                to(just(Token::Op(">>")), BinaryOp::RShift)
+            )),
+            additive_expression
         ),
-        |(a, b)| a // TODO
+        || first_expr,
+        binary_fold
     )(input)
 }
 
 fn binary_and_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    map(
+    let (input, first_expr) = shift_expression(input)?;
+    fold_many0(
         then(
-            shift_expression,
-            many0(then(
-                just(Token::Op("&")),
-                shift_expression
-            ))
+            to(just(Token::Op("&")), BinaryOp::BAnd),
+            shift_expression
         ),
-        |(a, b)| a // TODO
+        || first_expr,
+        binary_fold
     )(input)
 }
 
 fn binary_xor_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    map(
+    let (input, first_expr) = binary_and_expression(input)?;
+    fold_many0(
         then(
-            binary_and_expression,
-            many0(then(
-                just(Token::Op("^")),
-                binary_and_expression
-            ))
+            to(just(Token::Op("^")), BinaryOp::BXor),
+            binary_and_expression
         ),
-        |(a, b)| a // TODO
+        || first_expr,
+        binary_fold
     )(input)
 }
 
 fn binary_or_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    map(
+    let (input, first_expr) = binary_xor_expression(input)?;
+    fold_many0(
         then(
-            binary_xor_expression,
-            many0(then(
-                just(Token::Op("|")),
-                binary_xor_expression
-            ))
+            to(just(Token::Op("|")), BinaryOp::BOr),
+            binary_xor_expression
         ),
-        |(a, b)| a // TODO
+        || first_expr,
+        binary_fold
     )(input)
 }
 
 fn relation_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    map(
+    let (input, first_expr) = binary_or_expression(input)?;
+    fold_many0(
         then(
-            binary_or_expression,
-            many0(then(
-                choice((
-                    just(Token::Op(">")),
-                    just(Token::Op("<")),
-                    just(Token::Op(">=")),
-                    just(Token::Op("<="))
-                )),
-                binary_or_expression
-            ))
+            choice((
+                to(just(Token::Op(">")), BinaryOp::Greater),
+                to(just(Token::Op("<")), BinaryOp::Less),
+                to(just(Token::Op(">=")), BinaryOp::GreaterEqual),
+                to(just(Token::Op("<=")), BinaryOp::LessEqual)
+            )),
+            binary_or_expression
         ),
-        |(a, b)| a // TODO
+        || first_expr,
+        binary_fold
     )(input)
 }
 
 fn equality_expression<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    map(
+    let (input, first_expr) = relation_expression(input)?;
+    fold_many0(
         then(
-            relation_expression,
-            many0(then(
-                choice((
-                    just(Token::Op("==")),
-                    just(Token::Op("!="))
-                )),
-                relation_expression
-            ))
+            choice((
+                to(just(Token::Op("==")), BinaryOp::Eq),
+                to(just(Token::Op("!=")), BinaryOp::NotEq)
+            )),
+            relation_expression
         ),
-        |(a, b)| a // TODO
+        || first_expr,
+        binary_fold
     )(input)
 }
 
 fn boolean_and<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    map(
+    let (input, first_expr) = equality_expression(input)?;
+    fold_many0(
         then(
-            equality_expression,
-            many0(then(
-                just(Token::Op("&&")),
-                equality_expression
-            ))
+            to(just(Token::Op("&&")), BinaryOp::LAnd),
+            equality_expression
         ),
-        |(a, b)| a // TODO
+        || first_expr,
+        binary_fold
     )(input)
 }
 
 fn boolean_xor<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    map(
+    let (input, first_expr) = boolean_and(input)?;
+    fold_many0(
         then(
-            boolean_and,
-            many0(then(
-                just(Token::Op("^^")),
-                boolean_and
-            ))
+            to(just(Token::Op("^^")), BinaryOp::LXor),
+            boolean_and
         ),
-        |(a, b)| a // TODO
+        || first_expr,
+        binary_fold
     )(input)
 }
 
 fn boolean_or<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    map(
+    let (input, first_expr) = boolean_xor(input)?;
+    fold_many0(
         then(
-            boolean_xor,
-            many0(then(
-                just(Token::Op("||")),
-                boolean_xor
-            ))
+            to(just(Token::Op("||")), BinaryOp::LOr),
+            boolean_xor
         ),
-        |(a, b)| a // TODO
+        || first_expr,
+        binary_fold
     )(input)
 }
 
 fn ternary_conditional<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    map(
-        then(
-            boolean_or,
-            many0(then(
-                just(Token::Op("?")),
-                then(
-                    boolean_or,
-                    then(
-                        just(Token::Op(":")),
-                        boolean_or
-                    )
+    let (input, first_expr) = boolean_or(input)?;
+    fold_many0(
+        preceded(
+            just(Token::Op("?")),
+            then(
+                boolean_or,
+                preceded(
+                    just(Token::Op(":")),
+                    boolean_or
                 )
-            ))
+            )
         ),
-        |(a, b)| a // TODO
+        || first_expr,
+        |(loperand, l_span), (moperand, (roperand, r_span))| (
+            Expr::Ternary {
+                loperand: Box::new((loperand, l_span)),
+                moperand: Box::new(moperand),
+                roperand: Box::new((roperand, r_span))
+            },
+            l_span.start..r_span.end
+        )
     )(input)
 }
 
