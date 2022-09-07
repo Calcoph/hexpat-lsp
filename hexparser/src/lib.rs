@@ -67,6 +67,7 @@ pub fn type_inference(expr: &Spanned<Expr>, symbol_type_table: &mut HashMap<Rang
         Expr::AttributeArgument {..} => (), // TODO
         Expr::WhileLoop { .. } => (), // TODO
         Expr::ForLoop { .. } => (), // TODO
+        Expr::UnnamedParameter { .. } => (), // TODO
     }
 }
 

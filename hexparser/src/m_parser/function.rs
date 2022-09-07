@@ -16,7 +16,7 @@ use nom::{
     }
 };
 
-use crate::{token::{Spanned, Tokens, Token, Keyword}, combinators::{to, map_with_span, ignore}, m_parser::{ident, parse_type, mathematical_expression, statement_body, FuncArgument, ident_local, Assignment, value_type_auto, BinaryOp, old_member_access, old_namespace_resolution, old_function_call, value_type_any, namespace_resolution}, Expr, Value};
+use crate::{token::{Spanned, Tokens, Token, Keyword, ValueType}, combinators::map_with_span, m_parser::{ident, parse_type, mathematical_expression, statement_body, FuncArgument, ident_local, Assignment, BinaryOp, member_access, function_call, assignment_expr}, Expr, Value};
 
 
 pub fn function_definition<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
@@ -40,7 +40,7 @@ pub fn function_definition<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned
                                     choice((
                                         map_with_span(
                                             separated_pair(
-                                                value_type_auto, // TODO: Maybe don't ignore this
+                                                just(Token::V(ValueType::Auto)), // TODO: Maybe don't ignore this
                                                 then(
                                                     just(Token::Separator('.')),
                                                     then(
@@ -258,105 +258,38 @@ pub fn function_statement<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<
             function_conditional,
             function_while_loop,
             function_for_loop,
-            todo_name,
-            todo_name2,
-            todo_name3
+            function_assignment,
+            function_call,
+            function_variable_decl,
         )),
         many1(just(Token::Separator(';')))
     )(input)
 }
 
-fn todo_name<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+fn function_assignment<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
     map_with_span(
-        then(
-            ident,
-            then(
-                peek(choice((
+        preceded(
+            peek(then(
+                ident,
+                choice((
                     just(Token::Separator('.')),
                     just(Token::Separator('[')),
-                ))),
-                then(
-                    old_member_access,
-                    then(
-                        just(Token::Op("=")),
-                        mathematical_expression
-                    )
-                )
-            )
-        ),
-        |a, span| (a, span) // TODO
-    )
-}
-
-fn todo_name2<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    then(
-        namespace_resolution,
-        choice((
-            map(
-                then(
-                    peek(just(Token::Separator('('))),
-                    old_function_call
-                ),
-                |(_, a)| a
-            ),
-            function_variable_decl
-        ))
-    )
-}
-
-fn todo_name3<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    then(
-        peek(choice((
-            ignore(just(Token::K(Keyword::BigEndian))),
-            ignore(just(Token::K(Keyword::LittleEndian))),
-            ignore(value_type_any)
-        ))),
-        function_variable_decl
-    )
-}
-
-fn assignment_expr<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    map_with_span(
-        then(
-            choice((
-                ident_local,
-                map_with_span(
-                    just(Token::Op("$")),
-                    |_, span| (Expr::Local { name: (String::from("$"), span) }, span)
-                )
+                ))
             )),
-            then(
-                opt(choice((
-                    to(just(Token::Op("+")), Assignment::Add),
-                    to(just(Token::Op("-")), Assignment::Sub),
-                    to(just(Token::Op("*")), Assignment::Mul),
-                    to(just(Token::Op("/")), Assignment::Div),
-                    to(just(Token::Op("%")), Assignment::Mod),
-                    to(just(Token::Op("<<")), Assignment::LShift),
-                    to(just(Token::Op(">>")), Assignment::RShift),
-                    to(just(Token::Op("|")), Assignment::BOr),
-                    to(just(Token::Op("&")), Assignment::BAnd),
-                    to(just(Token::Op("^")), Assignment::BXor),
-                ))),
-                preceded(
-                    just(Token::Op("=")),
-                    mathematical_expression
-                )
+            separated_pair(
+                member_access,
+                just(Token::Op("=")),
+                mathematical_expression
             )
         ),
-        |(loperand, (assignment, roperand)), span| {
-            let assignment = match assignment {
-                Some((ass, _)) => ass,
-                None => Assignment::Just
-            };
-            let expr = Expr::Binary {
+        |(loperand, roperand), span| (
+            Expr::Binary {
                 loperand: Box::new(loperand),
-                operation: BinaryOp::Assign(assignment),
-                roperand: Box::new(roperand),
-            };
-    
-            (expr, span)
-        }
+                operation: BinaryOp::Assign(Assignment::Just),
+                roperand: Box::new(roperand)
+            },
+            span
+        )
     )(input)
 }
 

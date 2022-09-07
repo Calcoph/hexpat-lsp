@@ -32,7 +32,7 @@ use nom::{
 };
 use nom_supreme::error::{GenericErrorTree, ErrorTree};
 
-use crate::{recovery_err::{IResult, StrSpan, RecoveredError, ParseState, ToRange}, token::{TokSpan, FromStrSpan, Token, PreProc, Keyword, BuiltFunc}};
+use crate::{recovery_err::{IResult, StrSpan, RecoveredError, ParseState, ToRange}, token::{TokSpan, FromStrSpan, Token, PreProc, Keyword, BuiltFunc, ValueType}};
 
 fn hex_num<'a>(input: StrSpan<'a>) -> IResult<StrSpan, TokSpan> {
     map(
@@ -369,6 +369,30 @@ fn lexer<'a>(input: StrSpan<'a>) -> IResult<StrSpan, Vec<TokSpan>> {
                 "sizeof" => Token::B(BuiltFunc::SizeOf),
                 "true" => Token::Bool(true),
                 "false" => Token::Bool(false),
+                "u8" => Token::V(ValueType::U8),
+                "s8" => Token::V(ValueType::S8),
+                "u16" => Token::V(ValueType::U16),
+                "s16" => Token::V(ValueType::S16),
+                "u24" => Token::V(ValueType::U24),
+                "s24" => Token::V(ValueType::S24),
+                "u32" => Token::V(ValueType::U32),
+                "s32" => Token::V(ValueType::S32),
+                "u48" => Token::V(ValueType::U48),
+                "s48" => Token::V(ValueType::S48),
+                "u64" => Token::V(ValueType::U64),
+                "s64" => Token::V(ValueType::S64),
+                "u96" => Token::V(ValueType::U96),
+                "s96" => Token::V(ValueType::S96),
+                "u128" => Token::V(ValueType::U128),
+                "s128" => Token::V(ValueType::S128),
+                "float" => Token::V(ValueType::Float),
+                "double" => Token::V(ValueType::Double),
+                "char" => Token::V(ValueType::Character),
+                "char16" => Token::V(ValueType::Character16),
+                "bool" => Token::V(ValueType::Boolean),
+                "str" => Token::V(ValueType::String),
+                "padding" => Token::V(ValueType::Padding),
+                "auto" => Token::V(ValueType::Auto),
                 s => Token::Ident(s),
             };
             let state = s.extra.clone();
