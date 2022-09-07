@@ -352,7 +352,7 @@ pub fn function_conditional<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanne
             });
             (
                 Expr::If {
-                    test_: Box::new(test_),
+                    test: Box::new(test_),
                     consequent: Box::new(consequent),
                     alternative
                 },

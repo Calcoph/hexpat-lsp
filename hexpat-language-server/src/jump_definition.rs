@@ -28,15 +28,15 @@ pub fn get_definition_of_expr(
 ) -> (bool, Option<Spanned<String>>) {
     match &expr.0 {
         Expr::Error => (true, None),
-        Expr::Value(_) => (true, None),
+        Expr::Value { .. } => (true, None),
         // Expr::List(exprs) => exprs
         //     .iter()
         //     .for_each(|expr| get_definition(expr, definition_ass_list)),
-        Expr::Local(local) => {
-            if ident_offset >= local.1.start && ident_offset < local.1.end {
+        Expr::Local { name } => {
+            if ident_offset >= name.1.start && ident_offset < name.1.end {
                 let index = definition_ass_list
                     .iter()
-                    .position(|decl| decl.0 == local.0);
+                    .position(|decl| decl.0 == name.0);
                 (
                     false,
                     index.map(|i| definition_ass_list.get(i).unwrap().clone()),
@@ -45,23 +45,23 @@ pub fn get_definition_of_expr(
                 (true, None)
             }
         }
-        Expr::Binary(lhs, _op, rhs) => {
-            match get_definition_of_expr(lhs, definition_ass_list.clone(), ident_offset) {
+        Expr::Binary { loperand, operator, roperand } => {
+            match get_definition_of_expr(loperand, definition_ass_list.clone(), ident_offset) {
                 (true, None) => {
-                    get_definition_of_expr(rhs, definition_ass_list.clone(), ident_offset)
+                    get_definition_of_expr(roperand, definition_ass_list.clone(), ident_offset)
                 }
                 (false, None) => (false, None),
                 (true, Some(value)) | (false, Some(value)) => (false, Some(value)),
             }
         }
-        Expr::Call(callee, args) => {
-            match get_definition_of_expr(callee, definition_ass_list.clone(), ident_offset) {
+        Expr::Call { func_name, arguments } => {
+            match get_definition_of_expr(func_name, definition_ass_list.clone(), ident_offset) {
                 (true, None) => {}
                 (true, Some(value)) => return (false, Some(value)),
                 (false, None) => return (false, None),
                 (false, Some(value)) => return (false, Some(value)),
             }
-            for expr in &args.0 {
+            for expr in &arguments.0 {
                 match get_definition_of_expr(&expr, definition_ass_list.clone(), ident_offset) {
                     (true, None) => continue,
                     (true, Some(value)) => return (false, Some(value)),
@@ -71,7 +71,7 @@ pub fn get_definition_of_expr(
             }
             (true, None)
         }
-        Expr::If(test, consequent, alternative) => {
+        Expr::If { test, consequent, alternative } => {
             match get_definition_of_expr(test, definition_ass_list.clone(), ident_offset) {
                 (true, None) => {}
                 (true, Some(value)) => return (false, Some(value)),
@@ -91,25 +91,32 @@ pub fn get_definition_of_expr(
                 (false, Some(value)) => return (false, Some(value)),
             }
         }
-        Expr::Definition(_, (name, name_span), lhs) => {
-            get_definition_of_expr(lhs, definition_ass_list.clone(), ident_offset)
+        Expr::Definition { value_type, name, body } => {
+            get_definition_of_expr(body, definition_ass_list.clone(), ident_offset)
         },
-        Expr::BitFieldEntry(_, _) => (false, None), // TODO
-        Expr::EnumEntry(_, _) => (false, None), // TODO
-        Expr::Ternary(_, _, _) => (false, None), // TODO
-        Expr::NamespaceAccess(_, _) => (false, None), // TODO
         Expr::Dollar => (false, None), // TODO
-        Expr::Unary(_, _) => (false, None), // TODO
-        Expr::Using(_) => (false, None), // TODO
+        Expr::ExprList { list } => (false, None), // TODO
+        Expr::UnnamedParameter { type_ } => (false, None), // TODO
+        Expr::Unary { operation, operand } => (false, None), // TODO
+        Expr::Ternary { loperand, moperand, roperand } => (false, None), // TODO
+        Expr::BitFieldEntry { name, length } => (false, None), // TODO
+        Expr::EnumEntry { name, value } => (false, None), // TODO
+        Expr::NamespaceAccess { previous, name } => (false, None), // TODO
+        Expr::Using { new_name, old_name } => (false, None), // TODO
+        Expr::Return { value } => (false, None), // TODO
         Expr::Continue => (false, None), // TODO
         Expr::Break => (false, None), // TODO
-        Expr::ExprList(_) => (false, None), // TODO
-        Expr::Func(_, _, _) => (false, None), // TODO
-        Expr::Struct(_, _) => (false, None), // TODO
-        Expr::Namespace(_, _) => (false, None), // TODO
-        Expr::Enum(_, _, _) => (false, None), // TODO
-        Expr::Bitfield(_, _) => (false, None), // TODO
-        Expr::Return(_) => (false, None), // TODO
-        Expr::Access(_, _) => (false, None), // TODO
+        Expr::Func { name, args, body } => (false, None), // TODO
+        Expr::Struct { name, body } => (false, None), // TODO
+        Expr::Namespace { name, body } => (false, None), // TODO
+        Expr::Enum { name, value_type, body } => (false, None), // TODO
+        Expr::Bitfield { name, body } => (false, None), // TODO
+        Expr::Access { item, member } => (false, None), // TODO
+        Expr::Attribute { arguments } => (false, None), // TODO
+        Expr::AttributeArgument { name, value } => (false, None), // TODO
+        Expr::WhileLoop { condition, body } => (false, None), // TODO
+        Expr::ForLoop { var_init, var_test, var_change, body } => (false, None), // TODO
+        Expr::Cast { cast_operator, operand } => (false, None), // TODO
+        Expr::Union { name, body } => (false, None), // TODO
     }
 }

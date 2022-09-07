@@ -19,33 +19,46 @@ pub fn semantic_token_from_expr(
 ) {
     match &expr.0 {
         Expr::Error => {}
-        Expr::Value(_) => {}
-        Expr::Local((_, span)) => {
+        Expr::Value { .. } => {}
+        Expr::Local { name: (_, name_span) } => {
             semantic_tokens.push(ImCompleteSemanticToken {
-                start: span.start,
-                length: span.len(),
+                start: name_span.start,
+                length: name_span.len(),
                 token_type: LEGEND_TYPE
                     .iter()
                     .position(|item| item == &SemanticTokenType::VARIABLE)
                     .unwrap(),
             });
         }
-        Expr::Binary(lhs, _op, rhs) => {
-            semantic_token_from_expr(lhs, semantic_tokens);
-            semantic_token_from_expr(rhs, semantic_tokens);
+        Expr::Binary { loperand, operator, roperand } => {
+            semantic_token_from_expr(loperand, semantic_tokens);
+            semantic_token_from_expr(roperand, semantic_tokens);
         }
-        Expr::Call(expr, params) => {
+        Expr::Call { func_name, arguments } => {
             semantic_token_from_expr(expr, semantic_tokens);
-            params.0.iter().for_each(|p| {
+            arguments.0.iter().for_each(|p| {
                 semantic_token_from_expr(p, semantic_tokens);
             });
         }
-        Expr::If(test, consequent, alternative) => {
+        Expr::If { test, consequent, alternative } => {
             semantic_token_from_expr(test, semantic_tokens);
             semantic_token_from_expr(consequent, semantic_tokens);
             semantic_token_from_expr(alternative, semantic_tokens);
         }
-        Expr::Definition((_, type_span), (_, name_span), rhs) => {
+        Expr::Definition { value_type: (_, type_span), name, body } => {
+            match &name.0 {
+                Expr::Local { name: (_, name_span) } => {
+                    semantic_tokens.push(ImCompleteSemanticToken {
+                        start: name_span.start,
+                        length: name_span.len(),
+                        token_type: LEGEND_TYPE
+                            .iter()
+                            .position(|item| item == &SemanticTokenType::VARIABLE)
+                            .unwrap(),
+                    });     
+                },
+                _ => () // TODO
+            }
             semantic_tokens.push(ImCompleteSemanticToken {
                 start: type_span.start,
                 length: type_span.len(),
@@ -54,20 +67,12 @@ pub fn semantic_token_from_expr(
                     .position(|item| item == &SemanticTokenType::TYPE)
                     .unwrap(),
             });
-            semantic_tokens.push(ImCompleteSemanticToken {
-                start: name_span.start,
-                length: name_span.len(),
-                token_type: LEGEND_TYPE
-                    .iter()
-                    .position(|item| item == &SemanticTokenType::VARIABLE)
-                    .unwrap(),
-            });
-            semantic_token_from_expr(rhs, semantic_tokens)
+            semantic_token_from_expr(body, semantic_tokens)
         },
-        Expr::BitFieldEntry((_, name_span), e1) => {
-            semantic_token_from_expr(e1, semantic_tokens);
+        Expr::BitFieldEntry { name, length } => {
+            semantic_token_from_expr(length, semantic_tokens);
         },// TODO
-        Expr::EnumEntry((_, name_span), e1) => {
+        Expr::EnumEntry { name: (_, name_span), value } => {
             semantic_tokens.push(ImCompleteSemanticToken {
                 start: name_span.start,
                 length: name_span.len(),
@@ -76,15 +81,15 @@ pub fn semantic_token_from_expr(
                     .position(|item| item == &SemanticTokenType::ENUM_MEMBER)
                     .unwrap(),
             });
-            semantic_token_from_expr(e1, semantic_tokens);
+            semantic_token_from_expr(value, semantic_tokens);
         },
-        Expr::Ternary(e1, e2, e3) => {
-            semantic_token_from_expr(e1, semantic_tokens);
-            semantic_token_from_expr(e2, semantic_tokens);
-            semantic_token_from_expr(e3, semantic_tokens)
+        Expr::Ternary { loperand, moperand, roperand } => {
+            semantic_token_from_expr(loperand, semantic_tokens);
+            semantic_token_from_expr(moperand, semantic_tokens);
+            semantic_token_from_expr(roperand, semantic_tokens)
         },
-        Expr::NamespaceAccess(e, (_, name_span)) => {
-            semantic_token_from_expr(e, semantic_tokens)
+        Expr::NamespaceAccess { previous, name } => {
+            semantic_token_from_expr(previous, semantic_tokens)
         }, // TODO
         Expr::Dollar => semantic_tokens.push(ImCompleteSemanticToken {
             start: expr.1.start,
@@ -94,11 +99,11 @@ pub fn semantic_token_from_expr(
                 .position(|item| item == &SemanticTokenType::new("dollar"))
                 .unwrap(),
         }),
-        Expr::Unary(_, e) => {
-            semantic_token_from_expr(e, semantic_tokens)
+        Expr::Unary { operation, operand } => {
+            semantic_token_from_expr(operand, semantic_tokens)
         },
-        Expr::Using(e) => {
-            semantic_token_from_expr(e, semantic_tokens)
+        Expr::Using { new_name, old_name } => {
+            //TODO
         },
         Expr::Continue => semantic_tokens.push(ImCompleteSemanticToken {
             start: expr.1.start,
@@ -116,12 +121,12 @@ pub fn semantic_token_from_expr(
                 .position(|item| item == &SemanticTokenType::KEYWORD)
                 .unwrap(),
         }),
-        Expr::ExprList(exps) => {
-            for expr in exps.as_ref() {
+        Expr::ExprList { list } => {
+            for expr in list {
                 semantic_token_from_expr(expr, semantic_tokens)
             }
         },
-        Expr::Func((_, name_span), args, e) => {
+        Expr::Func { name: (_, name_span), args, body } => {
             semantic_tokens.push(ImCompleteSemanticToken {
                 start: name_span.start,
                 length: name_span.len(),
@@ -130,9 +135,9 @@ pub fn semantic_token_from_expr(
                     .position(|item| item == &SemanticTokenType::FUNCTION)
                     .unwrap(),
             });
-            semantic_token_from_expr(e, semantic_tokens)
+            semantic_token_from_expr(body, semantic_tokens)
         }, // TODO
-        Expr::Struct((_, name_span), e) => {
+        Expr::Struct { name: (_, name_span), body } => {
             semantic_tokens.push(ImCompleteSemanticToken {
                 start: name_span.start,
                 length: name_span.len(),
@@ -141,20 +146,20 @@ pub fn semantic_token_from_expr(
                     .position(|item| item == &SemanticTokenType::STRUCT)
                     .unwrap(),
             });
-            semantic_token_from_expr(e, semantic_tokens)
+            semantic_token_from_expr(body, semantic_tokens)
         },
-        Expr::Namespace((_, name_span), e) => {
-            semantic_tokens.push(ImCompleteSemanticToken {
+        Expr::Namespace { name, body } => {
+            /* semantic_tokens.push(ImCompleteSemanticToken {
                 start: name_span.start,
                 length: name_span.len(),
                 token_type: LEGEND_TYPE
                     .iter()
                     .position(|item| item == &SemanticTokenType::NAMESPACE)
                     .unwrap(),
-            });
-            semantic_token_from_expr(e, semantic_tokens)
+            }); */ // TODO
+            semantic_token_from_expr(body, semantic_tokens)
         },
-        Expr::Enum((_, name_span), e, type_) => {
+        Expr::Enum { name: (_, name_span), value_type, body } => {
             semantic_tokens.push(ImCompleteSemanticToken {
                 start: name_span.start,
                 length: name_span.len(),
@@ -163,9 +168,9 @@ pub fn semantic_token_from_expr(
                     .position(|item| item == &SemanticTokenType::ENUM)
                     .unwrap(),
             });
-            semantic_token_from_expr(e, semantic_tokens)
+            semantic_token_from_expr(body, semantic_tokens)
         }, // TODO
-        Expr::Bitfield((_, name_span), e) => {
+        Expr::Bitfield { name: (_, name_span), body } => {
             semantic_tokens.push(ImCompleteSemanticToken {
                 start: name_span.start,
                 length: name_span.len(),
@@ -174,9 +179,16 @@ pub fn semantic_token_from_expr(
                     .position(|item| item == &SemanticTokenType::new("bitfield"))
                     .unwrap(),
             });
-            semantic_token_from_expr(e, semantic_tokens)
+            semantic_token_from_expr(body, semantic_tokens)
         },
-        Expr::Return(_) => (), // TODO
-        Expr::Access(_, _) => (), // TODO
+        Expr::UnnamedParameter { type_ } => (), // TODO
+        Expr::Return { value } => (), // TODO
+        Expr::Access { item, member } => (), // TODO
+        Expr::Attribute { arguments } => (), // TODO
+        Expr::AttributeArgument { name, value } => (), // TODO
+        Expr::WhileLoop { condition, body } => (), // TODO
+        Expr::ForLoop { var_init, var_test, var_change, body } => (), // TODO
+        Expr::Cast { cast_operator, operand } => (), // TODO
+        Expr::Union { name, body } => (), // TODO
     }
 }

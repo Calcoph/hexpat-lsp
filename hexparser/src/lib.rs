@@ -41,7 +41,7 @@ pub fn type_inference(expr: &Spanned<Expr>, symbol_type_table: &mut HashMap<Rang
         Expr::Local {..} => {}
         Expr::Binary {..} => {}
         Expr::Call {..} => {}
-        Expr::If { test_, consequent, alternative } => {
+        Expr::If { test: test_, consequent, alternative } => {
             type_inference(consequent, symbol_type_table);
             type_inference(alternative, symbol_type_table);
         },

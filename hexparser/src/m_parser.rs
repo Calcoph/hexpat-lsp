@@ -83,7 +83,7 @@ pub enum Expr {
         arguments: Spanned<Vec<Spanned<Self>>>
     },
     If { // TODO: See what is up with unkown
-        test_: Box<Spanned<Self>>,
+        test: Box<Spanned<Self>>,
         consequent: Box<Spanned<Self>>,
         alternative: Box<Spanned<Self>>
     },
@@ -508,7 +508,7 @@ fn conditional<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
             });
             (
                 Expr::If {
-                    test_: Box::new(test_),
+                    test: Box::new(test_),
                     consequent: Box::new(consequent),
                     alternative
                 },
@@ -1039,7 +1039,7 @@ fn bitfield_conditional<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Ex
             });
             (
                 Expr::If {
-                    test_: Box::new(test_),
+                    test: Box::new(test_),
                     consequent: Box::new(consequent),
                     alternative
                 },

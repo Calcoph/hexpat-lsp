@@ -100,29 +100,29 @@ pub fn get_completion_of(
 ) -> bool {
     match &expr.0 {
         Expr::Error => true,
-        Expr::Value(_) => true,
+        Expr::Value { .. } => true,
         // Expr::List(exprs) => exprs
         //     .iter()
         //     .for_each(|expr| get_definition(expr, definition_ass_list)),
-        Expr::Local(local) => {
-            if ident_offset >= local.1.start && ident_offset < local.1.end {
+        Expr::Local { name } => {
+            if ident_offset >= name.1.start && ident_offset < name.1.end {
                 false
             } else {
                 true
             }
         }
-        Expr::Binary(lhs, _op, rhs) => {
-            match get_completion_of(lhs, definition_map, ident_offset) {
-                true => get_completion_of(rhs, definition_map, ident_offset),
+        Expr::Binary { loperand, operator, roperand } => {
+            match get_completion_of(loperand, definition_map, ident_offset) {
+                true => get_completion_of(roperand, definition_map, ident_offset),
                 false => false,
             }
         },
-        Expr::Call(callee, args) => {
-            match get_completion_of(callee, definition_map, ident_offset) {
+        Expr::Call { func_name, arguments } => {
+            match get_completion_of(func_name, definition_map, ident_offset) {
                 true => {}
                 false => return false,
             }
-            for expr in &args.0 {
+            for expr in &arguments.0 {
                 match get_completion_of(&expr, definition_map, ident_offset) {
                     true => continue,
                     false => return false,
@@ -130,7 +130,7 @@ pub fn get_completion_of(
             }
             true
         }
-        Expr::If(test, consequent, alternative) => {
+        Expr::If { test, consequent, alternative } => {
             match get_completion_of(test, definition_map, ident_offset) {
                 true => {}
                 false => return false,
@@ -141,29 +141,70 @@ pub fn get_completion_of(
             }
             get_completion_of(alternative, definition_map, ident_offset)
         }
-        Expr::Definition(_, name, lhs) => {
-            definition_map.insert(
-                name.0.clone(),
-                ImCompleteCompletionItem::Variable(name.0.clone()),
-            );
-            get_completion_of(lhs, definition_map, ident_offset)
+        Expr::Definition { value_type, name, body } => {
+            match &name.0 {
+                Expr::Error => todo!(),
+                Expr::Value { val } => todo!(),
+                Expr::Dollar => todo!(),
+                Expr::ExprList { list } => todo!(),
+                Expr::UnnamedParameter { type_ } => todo!(),
+                Expr::Local { name } => {
+                    definition_map.insert(
+                        name.0.clone(),
+                        ImCompleteCompletionItem::Variable(name.0.clone()),
+                    );
+                },
+                Expr::Unary { operation, operand } => todo!(),
+                Expr::Binary { loperand, operator, roperand } => todo!(),
+                Expr::Ternary { loperand, moperand, roperand } => todo!(),
+                Expr::Call { func_name, arguments } => todo!(),
+                Expr::If { test, consequent, alternative } => todo!(),
+                Expr::Definition { value_type, name, body } => todo!(),
+                Expr::BitFieldEntry { name, length } => todo!(),
+                Expr::EnumEntry { name, value } => todo!(),
+                Expr::NamespaceAccess { previous, name } => todo!(),
+                Expr::Using { new_name, old_name } => todo!(),
+                Expr::Return { value } => todo!(),
+                Expr::Continue => todo!(),
+                Expr::Break => todo!(),
+                Expr::Func { name, args, body } => todo!(),
+                Expr::Struct { name, body } => todo!(),
+                Expr::Namespace { name, body } => todo!(),
+                Expr::Enum { name, value_type, body } => todo!(),
+                Expr::Bitfield { name, body } => todo!(),
+                Expr::Access { item, member } => todo!(),
+                Expr::Attribute { arguments } => todo!(),
+                Expr::AttributeArgument { name, value } => todo!(),
+                Expr::WhileLoop { condition, body } => todo!(),
+                Expr::ForLoop { var_init, var_test, var_change, body } => todo!(),
+                Expr::Cast { cast_operator, operand } => todo!(),
+                Expr::Union { name, body } => todo!(),
+            }
+            get_completion_of(body, definition_map, ident_offset)
         },
-        Expr::BitFieldEntry(_, _) => false, // TODO
-        Expr::EnumEntry(_, _) => false, // TODO
-        Expr::Ternary(_, _, _) => false, // TODO
-        Expr::NamespaceAccess(_, _) => false, // TODO
         Expr::Dollar => false, // TODO
-        Expr::Unary(_, _) => false, // TODO
-        Expr::Using(_) => false, // TODO
+        Expr::ExprList { list } => false, // TODO
+        Expr::UnnamedParameter { type_ } => false, // TODO
+        Expr::Unary { operation, operand } => false, // TODO
+        Expr::Ternary { loperand, moperand, roperand } => false, // TODO
+        Expr::BitFieldEntry { name, length } => false, // TODO
+        Expr::EnumEntry { name, value } => false, // TODO
+        Expr::NamespaceAccess { previous, name } => false, // TODO
+        Expr::Using { new_name, old_name } => false, // TODO
+        Expr::Return { value } => false, // TODO
         Expr::Continue => false, // TODO
         Expr::Break => false, // TODO
-        Expr::ExprList(_) => false, // TODO
-        Expr::Func(_, _, _) => false, // TODO
-        Expr::Struct(_, _) => false, // TODO
-        Expr::Namespace(_, _) => false, // TODO
-        Expr::Enum(_, _, _) => false, // TODO
-        Expr::Bitfield(_, _) => false, // TODO
-        Expr::Return(_) => false, // TODO
-        Expr::Access(_, _) => false, // TODO
+        Expr::Func { name, args, body } => false, // TODO
+        Expr::Struct { name, body } => false, // TODO
+        Expr::Namespace { name, body } => false, // TODO
+        Expr::Enum { name, value_type, body } => false, // TODO
+        Expr::Bitfield { name, body } => false, // TODO
+        Expr::Access { item, member } => false, // TODO
+        Expr::Attribute { arguments } => false, // TODO
+        Expr::AttributeArgument { name, value } => false, // TODO
+        Expr::WhileLoop { condition, body } => false, // TODO
+        Expr::ForLoop { var_init, var_test, var_change, body } => false, // TODO
+        Expr::Cast { cast_operator, operand } => false, // TODO
+        Expr::Union { name, body } => false, // TODO
     }
 }
