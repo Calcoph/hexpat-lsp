@@ -68,6 +68,8 @@ pub fn type_inference(expr: &Spanned<Expr>, symbol_type_table: &mut HashMap<Rang
         Expr::WhileLoop { .. } => (), // TODO
         Expr::ForLoop { .. } => (), // TODO
         Expr::UnnamedParameter { .. } => (), // TODO
+        Expr::Cast { .. } => (), // TODO
+        Expr::Union { .. } => (), // TODO
     }
 }
 

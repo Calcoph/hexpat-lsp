@@ -70,7 +70,7 @@ pub enum Expr {
     },
     Binary {
         loperand: Box<Spanned<Self>>,
-        operation: BinaryOp,
+        operator: BinaryOp,
         roperand: Box<Spanned<Self>>
     },
     Ternary {
@@ -658,7 +658,7 @@ fn assignment_expr<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> 
             };
             let expr = Expr::Binary {
                 loperand: Box::new(loperand),
-                operation: BinaryOp::Assign(assignment),
+                operator: BinaryOp::Assign(assignment),
                 roperand: Box::new(roperand),
             };
     
@@ -697,80 +697,88 @@ fn array_declr<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Option<Spanned<Expr
     )(input)
 }
 
+fn member_declaration<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+    then(
+        peek(choice((
+            ignore(just(Token::K(Keyword::BigEndian))),
+            ignore(just(Token::K(Keyword::LittleEndian))),
+            ignore(value_type_any),
+            ignore(ident)
+        ))),
+        choice((
+            function_call,
+            choice((
+                then(
+                    namespace_resolution,
+                    then(
+                        array_declr,
+                        opt(preceded(
+                            just(Token::Op("@")),
+                            mathematical_expression
+                        ))
+                    )
+                ),
+                then(
+                    namespace_resolution,
+                    choice((
+                        preceded(
+                            just(Token::Op("@")),
+                            mathematical_expression
+                        ),
+                        map_with_span(
+                            separated_list1(
+                                just(Token::Separator(',')),
+                                ident_local
+                            ),
+                            |list, span| (Expr::ExprList { list }, span)
+                        )
+                    ))
+                ),
+                separated_pair(
+                    parse_type,
+                    just(Token::Op("*")),
+                    then(
+                        separated_pair(
+                            ident,
+                            just(Token::Op(":")),
+                            pointer_size_type
+                        ),
+                        opt(preceded(
+                            just(Token::Op("@")),
+                            mathematical_expression
+                        ))
+                    )
+                ),
+                separated_pair(
+                    parse_type,
+                    just(Token::Op("*")),
+                    then(
+                        ident,
+                        then(
+                            array_declr,
+                            preceded(
+                                just(Token::Op(":")),
+                                then(
+                                    pointer_size_type,
+                                    opt(preceded(
+                                        just(Token::Op("@")),
+                                        mathematical_expression
+                                    ))
+                                )
+                            )
+                        )
+                    )
+                )
+            ))
+        ))
+    )(input)
+}
+
 fn member<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
     terminated(
         choice((
             assignment_expr,
-            then(
-                peek(choice((
-                    ignore(just(Token::K(Keyword::BigEndian))),
-                    ignore(just(Token::K(Keyword::LittleEndian))),
-                    ignore(value_type_any),
-                    ignore(ident)
-                ))),
-                choice((
-                    function_call,
-                    then(
-                        opt(namespace_resolution),
-                        choice((
-                            then(
-                                ident,
-                                then(
-                                    array_declr,
-                                    opt(preceded(
-                                        just(Token::Op("@")),
-                                        mathematical_expression
-                                    ))
-                                )
-                            ),
-                            choice((
-                                separated_pair(
-                                    ident,
-                                    just(Token::Op("@")),
-                                    mathematical_expression
-                                ),
-                                separated_list1(
-                                    just(Token::Separator(',')),
-                                    ident_local
-                                )
-                            )),
-                            then(
-                                just(Token::Op("*")),
-                                then(
-                                    separated_pair(
-                                        ident,
-                                        just(Token::Op(":")),
-                                        pointer_size_type
-                                    ),
-                                    opt(preceded(
-                                        just(Token::Op("@")),
-                                        mathematical_expression
-                                    ))
-                                )
-                            ),
-                            then(
-                                just(Token::Op("*")),
-                                then(
-                                    ident,
-                                    then(
-                                        array_declr,
-                                        preceded(
-                                            just(Token::Op(":")),
-                                            then(
-                                                pointer_size_type,
-                                                opt(preceded(
-                                                    just(Token::Op("@")),
-                                                    mathematical_expression
-                                                ))
-                                            )
-                                        )
-                                    )
-                                )
-                            )
-                        ))
-                    )
-                ))
-            ),
+            member_declaration,
             preceded(
                 just(Token::V(ValueType::Padding)),
                 delimited(
@@ -1134,72 +1142,73 @@ fn parse_namespace<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> 
 }
 
 fn placement<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    choice((
-        array_variable_placement,
-        map_with_span(
-            then(
-                ident_local,
-                opt(choice((
-                    map(
-                        preceded(
-                            just(Token::Op("@")),
-                            mathematical_expression
+    then(
+        parse_type,
+        choice((
+            array_variable_placement,
+            map_with_span(
+                then(
+                    ident_local,
+                    opt(choice((
+                        map(
+                            preceded(
+                                just(Token::Op("@")),
+                                mathematical_expression
+                            ),
+                            |a| Some(a)
                         ),
-                        |a| Some(a)
-                    ),
-                    map(just(Token::K(Keyword::In)), |_| None),
-                    map(just(Token::K(Keyword::Out)), |_| None),
-                )))
-            ),
-            |(name, body), span| {
-                let body = Box::new(match body {
-                    Some(body) => match body {
-                        Some(body) => body,
+                        map(just(Token::K(Keyword::In)), |_| None),
+                        map(just(Token::K(Keyword::Out)), |_| None),
+                    )))
+                ),
+                |(name, body), span| {
+                    let body = Box::new(match body {
+                        Some(body) => match body {
+                            Some(body) => body,
+                            None => (Expr::Value { val: Value::Null }, span),
+                        },
                         None => (Expr::Value { val: Value::Null }, span),
-                    },
-                    None => (Expr::Value { val: Value::Null }, span),
-                });
-
-                (
-                    Expr::Definition {
-                        value_type: (HexTypeDef {endianness: Endianness::Unkown, name: (HexType::Null, span)}, span),
-                        name: Box::new(name),
-                        body
-                    },
-                    span
-                )
-            }
-        ),
-        map(
-            then(
-                then(
-                    then(
-                        just(Token::Op("*")),
-                        ident
-                    ),
-                    just(Token::Op(":"))
-                ),
-                then(
-                    pointer_size_type,
-                    mathematical_expression
-                )
+                    });
+    
+                    (
+                        Expr::Definition {
+                            value_type: (HexTypeDef {endianness: Endianness::Unkown, name: (HexType::Null, span)}, span),
+                            name: Box::new(name),
+                            body
+                        },
+                        span
+                    )
+                }
             ),
-            |(a, b)| b // TODO
-        ),
-        map(
-            then(
-                then(
-                    then(
-                        just(Token::Op("*")),
-                        ident
-                    ),
-                    just(Token::Separator('{'))
+            map(
+                preceded(
+                    just(Token::Op("*")),
+                    separated_pair(
+                        ident,
+                        just(Token::Op(":")),
+                        then(
+                            pointer_size_type,
+                            mathematical_expression
+                        )
+                    )
                 ),
-                pointer_array_variable_placement
+                |(a, (b, c))| b // TODO
             ),
-            |(a, b)| b // TODO
-        )
-    ))(input)
+            map(
+                then(
+                    just(Token::Op("*")),
+                    then(
+                        ident,
+                        then(
+                            just(Token::Separator('{')),
+                            pointer_array_variable_placement
+                        )
+                    )
+                ),
+                |(a, b)| b // TODO
+            )
+        ))
+    )(input)
 }
 
 fn statements_choice<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
@@ -1223,44 +1232,29 @@ fn statements_choice<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>
                 span
             )
         ),
-        map(
-            then(
-                peek(choice((
-                        ignore(just(Token::K(Keyword::BigEndian))),
-                        ignore(just(Token::K(Keyword::LittleEndian))),
-                        ignore(value_type_any),
-                ))),
-                placement // TODO: Assign the parsed type to the type-less definition returned by placement
-            ),
-            |(_, a)| a
+        preceded(
+            peek(choice((
+                    ignore(just(Token::K(Keyword::BigEndian))),
+                    ignore(just(Token::K(Keyword::LittleEndian))),
+                    ignore(value_type_any),
+            ))),
+            placement // TODO: Assign the parsed type to the type-less definition returned by placement
         ),
-        map(
-            preceded(
-                peek(then(
-                    ident,
-                    then(
-                        not(just(Token::Op("="))),
-                        then(
-                            not(just(Token::Separator('.'))),
-                            not(just(Token::Separator('[')))
-                        )
-                    )
-                )),
+        preceded(
+            peek(then(
+                ident,
                 then(
-                    namespace_resolution,
-                    choice((
-                        map(
-                            then(
-                                peek(just(Token::Separator('('))),
-                                old_function_call
-                            ),
-                            |(_, b)| b
-                        ),
-                        placement // TODO: Assign the parsed type to the type-less definition returned by placement
-                    ))
+                    not(just(Token::Op("="))),
+                    then(
+                        not(just(Token::Separator('.'))),
+                        not(just(Token::Separator('[')))
+                    )
                 )
-            ),
-            |(a, b)| b // TODO
+            )),
+            choice((
+                function_call,
+                placement
+            ))
         ),
         parse_struct,
         parse_union,

@@ -285,7 +285,7 @@ fn function_assignment<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Exp
         |(loperand, roperand), span| (
             Expr::Binary {
                 loperand: Box::new(loperand),
-                operation: BinaryOp::Assign(Assignment::Just),
+                operator: BinaryOp::Assign(Assignment::Just),
                 roperand: Box::new(roperand)
             },
             span
