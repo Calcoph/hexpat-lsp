@@ -96,6 +96,7 @@ impl LanguageServer for Backend {
         &self,
         params: SemanticTokensParams,
     ) -> Result<Option<SemanticTokensResult>> {
+        dbg!("semantic_token_full");
         let uri = params.text_document.uri.to_string();
         self.client
             .log_message(MessageType::LOG, "semantic_token_full")
@@ -135,6 +136,9 @@ impl LanguageServer for Backend {
                 .collect::<Vec<_>>();
             Some(semantic_tokens)
         }();
+        self.client // TODO: Remove this
+            .log_message(MessageType::INFO, "semantic_token_full_end")
+            .await;
         if let Some(semantic_token) = semantic_tokens {
             return Ok(Some(SemanticTokensResult::Tokens(SemanticTokens {
                 result_id: None,
@@ -204,6 +208,9 @@ impl LanguageServer for Backend {
     }
 
     async fn references(&self, params: ReferenceParams) -> Result<Option<Vec<Location>>> {
+        self.client // TODO: Remove this
+            .log_message(MessageType::INFO, "references_start")
+            .await;
         let reference_list = || -> Option<Vec<Location>> {
             let uri = params.text_document_position.text_document.uri;
             let ast = self.ast_map.get(&uri.to_string())?;
@@ -226,6 +233,9 @@ impl LanguageServer for Backend {
                 .collect::<Vec<_>>();
             Some(ret)
         }();
+        self.client // TODO: Remove this
+            .log_message(MessageType::INFO, "references_end")
+            .await;
         Ok(reference_list)
     }
 
@@ -233,6 +243,9 @@ impl LanguageServer for Backend {
         &self,
         params: GotoDefinitionParams,
     ) -> Result<Option<GotoDefinitionResponse>> {
+        self.client // TODO: Remove this
+            .log_message(MessageType::INFO, "goto_definition_start")
+            .await;
         let definition = || -> Option<GotoDefinitionResponse> {
             let uri = params.text_document_position_params.text_document.uri;
             let ast = self.ast_map.get(&uri.to_string())?;
@@ -251,6 +264,9 @@ impl LanguageServer for Backend {
                 Some(GotoDefinitionResponse::Scalar(Location::new(uri, range)))
             })
         }();
+        self.client // TODO: Remove this
+            .log_message(MessageType::INFO, "goto_definition_end")
+            .await;
         Ok(definition)
     }
     async fn did_change_workspace_folders(&self, _: DidChangeWorkspaceFoldersParams) {
@@ -321,6 +337,9 @@ impl LanguageServer for Backend {
     }
 
     async fn rename(&self, params: RenameParams) -> Result<Option<WorkspaceEdit>> {
+        self.client // TODO: Remove this
+            .log_message(MessageType::INFO, "rename_start")
+            .await;
         let workspace_edit = || -> Option<WorkspaceEdit> {
             let uri = params.text_document_position.text_document.uri;
             let ast = self.ast_map.get(&uri.to_string())?;
@@ -351,12 +370,18 @@ impl LanguageServer for Backend {
                 None
             }
         }();
+        self.client // TODO: Remove this
+            .log_message(MessageType::INFO, "rename_end")
+            .await;
         Ok(workspace_edit)
     }
 
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
         let uri = params.text_document_position.text_document.uri;
         let position = params.text_document_position.position;
+        self.client // TODO: Remove this
+            .log_message(MessageType::INFO, "completion_start")
+            .await;
         let completions = || -> Option<Vec<CompletionItem>> {
             let rope = self.document_map.get(&uri.to_string())?;
             let ast = self.ast_map.get(&uri.to_string())?;
@@ -434,6 +459,9 @@ impl LanguageServer for Backend {
             }
             Some(ret)
         }();
+        self.client // TODO: Remove this
+            .log_message(MessageType::INFO, "completion_end")
+            .await;
         Ok(completions.map(CompletionResponse::Array))
     }
 }
@@ -454,6 +482,7 @@ struct TextDocumentItem {
 }
 impl Backend {
     async fn inlay_hint(&self, params: InlayHintParams) -> Result<Vec<(usize, usize, String)>> {
+        dbg!("INLAY_STARTED");
         let mut hashmap = HashMap::new();
         if let Some(ast) = self.ast_map.get(&params.path) {
             type_inference(&ast.1, &mut hashmap);
@@ -476,8 +505,10 @@ impl Backend {
                 )
             })
             .collect::<Vec<_>>();
+        dbg!("INLAY_ENDED");
         Ok(inlay_hint_list)
     }
+
     async fn on_change(&self, params: TextDocumentItem) {
         let rope = ropey::Rope::from_str(&params.text);
         self.document_map
@@ -492,10 +523,13 @@ impl Backend {
             },
             None => (),
         };
+        dbg!("parsing_start");
         let (ast, errors, semantic_tokens) = parse(&params.text, &paths_v);
-        self.client
+        dbg!("parsing_end");
+        /* self.client // TODO: Uncomment this
             .log_message(MessageType::INFO, format!("{:?}", errors))
-            .await;
+            .await; */
+        dbg!("diagnostics_start");
         let diagnostics = errors
             .into_iter()
             .filter_map(|RecoveredError(span, message)| {
@@ -516,17 +550,18 @@ impl Backend {
                 diagnostic
             })
             .collect::<Vec<_>>();
-
+            dbg!("diagnostics_end");
         self.client
             .publish_diagnostics(params.uri.clone(), diagnostics, Some(params.version))
             .await;
 
         self.ast_map.insert(params.uri.to_string(), ast);
-        self.client
+        /* self.client // TODO: uncomment this
             .log_message(MessageType::INFO, &format!("{:?}", semantic_tokens))
-            .await;
+            .await; */
         self.semantic_token_map
             .insert(params.uri.to_string(), semantic_tokens);
+        dbg!("ONCHANGE_ENDED");
     }
 
     async fn update_configuration(&self) {
@@ -551,6 +586,7 @@ impl Backend {
         };
 
         self.configuration.insert("imhexBaseFolders".to_string(), paths);
+        dbg!("CONFIG_ENDED");
     }
 }
 

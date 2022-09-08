@@ -16,7 +16,7 @@ pub fn completion(
     ident_offset: usize,
 ) -> HashMap<String, ImCompleteCompletionItem> {
     let mut map = HashMap::new();
-    for (name, (v, span)) in ast.0.iter() {
+    /* for (name, (v, span)) in ast.0.iter() {
         match v {
             NamedNode::Function(args) => {
                 if span.end < ident_offset {
@@ -90,6 +90,7 @@ pub fn completion(
             _ => (),
         }
     }
+     */ // TODO: Uncomment this
     map
 }
 

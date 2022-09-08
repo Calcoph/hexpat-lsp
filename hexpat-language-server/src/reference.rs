@@ -16,10 +16,10 @@ pub fn get_reference(
     ident_offset: usize,
     include_self: bool,
 ) -> Vec<Spanned<String>> {
-    let vector = Vector::new();
+    //let vector = Vector::new();
     let mut reference_list = vec![];
     let reference_symbol = ReferenceSymbol::Finding(ident_offset);
-    get_reference_of_expr(&ast.1, vector, reference_symbol, &mut reference_list, include_self);
+    //get_reference_of_expr(&ast.1, vector, reference_symbol, &mut reference_list, include_self); // TODO: Uncomment this
     reference_list
 }
 

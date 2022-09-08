@@ -2,11 +2,11 @@ use std::ops::Range;
 
 use nom::{error::{ParseError, ErrorKind}, Parser, InputLength};
 use nom::Err;
-use crate::{token::Spanned, recovery_err::{IResult, ToRange}};
+use crate::{token::Spanned, recovery_err::{StrResult, ToRange}};
 
 pub fn spanned<I, O, E: ParseError<I>, F>(
     mut parser: F
-) -> impl FnMut(I) -> IResult<I, Spanned<O>, E>
+) -> impl FnMut(I) -> StrResult<I, Spanned<O>, E>
 where
   F: Parser<I, O, E>,
   I: ToRange
@@ -23,7 +23,7 @@ where
 pub fn map_with_span<I, O1, O2, E: ParseError<I>, F, G>(
     mut parser: F,
     mut mapper: G
-) -> impl FnMut(I) -> IResult<I, O2, E>
+) -> impl FnMut(I) -> StrResult<I, O2, E>
 where
   F: Parser<I, O1, E>,
   I: ToRange,
@@ -40,7 +40,7 @@ where
 
 pub fn ignore<I, O, E: ParseError<I>, F>(
     mut parser: F
-) -> impl FnMut(I) -> IResult<I, (), E>
+) -> impl FnMut(I) -> StrResult<I, (), E>
 where
   F: Parser<I, O, E>,
 {
@@ -54,7 +54,7 @@ where
 pub fn to<I, O1, O2, E: ParseError<I>, F>(
     mut parser: F,
     value: O2
-) -> impl FnMut(I) -> IResult<I, Spanned<O2>, E>
+) -> impl FnMut(I) -> StrResult<I, Spanned<O2>, E>
 where
   F: Parser<I, O1, E>,
   I: ToRange,
@@ -73,7 +73,7 @@ pub fn fold_many0_once<I, O, E, F, G, H, R>(
     mut f: F,
     init: H,
     mut g: G,
-  ) -> impl FnOnce(I) -> IResult<I, R, E>
+  ) -> impl FnOnce(I) -> StrResult<I, R, E>
   where
     I: Clone + InputLength,
     F: Parser<I, O, E>,

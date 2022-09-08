@@ -8,7 +8,7 @@ use hexparser::{ImCompleteSemanticToken, m_parser::{Expr, NamedNode}, token::Spa
 pub fn semantic_token_from_ast(ast: &(HashMap<String, Spanned<NamedNode>>, Spanned<Expr>)) -> Vec<ImCompleteSemanticToken> {
     let mut semantic_tokens = vec![];
 
-    semantic_token_from_expr(&ast.1, &mut semantic_tokens);
+    semantic_token_from_expr(&ast.1, &mut semantic_tokens); // TODO: Uncomment this
 
     semantic_tokens
 }
@@ -35,7 +35,7 @@ pub fn semantic_token_from_expr(
             semantic_token_from_expr(roperand, semantic_tokens);
         }
         Expr::Call { func_name, arguments } => {
-            semantic_token_from_expr(expr, semantic_tokens);
+            semantic_token_from_expr(func_name, semantic_tokens);
             arguments.0.iter().for_each(|p| {
                 semantic_token_from_expr(p, semantic_tokens);
             });

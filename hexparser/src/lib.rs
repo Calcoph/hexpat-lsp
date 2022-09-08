@@ -7,7 +7,7 @@ use parserlib::LEGEND_TYPE;
 
 use crate::m_parser::NamedNode;
 use crate::token::{Token, Keyword, BuiltFunc};
-use crate::{m_lexer::lex, recovery_err::RecoveredError, m_parser::placeholder_parse, token::Spanned};
+use crate::{m_lexer::lex, recovery_err::RecoveredError, m_parser::token_parse, token::Spanned};
 
 pub use self::m_parser::{Expr, Value};
 pub mod m_lexer;
@@ -324,7 +324,7 @@ pub fn parse(
                 Token::Err => None,
             })
             .collect::<Vec<_>>();
-        let ast = placeholder_parse(tokens);
+        let ast = token_parse(tokens);
 
         // println!("{:#?}", ast);
         // if let Some(funcs) = ast.filter(|_| errs.len() + parse_errs.len() == 0) {

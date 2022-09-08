@@ -1,5 +1,4 @@
 use nom::{
-    IResult,
     branch::alt as choice,
     bytes::complete::{
         tag as just,
@@ -11,9 +10,9 @@ use nom::{
     sequence::{pair as then, delimited, preceded}
 };
 
-use crate::{token::{Spanned, Tokens, Token, Keyword, BuiltFunc}, combinators::{ignore, map_with_span, to}, m_parser::{numeric, operations::mathematical_expression, namespace_resolution, old_member_access, ident, value_type_any, member_access, function_call}, Expr};
+use crate::{token::{Spanned, Tokens, Token, Keyword, BuiltFunc}, combinators::{ignore, map_with_span, to}, m_parser::{numeric, operations::mathematical_expression, namespace_resolution, old_member_access, ident, value_type_any, member_access, function_call}, Expr, recovery_err::TokResult};
 
-pub fn factor<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+pub fn factor<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     choice((
         numeric,
         unary,
@@ -34,7 +33,7 @@ pub fn factor<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
     ))(input)
 }
 
-fn unary<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+fn unary<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     preceded(
         peek(choice((
             just(Token::Op("+")),
@@ -46,7 +45,7 @@ fn unary<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
     )(input)
 }
 
-fn builtin_func<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+fn builtin_func<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     map_with_span(
         then(
             choice((
@@ -95,7 +94,7 @@ fn builtin_func<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
     )(input)
 }
 
-fn special_variables<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+fn special_variables<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     map_with_span(
         then(
             choice((

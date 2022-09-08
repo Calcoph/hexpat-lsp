@@ -1,6 +1,6 @@
-use std::{ops::Range, iter::{Enumerate, Copied}, slice::Iter, fmt};
+use std::{ops::Range, iter::{Enumerate, Copied}, slice::Iter, fmt::{self, Display}};
 
-use nom::{Compare, CompareResult, InputLength, InputIter, InputTake};
+use nom::{Compare, CompareResult, InputLength, InputIter, InputTake, Needed};
 use nom_locate::LocatedSpan;
 
 use crate::recovery_err::{ParseState, ToRange};
@@ -168,16 +168,34 @@ impl<'a> ToRange for TokSpan<'a> {
 
 impl<'a> ToRange for Tokens<'a> {
     fn span(&self) -> Range<usize> {
-        let start = self.tokens[0].location_offset();
-        let end = self.tokens[self.tokens.len()-1];
-        let end = end.location_offset()+end.extra.1;
+        let start = self.offset;
+        let end = match self.tokens.len() {
+            0 => start+1,
+            _ => {
+                let end = self.tokens[self.tokens.len()-1];
+                end.location_offset()+end.extra.1
+            }
+        };
         start..end
     }
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct Tokens<'a> {
-    pub tokens: &'a [TokSpan<'a>]
+    pub tokens: &'a [TokSpan<'a>],
+    offset: usize
+}
+
+impl<'a> Tokens<'a> {
+    pub fn new(tokens: &'a [TokSpan<'a>]) -> Tokens<'a> {
+        Tokens { tokens, offset: 0 }
+    }
+}
+
+impl<'a> Display for Tokens<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self.tokens)
+    }
 }
 
 // impl AsBytes
@@ -243,11 +261,15 @@ impl<'a> InputIter for Tokens<'a> {
     fn position<P>(&self, predicate: P) -> Option<usize>
   where
     P: Fn(Self::Item) -> bool {
-        todo!()
+        self.tokens.iter().position(|b| predicate(*b))
     }
 
     fn slice_index(&self, count: usize) -> Result<usize, nom::Needed> {
-        todo!()
+        if self.tokens.len() >= count {
+            Ok(count)
+        } else {
+        Err(Needed::new(count - self.tokens.len()))
+        }
     }
 }
 
@@ -267,12 +289,19 @@ impl<'a> InputLength for Token<'a> {
 
 impl<'a> InputTake for Tokens<'a> {
     fn take(&self, count: usize) -> Self {
-        Tokens{tokens: &self.tokens[0..count]}
+        Tokens::new(&self.tokens[0..count])
     }
 
     fn take_split(&self, count: usize) -> (Self, Self) {
         let (prefix, suffix) = self.tokens.split_at(count);
-        (Tokens{tokens: suffix}, Tokens{tokens: prefix})
+        let suf_offset = match suffix.len() {
+            0 => match prefix.len() {
+                0 => self.offset,
+                _ => prefix[0].span().end+1
+            },
+            _ => suffix[0].span().start
+        };
+        (Tokens{tokens: suffix, offset: suf_offset}, Tokens{tokens: prefix, offset: self.offset})
     }
 }
 

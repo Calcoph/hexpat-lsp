@@ -1,7 +1,6 @@
-use std::{collections::HashMap, ops::Range, io::ErrorKind};
+use std::{collections::HashMap, ops::Range, io::ErrorKind, error::Error};
 
 use nom::{
-    IResult,
     branch::alt as choice,
     bytes::complete::{
         tag as just, take,
@@ -21,12 +20,12 @@ use nom::{
         fold_many0,
         separated_list0,
         separated_list1
-    }
+    }, InputTake
 };
-use nom_supreme::error::{ErrorTree, BaseErrorKind};
+use nom_supreme::error::{ErrorTree, BaseErrorKind, GenericErrorTree};
 use serde::{Deserialize, Serialize};
 
-use crate::{token::{Spanned, TokSpan, Tokens, Token, Keyword, ValueType}, combinators::{spanned, ignore, to, map_with_span, fold_many0_once}, m_parser::{function::{function_statement, function_definition}, operations::{UnaryOp, mathematical_expression}}};
+use crate::{token::{Spanned, TokSpan, Tokens, Token, Keyword, ValueType}, combinators::{spanned, ignore, to, map_with_span, fold_many0_once}, m_parser::{function::{function_statement, function_definition}, operations::{UnaryOp, mathematical_expression}}, recovery_err::{TokResult, ToRange, RecoveredError, TokError}};
 
 mod function;
 mod factor;
@@ -113,7 +112,7 @@ pub enum Expr {
     Break,
     Func {
         name: Spanned<String>,
-        args: Vec<Spanned<FuncArgument>>,
+        args: Spanned<Vec<Spanned<FuncArgument>>>,
         body: Box<Spanned<Self>>
     },
     Struct {
@@ -210,7 +209,7 @@ pub enum Assignment {
 }
 
 // TODO: rework all parsers that use this
-fn old_function_call<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+fn old_function_call<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     map(
         then(
             old_namespace_resolution,
@@ -245,7 +244,7 @@ fn old_function_call<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>
 }
 
 // exaclty the same as above, but used when the rework has been done
-fn function_call<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+fn function_call<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     map(
         then(
             namespace_resolution,
@@ -279,12 +278,23 @@ fn function_call<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
     )(input)
 }
 
-fn string_literal<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    todo!()
+fn string_literal<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
+    map_res(
+        spanned(take(1 as usize)),
+        |(consumed, span): (Tokens, Range<usize>)|{
+            match consumed.tokens[0].fragment() {
+                Token::Str(s) => Ok((Expr::Value { val: Value::Str(String::from(*s)) }, span)),
+                _ => Err(ErrorTree::Base {
+                    location: consumed,
+                    kind: BaseErrorKind::External(Box::new(tokio::io::Error::new(ErrorKind::Other, "Expected string literal")))
+                }) // TODO: Expand match tree for "found X"
+            }
+        }
+    )(input)
 }
 
 // TODO: Rework all the parsers so "ident" is not parsed before namespace_resolution.
-fn old_namespace_resolution<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+fn old_namespace_resolution<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     let (input, first_name) = ident_local(input).unwrap(); // TODO: Error recovery instead of unwrap
     fold_many0_once(
         preceded(
@@ -305,8 +315,8 @@ fn old_namespace_resolution<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanne
 }
 
 // exaclty the same as above, but used when the rework has been done
-fn namespace_resolution<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    let (input, first_name) = ident_local(input).unwrap(); // TODO: Error recovery instead of unwrap
+fn namespace_resolution<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
+    let (input, first_name) = ident_local(input)?;
     fold_many0_once(
         preceded(
             just(Token::Op("::")),
@@ -327,7 +337,7 @@ fn namespace_resolution<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Ex
 
 // r_value
 // TODO: Also parse the ident/parent/this that comes before this
-fn old_member_access<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+fn old_member_access<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     then(
         choice((
             ident,
@@ -365,43 +375,54 @@ fn old_member_access<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>
 
 // exaclty the same as above, but used when the rework has been done
 // r_value
-fn member_access<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    then(
-        choice((
-            ident,
-            map_with_span(
-                just(Token::K(Keyword::Parent)),
-                |_, span| (String::from("parent"), span)
-            ),
-            map_with_span(
-                just(Token::K(Keyword::This)),
-                |_, span| (String::from("this"), span)
-            )
-        )),
+fn member_access<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
+    map_with_span(
         then(
-            opt(then(
-                just(Token::Separator('[')),
-                then(
-                    mathematical_expression,
-                    just(Token::Separator(']'))
+            choice((
+                ident_local,
+                map_with_span(
+                    just(Token::K(Keyword::Parent)),
+                    |_, span| (Expr::Local { name: (String::from("parent"), span.clone())} , span)
+                ),
+                map_with_span(
+                    just(Token::K(Keyword::This)),
+                    |_, span| (Expr::Local { name: (String::from("this1"), span.clone())} , span)
                 )
             )),
-            opt(then(
-                just(Token::Separator('.')),
-                then(
-                    choice((
-                        ident,
-                        to(just(Token::K(Keyword::Parent)), String::from("parent"))
-                    )),
-                    old_member_access
-                )
-            ))
-        )
-    )(input);
-    todo!()
+            then(
+                opt(delimited(
+                    just(Token::Separator('[')),
+                    mathematical_expression,
+                    just(Token::Separator(']'))
+                )),
+                opt(preceded(
+                    just(Token::Separator('.')),
+                    preceded(
+                        peek(choice((
+                            ignore(ident),
+                            ignore(just(Token::K(Keyword::Parent)))
+                        ))),
+                        member_access
+                    )
+                ))
+            )
+        ),
+        |(item, (array, member)), span| {
+            match member {
+                Some(member) => (
+                    Expr::Access {
+                        item: Box::new(item),
+                        member: Box::new(member)
+                    },
+                    span
+                ),
+                None => item
+            }
+        }
+    )(input)
 }
 
-fn attribute_arg<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+fn attribute_arg<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     map(
         then(
             ident,
@@ -429,7 +450,7 @@ fn attribute_arg<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
     )(input)
 }
 
-fn attribute<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+fn attribute<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     map_with_span(
         separated_list1(
             just(Token::Separator(',')),
@@ -448,7 +469,7 @@ fn attribute<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
     )(input)
 }
 
-fn statement_body<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+fn statement_body<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     choice((
         map_with_span(
             delimited(
@@ -462,7 +483,7 @@ fn statement_body<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
     ))(input)
 }
 
-fn conditional<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+fn conditional<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     map_with_span(
         preceded(
             just(Token::K(Keyword::If)),
@@ -557,7 +578,7 @@ fn recursive_namespace_access_to_hextype(expr: Expr, v: &mut Vec<String>) {
     }
 }
 
-fn parse_type<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<HexTypeDef>> {
+fn parse_type<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<HexTypeDef>> {
     map_with_span(
         then(
             opt(choice((
@@ -594,11 +615,11 @@ fn parse_type<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<HexTypeDef>>
     )(input)
 }
 
-fn using_declaration<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<HexTypeDef>> {
+fn using_declaration<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<HexTypeDef>> {
     parse_type(input)
 }
 
-fn padding<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+fn padding<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     choice((
         map_with_span(
             preceded(
@@ -621,11 +642,11 @@ fn padding<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
     ))(input)
 }
 
-fn pointer_size_type<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<HexTypeDef>> {
+fn pointer_size_type<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<HexTypeDef>> {
     parse_type(input)
 }
 
-fn assignment_expr<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+fn assignment_expr<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     map_with_span(
         then(
             choice((
@@ -670,7 +691,7 @@ fn assignment_expr<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> 
     )(input)
 }
 
-fn array_declaration<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Option<Spanned<Expr>>> { // TODO: make an "array declaration" expression, so the "[","]" is also spanned and this returns Spanned<Expr> instead of Option<Spanned<Expr>>
+fn array_declaration<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Option<Spanned<Expr>>> { // TODO: make an "array declaration" expression, so the "[","]" is also spanned and this returns Spanned<Expr> instead of Option<Spanned<Expr>>
     delimited(
         then(
             just(Token::Separator('[')),
@@ -700,7 +721,7 @@ fn array_declaration<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Option<Spanne
     )(input)
 }
 
-fn member_variable<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+fn member_variable<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     choice((
         map_with_span(
             then(
@@ -843,7 +864,7 @@ fn member_variable<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> 
     ))(input)
 }
 
-fn member_declaration<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+fn member_declaration<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     preceded(
         peek(choice((
             ignore(just(Token::K(Keyword::BigEndian))),
@@ -858,7 +879,7 @@ fn member_declaration<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr
     )(input)
 }
 
-fn member<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+fn member<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     terminated(
         choice((
             assignment_expr,
@@ -892,7 +913,7 @@ fn member<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
     )(input)
 }
     
-fn parse_struct<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+fn parse_struct<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     map_with_span(
         preceded(
             just(Token::K(Keyword::Struct)),
@@ -924,7 +945,7 @@ fn parse_struct<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
     )(input)
 }
 
-fn parse_union<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+fn parse_union<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     map_with_span(
         preceded(
             just(Token::K(Keyword::Union)),
@@ -947,7 +968,7 @@ fn parse_union<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
     )(input)
 }
 
-fn parse_enum<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+fn parse_enum<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     map_with_span(
         preceded(
             just(Token::K(Keyword::Enum)),
@@ -987,7 +1008,7 @@ fn parse_enum<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
     )(input)
 }
 
-fn bitfield_conditional<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+fn bitfield_conditional<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     map_with_span(
         preceded(
             just(Token::K(Keyword::If)),
@@ -1049,7 +1070,7 @@ fn bitfield_conditional<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Ex
     )(input)
 }
 
-fn bitfield_entry<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+fn bitfield_entry<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     terminated(
         choice((
             map_with_span(
@@ -1086,7 +1107,7 @@ fn bitfield_entry<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
     )(input)
 }
 
-fn parse_bitfield<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+fn parse_bitfield<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     map_with_span(
         preceded(
             just(Token::K(Keyword::Bitfield)),
@@ -1128,7 +1149,7 @@ fn parse_bitfield<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
     )(input)
 }
 
-fn array_variable_placement<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, (Spanned<Expr>, Spanned<Expr>)> {
+fn array_variable_placement<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, (Spanned<Expr>, Spanned<Expr>)> {
     map(
         then(
             ident_local,
@@ -1150,7 +1171,7 @@ fn array_variable_placement<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, (Spann
     )(input)
 }
 
-fn pointer_array_variable_placement<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+fn pointer_array_variable_placement<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     map(
         then(
             opt(
@@ -1183,7 +1204,7 @@ fn pointer_array_variable_placement<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>
     )(input)
 }
 
-fn parse_namespace<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+fn parse_namespace<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     map_with_span(
         preceded(
             just(Token::K(Keyword::Namespace)),
@@ -1218,7 +1239,7 @@ fn parse_namespace<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> 
     )(input)
 }
 
-fn placement<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+fn placement<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     map_with_span(
         then(
             parse_type,
@@ -1291,7 +1312,7 @@ fn placement<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
     )(input)
 }
 
-fn statements_choice<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+fn statements_choice<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     choice((
         map_with_span(
             preceded(
@@ -1352,7 +1373,7 @@ fn statements_choice<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>
     ))(input)
 }
 
-fn statements<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+fn statements<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     map(
         then(
             statements_choice,
@@ -1370,11 +1391,11 @@ fn statements<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
     )(input)// TODO: Consume all semicolons with nothing in between
 }
 
-fn add_type<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+fn add_type<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
    todo!()
 }
 
-fn ident<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<String>> {
+fn ident<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<String>> {
     map_res(
         spanned(take(1 as usize)),
         |(consumed, span): (Tokens, Range<usize>)|{
@@ -1389,51 +1410,70 @@ fn ident<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<String>> {
     )(input)
 }
 
-fn ident_local<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+fn ident_local<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     map(
         ident,
         |(name, span)| (Expr::Local { name: (name, span.clone()) }, span)
     )(input)
 }
 
-fn value_type_any<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<HexType>> {
+fn value_type_any<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<HexType>> {
     map_res(
         spanned(take(1 as usize)),
-        |(consumed, span): (Tokens, Range<usize>)|{
+        |(consumed, span): (Tokens<'a>, Range<usize>)|{
             match consumed.tokens[0].fragment() {
                 Token::V(type_) => Ok((HexType::V(*type_), span)), // TODO: Parse the number instead of always being 0.0
                 _ => Err(ErrorTree::Base {
                     location: consumed,
-                    kind: BaseErrorKind::External(Box::new(tokio::io::Error::new(ErrorKind::Other, "Expceted identifier")))
+                    kind: BaseErrorKind::External(Box::new(tokio::io::Error::new(ErrorKind::Other, "Expceted type")))
                 }) // TODO: Expand match tree for "found X"
             }
         }
     )(input)
 }
 
-fn numeric<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+fn numeric<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     map_res(
         spanned(take(1 as usize)),
-        |(consumed, span): (Tokens, Range<usize>)|{
+        |(consumed, span): (Tokens<'a>, Range<usize>)|{
             match consumed.tokens[0].fragment() {
                 Token::Num(_) => Ok((Expr::Value { val: Value::Num(0.0) }, span)), // TODO: Parse the number instead of always being 0.0
                 _ => Err(ErrorTree::Base {
                     location: consumed,
-                    kind: BaseErrorKind::External(Box::new(tokio::io::Error::new(ErrorKind::Other, "Expceted identifier")))
+                    kind: BaseErrorKind::External(Box::new(tokio::io::Error::new(ErrorKind::Other, "Expceted number literal")))
                 }) // TODO: Expand match tree for "found X"
             }
         }
     )(input)
 }
 
-fn placeholder_parser<'a>(input: Tokens<'a>) -> IResult<Tokens, Spanned<Expr>> {
+fn parser<'a>(input: Tokens<'a>) -> TokResult<Tokens, Spanned<Expr>> {
     map_with_span(
         many_until(
-            statements,
+            |input: Tokens<'a>| match statements(input) {
+                Ok(r) => Ok(r),
+                Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => {
+                    let input = recover_err(&e);
+                    let (rest, input) = input.take_split(1);
+                    let span = input.span();
+                    let state = input.tokens[0].extra.clone(); 
+                    state.0.report_error(RecoveredError(span.clone(), "Unexpected token".to_string()));
+                    Ok((rest, (Expr::Error, span)))
+                },
+                Err(e) => Err(e)
+            },
             eof
         ),
         |(list, _), span| (Expr::ExprList { list }, span)
     )(input)
+}
+
+fn recover_err<'a>(e: &TokError<'a>) -> Tokens<'a> {
+    match e {
+        GenericErrorTree::Base { location, kind: _ } => location.clone(),
+        GenericErrorTree::Stack { base, contexts: _ } => recover_err(base),
+        GenericErrorTree::Alt(v) => recover_err(v.get(0).unwrap()),
+    }
 }
 
 #[derive(Debug)]
@@ -1447,9 +1487,9 @@ pub enum NamedNode {
 }
 
 // Hashmap contains the names of named expressions and their clones
-pub fn placeholder_parse(tokens: Vec<TokSpan>) -> (HashMap<String, Spanned<NamedNode>>, Spanned<Expr>) {
+pub fn token_parse(tokens: Vec<TokSpan>) -> (HashMap<String, Spanned<NamedNode>>, Spanned<Expr>) {
     let hmap = HashMap::new();
-    let (_, ex) = placeholder_parser(Tokens{tokens: &tokens}).expect("Unrecovered error happenned in parser");
+    let (_, ex) = parser(Tokens::new(&tokens)).expect("Unrecovered error happenned in parser");
     //let ex = (Expr::Dollar, 0..1);
     (hmap, ex)
 }

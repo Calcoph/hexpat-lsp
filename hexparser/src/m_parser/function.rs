@@ -1,5 +1,4 @@
 use nom::{
-    IResult,
     branch::alt as choice,
     bytes::complete::{
         tag as just
@@ -16,11 +15,51 @@ use nom::{
     }
 };
 
-use crate::{token::{Spanned, Tokens, Token, Keyword, ValueType}, combinators::map_with_span, m_parser::{ident, parse_type, mathematical_expression, statement_body, FuncArgument, ident_local, Assignment, BinaryOp, member_access, function_call, assignment_expr}, Expr, Value};
+use crate::{token::{Spanned, Tokens, Token, Keyword, ValueType}, combinators::{map_with_span, spanned}, m_parser::{ident, parse_type, mathematical_expression, statement_body, FuncArgument, ident_local, Assignment, BinaryOp, member_access, function_call, assignment_expr}, Expr, Value, recovery_err::TokResult};
 
+fn function_arguments<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Vec<Spanned<FuncArgument>>>> {
+    map_with_span(
+        then(
+            separated_list1( // TODO: maybe also parse parameter packs here, with the sole purpose of giving better error messages
+                just(Token::Separator(',')),
+                func_arg
+            ),
+            opt(preceded(
+                just(Token::Separator(',')),
+                choice((
+                    map_with_span(
+                        separated_pair(
+                            just(Token::V(ValueType::Auto)), // TODO: Maybe don't ignore this
+                            then(
+                                just(Token::Separator('.')),
+                                then(
+                                    just(Token::Separator('.')),
+                                    just(Token::Separator('.')),
+                                )
+                            ),
+                            ident
+                        ),
+                        |(_, name), span| {
+                            (FuncArgument::ParameterPack(name), span)
+                        }
+                    ),
+                    func_arg
+                ))
+            ))
+        ),
+        |(mut args, arg_pack), span| {
+            match arg_pack {
+                Some(arg_pack) => args.push(arg_pack),
+                None => (),
+            };
 
-pub fn function_definition<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
-    map(
+            (args, span)
+        }
+    )(input)
+}
+
+pub fn function_definition<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
+    map_with_span(
         preceded(
             just(Token::K(Keyword::Fn)),
             then(
@@ -28,53 +67,29 @@ pub fn function_definition<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned
                 then(
                     delimited(
                         just(Token::Separator('(')),
-                        then(
-                            ident,
-                            then(
-                                separated_list0( // TODO: maybe also parse parameter packs here, with the sole purpose of giving better error messages
-                                    just(Token::Separator(',')),
-                                    func_arg
-                                ),
-                                opt(preceded(
-                                    just(Token::Separator(',')),
-                                    choice((
-                                        map_with_span(
-                                            separated_pair(
-                                                just(Token::V(ValueType::Auto)), // TODO: Maybe don't ignore this
-                                                then(
-                                                    just(Token::Separator('.')),
-                                                    then(
-                                                        just(Token::Separator('.')),
-                                                        just(Token::Separator('.')),
-                                                    )
-                                                ),
-                                                ident
-                                            ),
-                                            |(_, name), span| {
-                                                (FuncArgument::ParameterPack(name), span)
-                                            }
-                                        ),
-                                        func_arg
-                                    ))
-                                ))
-                            )
-                        ),
+                        function_arguments,
                         just(Token::Separator(')'))
                     ),
                     delimited(
                         just(Token::Separator('{')),
-                        many0(function_statement),
+                        spanned(many0(function_statement)),
                         just(Token::Separator('}'))
                     )
                 )
             )
         ),
-        |a| a // TODO
-    )(input);
-    todo!()
+        |(name, (args, (list, body_span))), span| (
+            Expr::Func {
+                name,
+                args,
+                body: Box::new((Expr::ExprList { list }, body_span))
+            },
+            span
+        )
+    )(input)
 }
 
-pub fn function_variable_decl<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+pub fn function_variable_decl<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     choice((
         map_with_span(
             then(
@@ -159,7 +174,7 @@ pub fn function_variable_decl<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Span
     ))(input)
 }
 
-pub fn function_while_loop<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+pub fn function_while_loop<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     map_with_span(
         preceded(
             just(Token::K(Keyword::While)),
@@ -182,7 +197,7 @@ pub fn function_while_loop<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned
     )(input)
 }
 
-pub fn function_for_loop<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+pub fn function_for_loop<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     map_with_span(
         preceded(
             just(Token::K(Keyword::For)),
@@ -220,7 +235,7 @@ pub fn function_for_loop<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<E
     )(input)
 }
 
-pub fn func_arg<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<FuncArgument>> {
+pub fn func_arg<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<FuncArgument>> {
     map_with_span(
         then(
             then(
@@ -250,7 +265,7 @@ pub fn func_arg<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<FuncArgume
     )(input)
 }
 
-pub fn function_statement<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+pub fn function_statement<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     terminated(
         choice((
             assignment_expr,
@@ -266,7 +281,7 @@ pub fn function_statement<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<
     )(input)
 }
 
-fn function_assignment<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+fn function_assignment<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     map_with_span(
         preceded(
             peek(then(
@@ -293,7 +308,7 @@ fn function_assignment<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Exp
     )(input)
 }
 
-pub fn function_controlflow_statement<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+pub fn function_controlflow_statement<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     choice((
         map_with_span(
             preceded(
@@ -324,7 +339,7 @@ pub fn function_controlflow_statement<'a>(input: Tokens<'a>) -> IResult<Tokens<'
     ))(input)
 }
 
-pub fn function_conditional<'a>(input: Tokens<'a>) -> IResult<Tokens<'a>, Spanned<Expr>> {
+pub fn function_conditional<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     map_with_span(
         preceded(
             just(Token::K(Keyword::If)),

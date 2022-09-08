@@ -32,9 +32,9 @@ use nom::{
 };
 use nom_supreme::error::{GenericErrorTree, ErrorTree};
 
-use crate::{recovery_err::{IResult, StrSpan, RecoveredError, ParseState, ToRange}, token::{TokSpan, FromStrSpan, Token, PreProc, Keyword, BuiltFunc, ValueType}};
+use crate::{recovery_err::{StrResult, StrSpan, RecoveredError, ParseState, ToRange}, token::{TokSpan, FromStrSpan, Token, PreProc, Keyword, BuiltFunc, ValueType}};
 
-fn hex_num<'a>(input: StrSpan<'a>) -> IResult<StrSpan, TokSpan> {
+fn hex_num<'a>(input: StrSpan<'a>) -> StrResult<StrSpan, TokSpan> {
     map(
         then(
             just_no_case("0x"),
@@ -68,7 +68,7 @@ fn hex_num<'a>(input: StrSpan<'a>) -> IResult<StrSpan, TokSpan> {
     )(input)
 }
 
-fn oct_num<'a>(input: StrSpan<'a>) -> IResult<StrSpan, TokSpan> {
+fn oct_num<'a>(input: StrSpan<'a>) -> StrResult<StrSpan, TokSpan> {
     map(
         then(
             just_no_case("0o"),
@@ -102,7 +102,7 @@ fn oct_num<'a>(input: StrSpan<'a>) -> IResult<StrSpan, TokSpan> {
     )(input)
 }
 
-fn bin_num<'a>(input: StrSpan<'a>) -> IResult<StrSpan, TokSpan> {
+fn bin_num<'a>(input: StrSpan<'a>) -> StrResult<StrSpan, TokSpan> {
     map(
         then(
             just_no_case("0b"),
@@ -136,7 +136,7 @@ fn bin_num<'a>(input: StrSpan<'a>) -> IResult<StrSpan, TokSpan> {
     )(input)
 }
 
-fn dec_num(input: StrSpan) -> IResult<StrSpan, TokSpan> {
+fn dec_num(input: StrSpan) -> StrResult<StrSpan, TokSpan> {
     match digit1(input) {
         Ok((p, s)) => {
             let state = s.extra.clone();
@@ -147,7 +147,7 @@ fn dec_num(input: StrSpan) -> IResult<StrSpan, TokSpan> {
 }
 
 // A parser for chars
-fn char_<'a>(input: StrSpan<'a>) -> IResult<StrSpan, TokSpan> { // TODO: Better handling of whitespaces (for example require (whitespace|operator|separator) between tokens)
+fn char_<'a>(input: StrSpan<'a>) -> StrResult<StrSpan, TokSpan> { // TODO: Better handling of whitespaces (for example require (whitespace|operator|separator) between tokens)
     match then(
         just("\'"),
         take(1 as u8) // TODO: parse also \'
@@ -193,7 +193,7 @@ fn char_<'a>(input: StrSpan<'a>) -> IResult<StrSpan, TokSpan> { // TODO: Better 
     }
 }
 
-fn str_<'a>(input: StrSpan<'a>) -> IResult<StrSpan, TokSpan> {
+fn str_<'a>(input: StrSpan<'a>) -> StrResult<StrSpan, TokSpan> {
     // A parser for strings
     let inp_start = input.span().start;
     let state = input.extra.clone();
@@ -234,7 +234,7 @@ fn str_<'a>(input: StrSpan<'a>) -> IResult<StrSpan, TokSpan> {
     )(input)
 }
 
-fn lexer<'a>(input: StrSpan<'a>) -> IResult<StrSpan, Vec<TokSpan>> {
+fn lexer<'a>(input: StrSpan<'a>) -> StrResult<StrSpan, Vec<TokSpan>> {
     // Integer parser
     // TODO: Floats
     let num = choice(( // TODO: Better error highlighting for hex, oct and bin
