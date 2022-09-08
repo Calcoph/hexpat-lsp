@@ -324,7 +324,12 @@ pub fn parse(
                 Token::Err => None,
             })
             .collect::<Vec<_>>();
-        let ast = token_parse(tokens);
+        let ast = token_parse(tokens.into_iter()
+            .filter(|tok| match tok.fragment() {
+                Token::Comment(_) => false,
+                _ => true
+            }
+        ).collect());
 
         // println!("{:#?}", ast);
         // if let Some(funcs) = ast.filter(|_| errs.len() + parse_errs.len() == 0) {

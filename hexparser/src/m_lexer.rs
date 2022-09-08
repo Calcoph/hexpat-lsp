@@ -23,13 +23,14 @@ use nom::{
         map,
         map_opt
     },
-    sequence::{pair as then, delimited},
+    sequence::{pair as then, delimited, preceded},
     multi::{
         many0_count,
         many_till as many_until, many0,
     },
     InputTake
 };
+use nom_locate::LocatedSpan;
 use nom_supreme::error::{GenericErrorTree, ErrorTree};
 
 use crate::{recovery_err::{StrResult, StrSpan, RecoveredError, ParseState, ToRange}, token::{TokSpan, FromStrSpan, Token, PreProc, Keyword, BuiltFunc, ValueType}};
@@ -411,10 +412,7 @@ fn lexer<'a>(input: StrSpan<'a>) -> StrResult<StrSpan, Vec<TokSpan>> {
         preproc,
     ));
 
-    let comment = map(
-        then(just("//"), take_until("\n")),
-        |(_, s): (StrSpan, StrSpan)| s
-    );
+    let comment = preceded(just("//"), take_until("\n"));
 
     let padding = map(
         choice((
@@ -423,13 +421,13 @@ fn lexer<'a>(input: StrSpan<'a>) -> StrResult<StrSpan, Vec<TokSpan>> {
             just("\r"),
             space1
         )),
-        |s| {
+        |s: StrSpan| {
             let state = s.extra.clone();
             TokSpan::from_strspan(Token::Comment(s.fragment()), state, s.span())
         }
     );
 
-    let mut pos_inputs = choice((token, padding));
+    let mut pos_inputs = choice((padding, token));
 
     map(
         many_until(
