@@ -14,8 +14,9 @@ use nom::{
         many0, many1, separated_list0, separated_list1
     }
 };
+use nom_supreme::ParserExt;
 
-use crate::{token::{Spanned, Tokens, Token, Keyword, ValueType}, combinators::{map_with_span, spanned}, m_parser::{ident, parse_type, mathematical_expression, statement_body, FuncArgument, ident_local, Assignment, BinaryOp, member_access, function_call, assignment_expr}, Expr, Value, recovery_err::TokResult};
+use crate::{token::{Spanned, Tokens, Token, Keyword, ValueType}, combinators::{map_with_span, spanned}, m_parser::{ident, parse_type, mathematical_expression, statement_body, FuncArgument, ident_local, Assignment, BinaryOp, member_access, function_call, assignment_expr}, Expr, Value, recovery_err::{TokResult, expression_recovery, non_opt}};
 
 fn function_arguments<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Vec<Spanned<FuncArgument>>>> {
     map_with_span(
@@ -58,22 +59,22 @@ fn function_arguments<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Ve
     )(input)
 }
 
-pub fn function_definition<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
-    map_with_span(
+pub(crate) fn function_definition<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
+    expression_recovery(map_with_span(
         preceded(
             just(Token::K(Keyword::Fn)),
             then(
-                ident,
+                ident.context("Expected function name"),
                 then(
                     delimited(
-                        just(Token::Separator('(')),
+                        just(Token::Separator('(')).context("Missing )"),
                         function_arguments,
-                        just(Token::Separator(')'))
+                        just(Token::Separator(')')).context("Expected ) or valid function arguments")
                     ),
                     delimited(
-                        just(Token::Separator('{')),
+                        just(Token::Separator('{')).context("Missing {"),
                         spanned(many0(function_statement)),
-                        just(Token::Separator('}'))
+                        just(Token::Separator('}')).context("Expected } or valid function expression")
                     )
                 )
             )
@@ -86,16 +87,16 @@ pub fn function_definition<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spann
             },
             span
         )
-    )(input)
+    ))(input)
 }
 
-pub fn function_variable_decl<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
-    choice((
+pub(crate) fn function_variable_decl<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
+    expression_recovery(choice((
         map_with_span(
             then(
                 then(
                     parse_type,
-                    ident_local
+                    ident_local.context("Expected variable name")
                 ),
                 delimited(
                     then(
@@ -106,11 +107,11 @@ pub fn function_variable_decl<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Sp
                         map_with_span(
                             preceded(
                                 just(Token::K(Keyword::While)),
-                                delimited(
-                                    just(Token::Separator('(')),
-                                    mathematical_expression,
-                                    just(Token::Separator(')'))
-                                )
+                                non_opt(delimited(
+                                    just(Token::Separator('(')).context("Missing ("),
+                                    mathematical_expression.context("Expected boolean expression"),
+                                    just(Token::Separator(')')).context("Missing )")
+                                ))
                             ),
                             |condition, span| (
                                 Expr::WhileLoop {
@@ -122,7 +123,7 @@ pub fn function_variable_decl<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Sp
                         ),
                         mathematical_expression
                     ))),
-                    just(Token::Separator(']'))
+                    just(Token::Separator(']')).context("Missing ]")
                 )
             ),
             |((value_type, name), body), span| {
@@ -147,10 +148,10 @@ pub fn function_variable_decl<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Sp
                     separated_list1(
                         just(Token::Separator(',')),
                         ident_local
-                    ),
+                    ).context("Expected variable name"),
                     opt(preceded(
                         just(Token::Op("=")),
-                        mathematical_expression
+                        non_opt(mathematical_expression.context("Expected mathematical expression"))
                     ))
                 )
             ),
@@ -171,20 +172,20 @@ pub fn function_variable_decl<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Sp
                 )
             }
         )
-    ))(input)
+    )))(input)
 }
 
-pub fn function_while_loop<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
-    map_with_span(
+pub(crate) fn function_while_loop<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
+    expression_recovery(map_with_span(
         preceded(
             just(Token::K(Keyword::While)),
             then(
                 delimited(
-                    just(Token::Separator('(')),
-                    mathematical_expression,
-                    just(Token::Separator(')')),
+                    just(Token::Separator('(')).context("Missing ("),
+                    mathematical_expression.context("Expected boolean expression"),
+                    just(Token::Separator(')')).context("Missing )"),
                 ),
-                statement_body
+                statement_body.context("Expected expression")
             )
         ),
         |(condition, body), span| (
@@ -194,28 +195,28 @@ pub fn function_while_loop<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spann
             },
             span
         )
-    )(input)
+    ))(input)
 }
 
-pub fn function_for_loop<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
-    map_with_span(
+pub(crate) fn function_for_loop<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
+    expression_recovery(map_with_span(
         preceded(
             just(Token::K(Keyword::For)),
             then(
                 delimited(
-                    just(Token::Separator('(')),
+                    just(Token::Separator('(')).context("Missing ("),
                     separated_pair(
-                        function_statement,
-                        just(Token::Separator(',')),
+                        function_statement.context("Expected variable declaration"),
+                        just(Token::Separator(',')).context("Missing ,"),
                         separated_pair(
-                            mathematical_expression,
-                            just(Token::Separator(',')),
-                            function_statement
+                            mathematical_expression.context("Expected boolean expression"),
+                            just(Token::Separator(',')).context("Missing ,"),
+                            function_statement.context("Expected expression")
                         )
                     ),
-                    just(Token::Separator(')')),
+                    just(Token::Separator(')')).context("Missing )"),
                 ),
-                statement_body
+                statement_body.context("Expected expression")
             )
         ),
         |((var_init,
@@ -232,10 +233,10 @@ pub fn function_for_loop<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned
             },
             span
         )
-    )(input)
+    ))(input)
 }
 
-pub fn func_arg<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<FuncArgument>> {
+pub(crate) fn func_arg<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<FuncArgument>> {
     map_with_span(
         then(
             then(
@@ -265,8 +266,8 @@ pub fn func_arg<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<FuncArgu
     )(input)
 }
 
-pub fn function_statement<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
-    terminated(
+pub(crate) fn function_statement<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
+    expression_recovery(terminated(
         choice((
             assignment_expr,
             function_controlflow_statement,
@@ -277,12 +278,12 @@ pub fn function_statement<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanne
             function_call,
             function_variable_decl,
         )),
-        many1(just(Token::Separator(';')))
-    )(input)
+        many1(just(Token::Separator(';'))).context("Missing ;")
+    ))(input)
 }
 
 fn function_assignment<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
-    map_with_span(
+    expression_recovery(map_with_span(
         preceded(
             peek(then(
                 ident,
@@ -293,8 +294,8 @@ fn function_assignment<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<E
             )),
             separated_pair(
                 member_access,
-                just(Token::Op("=")),
-                mathematical_expression
+                just(Token::Op("=")).context("Missing ="),
+                mathematical_expression.context("Expected expression")
             )
         ),
         |(loperand, roperand), span| (
@@ -305,18 +306,18 @@ fn function_assignment<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<E
             },
             span
         )
-    )(input)
+    ))(input)
 }
 
-pub fn function_controlflow_statement<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
-    choice((
+pub(crate) fn function_controlflow_statement<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
+    expression_recovery(choice(( // TODO: Probably this can do a more personalized recovery, instead of expression_recovery
         map_with_span(
             preceded(
                 just(Token::K(Keyword::Return)),
                 choice((
                     map(peek(just(Token::Separator(';'))), |_| None),
                     map(mathematical_expression, |a| Some(a))
-                ))
+                )).context("Expected ;")
             ),
             |value, span| {
                 let value = match value {
@@ -336,24 +337,24 @@ pub fn function_controlflow_statement<'a>(input: Tokens<'a>) -> TokResult<Tokens
             just(Token::K(Keyword::Continue)),
             |_, span| (Expr::Continue, span)
         ),
-    ))(input)
+    )))(input)
 }
 
-pub fn function_conditional<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
-    map_with_span(
+pub(crate) fn function_conditional<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
+    expression_recovery(map_with_span(
         preceded(
             just(Token::K(Keyword::If)),
             then(
                 delimited(
-                    just(Token::Separator('(')),
-                    mathematical_expression,
-                    just(Token::Separator(')'))
+                    just(Token::Separator('(')).context("Missing ("),
+                    mathematical_expression.context("Expected boolean expression"),
+                    just(Token::Separator(')')).context("Missing )")
                 ),
                 then(
-                    statement_body,
+                    statement_body.context("Expected expression"),
                     opt(preceded(
                         just(Token::K(Keyword::Else)),
-                        statement_body
+                        non_opt(statement_body.context("Expected expression"))
                     ))
                 )
             )
@@ -374,5 +375,5 @@ pub fn function_conditional<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Span
                 span
             )
         }
-    )(input)
+    ))(input)
 }

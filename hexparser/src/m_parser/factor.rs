@@ -12,7 +12,7 @@ use nom::{
 
 use crate::{token::{Spanned, Tokens, Token, Keyword, BuiltFunc}, combinators::{ignore, map_with_span, to}, m_parser::{numeric, operations::mathematical_expression, namespace_resolution, old_member_access, ident, value_type_any, member_access, function_call}, Expr, recovery_err::TokResult};
 
-pub fn factor<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
+pub(crate) fn factor<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     choice((
         numeric,
         unary,
@@ -57,7 +57,7 @@ fn builtin_func<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
                 choice((
                     map(
                         then(
-                            choice((
+                            peek(choice((
                                 ident,
                                 map_with_span(
                                     just(Token::K(Keyword::Parent)),
@@ -67,8 +67,8 @@ fn builtin_func<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
                                     just(Token::K(Keyword::This)),
                                     |_, span| (String::from("this"), span)
                                 )
-                            )),
-                            old_member_access
+                            ))),
+                            member_access
                         ),
                         |(_, expr)| expr // TODO
                     ),
@@ -97,11 +97,11 @@ fn builtin_func<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
 fn special_variables<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     map_with_span(
         then(
-            choice((
+            peek(choice((
                 to(just(Token::K(Keyword::Parent)), String::from("parent")),
                 to(just(Token::K(Keyword::This)), String::from("this"))
-            )),
-            old_member_access
+            ))),
+            member_access
         ),
         |((name, name_span), member_access), span| {
             let item = Box::new((Expr::Local { name: (name, name_span.clone()) }, name_span));

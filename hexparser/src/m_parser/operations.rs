@@ -265,6 +265,6 @@ fn ternary_conditional<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<E
     )(input)
 }
 
-pub fn mathematical_expression<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
+pub(crate) fn mathematical_expression<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     ternary_conditional(input)
 }

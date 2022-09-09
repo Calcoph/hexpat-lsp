@@ -10,7 +10,7 @@ use crate::token::{Token, Keyword, BuiltFunc};
 use crate::{m_lexer::lex, recovery_err::RecoveredError, m_parser::token_parse, token::Spanned};
 
 pub use self::m_parser::{Expr, Value};
-pub mod m_lexer;
+mod m_lexer;
 pub mod m_parser;
 pub mod recovery_err;
 pub mod token;
@@ -22,16 +22,6 @@ pub struct ImCompleteSemanticToken {
     pub start: usize,
     pub length: usize,
     pub token_type: usize,
-}
-
-#[derive(Clone, Debug)]
-pub enum BinaryOp {
-    Add,
-    Sub,
-    Mul,
-    Div,
-    Eq,
-    NotEq,
 }
 
 pub fn type_inference(expr: &Spanned<Expr>, symbol_type_table: &mut HashMap<Range<usize>, Value>) {

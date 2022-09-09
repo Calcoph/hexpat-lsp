@@ -41,7 +41,7 @@ fn hex_num<'a>(input: StrSpan<'a>) -> StrResult<StrSpan, TokSpan> {
             just_no_case("0x"),
             |input: StrSpan<'a>| match hex_digit1(input) {
                 Ok((p, s)) => {
-                    let state = s.extra.clone();
+                    let state = s.extra;
                     Ok((p, TokSpan::from_strspan(Token::Num(s.fragment()), state, s.span())))
                 },
                 Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => {
@@ -59,7 +59,7 @@ fn hex_num<'a>(input: StrSpan<'a>) -> StrResult<StrSpan, TokSpan> {
                         _ => unreachable!(),
                     };
                     let span = input.span();
-                    let state = input.extra.clone();
+                    let state = input.extra;
                     Ok((input, TokSpan::from_strspan(Token::Err, state, span)))
                 },
                 Err(e) => Err(e)
@@ -75,7 +75,7 @@ fn oct_num<'a>(input: StrSpan<'a>) -> StrResult<StrSpan, TokSpan> {
             just_no_case("0o"),
             |input: StrSpan<'a>| match oct_digit1(input) {
                 Ok((p, s)) => {
-                    let state = s.extra.clone();
+                    let state = s.extra;
                     Ok((p, TokSpan::from_strspan(Token::Num(s.fragment()), state, s.span())))
                 },
                 Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => {
@@ -93,7 +93,7 @@ fn oct_num<'a>(input: StrSpan<'a>) -> StrResult<StrSpan, TokSpan> {
                         _ => unreachable!(),
                     };
                     let span = input.span();
-                    let state = input.extra.clone();
+                    let state = input.extra;
                     Ok((input, TokSpan::from_strspan(Token::Err, state, span)))
                 },
                 Err(e) => Err(e)
@@ -109,7 +109,7 @@ fn bin_num<'a>(input: StrSpan<'a>) -> StrResult<StrSpan, TokSpan> {
             just_no_case("0b"),
             |input: StrSpan<'a>| match is_a("01")(input) {
                 Ok((p, s)) => {
-                    let state = s.extra.clone();
+                    let state = s.extra;
                     Ok((p, (Token::Num(s.fragment()), state, s.span())))
                 },
                 Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => {
@@ -127,7 +127,7 @@ fn bin_num<'a>(input: StrSpan<'a>) -> StrResult<StrSpan, TokSpan> {
                         _ => unreachable!()
                     };
                     let span = input.span();
-                    let state = input.extra.clone();
+                    let state = input.extra;
                     Ok((input, (Token::Err, state, span)))
                 },
                 Err(e) => Err(e)
@@ -140,7 +140,7 @@ fn bin_num<'a>(input: StrSpan<'a>) -> StrResult<StrSpan, TokSpan> {
 fn dec_num(input: StrSpan) -> StrResult<StrSpan, TokSpan> {
     match digit1(input) {
         Ok((p, s)) => {
-            let state = s.extra.clone();
+            let state = s.extra;
             Ok((p, TokSpan::from_strspan(Token::Num(s.fragment()), state, s.span())))
         },
         Err(e) => Err(e),
@@ -156,13 +156,13 @@ fn char_<'a>(input: StrSpan<'a>) -> StrResult<StrSpan, TokSpan> { // TODO: Bette
         Ok((p, (head, c))) => match *c.fragment() {
             "'" => {
                 let span = head.span().start..c.span().end;
-                let state = c.extra.clone();
+                let state = c.extra;
                 c.extra.report_error(RecoveredError(span.clone(), "Characters cannot be empty".to_string()));
                 Ok((p, TokSpan::from_strspan(Token::Err, state, span)))
             },
             _ => match just("\'")(p) {
                 Ok((p, tail)) => {
-                    let state = tail.extra.clone();
+                    let state = tail.extra;
                     Ok((p, TokSpan::from_strspan(
                         Token::Char(c.fragment().chars().next().unwrap()),
                         state,
@@ -184,7 +184,7 @@ fn char_<'a>(input: StrSpan<'a>) -> StrResult<StrSpan, TokSpan> { // TODO: Bette
                         }
                         _ => unreachable!()
                     };
-                    let state = input.extra.clone();
+                    let state = input.extra;
                     Ok((input, TokSpan::from_strspan(Token::Err, state, span)))
                 },
                 Err(e) => Err(e),
@@ -197,7 +197,7 @@ fn char_<'a>(input: StrSpan<'a>) -> StrResult<StrSpan, TokSpan> { // TODO: Bette
 fn str_<'a>(input: StrSpan<'a>) -> StrResult<StrSpan, TokSpan> {
     // A parser for strings
     let inp_start = input.span().start;
-    let state = input.extra.clone();
+    let state = input.extra;
     map( // TODO: Match for the Error of "delimited" (missing closing '"'")
         delimited(
             just("\""),
@@ -230,7 +230,7 @@ fn str_<'a>(input: StrSpan<'a>) -> StrResult<StrSpan, TokSpan> {
             } else {
                 (inp_start..inp_start+2, "")
             };
-            TokSpan::from_strspan(Token::Str(s), state.clone(), span) // TODO: Don't return empty str
+            TokSpan::from_strspan(Token::Str(s), state, span) // TODO: Don't return empty str
         }
     )(input)
 }
@@ -281,7 +281,7 @@ fn lexer<'a>(input: StrSpan<'a>) -> StrResult<StrSpan, Vec<TokSpan>> {
             ))
         )),
         |s: StrSpan| {
-            let state = s.extra.clone();
+            let state = s.extra;
             TokSpan::from_strspan(Token::Op(s.fragment()), state, s.span())
         }
     );
@@ -300,7 +300,7 @@ fn lexer<'a>(input: StrSpan<'a>) -> StrResult<StrSpan, Vec<TokSpan>> {
             just("."),
         )),
         |s: StrSpan| {
-            let state = s.extra.clone();
+            let state = s.extra;
             TokSpan::from_strspan(
                 Token::Separator(s.fragment().chars().next().unwrap()),
                 state,
@@ -331,7 +331,7 @@ fn lexer<'a>(input: StrSpan<'a>) -> StrResult<StrSpan, Vec<TokSpan>> {
                     _ => unreachable!()
                 };
                 let span = pound.span().start..arg.span().end;
-                let state = command.extra.clone();
+                let state = command.extra;
                 TokSpan::from_strspan(Token::Pre(pre), state, span)
             }
         );
@@ -396,7 +396,7 @@ fn lexer<'a>(input: StrSpan<'a>) -> StrResult<StrSpan, Vec<TokSpan>> {
                 "auto" => Token::V(ValueType::Auto),
                 s => Token::Ident(s),
             };
-            let state = s.extra.clone();
+            let state = s.extra;
             TokSpan::from_strspan(token, state, s.span())
         }
     );
@@ -422,7 +422,7 @@ fn lexer<'a>(input: StrSpan<'a>) -> StrResult<StrSpan, Vec<TokSpan>> {
             space1
         )),
         |s: StrSpan| {
-            let state = s.extra.clone();
+            let state = s.extra;
             TokSpan::from_strspan(Token::Comment(s.fragment()), state, s.span())
         }
     );
@@ -439,7 +439,7 @@ fn lexer<'a>(input: StrSpan<'a>) -> StrResult<StrSpan, Vec<TokSpan>> {
                     let (rest, input) = input.take_split(len);
                     let span = input.span();
                     input.extra.report_error(RecoveredError(span.clone(), "Unkown (non-ASCII) character".to_string()));
-                    let state = rest.extra.clone();
+                    let state = rest.extra;
                     Ok((rest, TokSpan::from_strspan(Token::Err, state, span)))
                 },
                 Err(e) => Err(e)
@@ -452,7 +452,7 @@ fn lexer<'a>(input: StrSpan<'a>) -> StrResult<StrSpan, Vec<TokSpan>> {
 
 fn recover_err<'a>(e: &ErrorTree<StrSpan<'a>>) -> StrSpan<'a> {
     match e {
-        GenericErrorTree::Base { location, kind: _ } => location.clone(),
+        GenericErrorTree::Base { location, kind: _ } => *location,
         GenericErrorTree::Stack { base, contexts: _ } => recover_err(base),
         GenericErrorTree::Alt(v) => recover_err(v.get(0).unwrap()),
     }

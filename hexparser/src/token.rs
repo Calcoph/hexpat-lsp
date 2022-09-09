@@ -183,12 +183,13 @@ impl<'a> ToRange for Tokens<'a> {
 #[derive(Debug, Clone, Copy)]
 pub struct Tokens<'a> {
     pub tokens: &'a [TokSpan<'a>],
-    offset: usize
+    offset: usize,
+    pub state: ParseState<'a>
 }
 
 impl<'a> Tokens<'a> {
-    pub fn new(tokens: &'a [TokSpan<'a>]) -> Tokens<'a> {
-        Tokens { tokens, offset: 0 }
+    pub fn new(tokens: &'a [TokSpan<'a>], state: ParseState<'a>) -> Tokens<'a> {
+        Tokens { tokens, offset: 0, state }
     }
 }
 
@@ -225,7 +226,7 @@ impl<'a> Display for Tokens<'a> {
 
 impl<'a> Compare<Token<'a>> for Tokens<'a> {
     fn compare(&self, t: Token) -> CompareResult {
-        if *self.tokens[0].fragment() != t {
+        if self.tokens.len() == 0 || *self.tokens[0].fragment() != t {
             CompareResult::Error
         } else {
             CompareResult::Ok
@@ -289,7 +290,7 @@ impl<'a> InputLength for Token<'a> {
 
 impl<'a> InputTake for Tokens<'a> {
     fn take(&self, count: usize) -> Self {
-        Tokens::new(&self.tokens[0..count])
+        Tokens::new(&self.tokens[0..count], self.state)
     }
 
     fn take_split(&self, count: usize) -> (Self, Self) {
@@ -301,7 +302,7 @@ impl<'a> InputTake for Tokens<'a> {
             },
             _ => suffix[0].span().start
         };
-        (Tokens{tokens: suffix, offset: suf_offset}, Tokens{tokens: prefix, offset: self.offset})
+        (Tokens{tokens: suffix, offset: suf_offset, state: self.state}, Tokens{tokens: prefix, offset: self.offset, state: self.state})
     }
 }
 
