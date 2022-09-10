@@ -20,7 +20,7 @@ use nom::{
         fold_many0,
         separated_list0,
         separated_list1
-    }, InputTake
+    }, InputTake, Parser
 };
 use nom_supreme::{error::{ErrorTree, BaseErrorKind, GenericErrorTree}, ParserExt};
 use serde::{Deserialize, Serialize};
@@ -251,7 +251,7 @@ fn function_call<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> 
         then(
             namespace_resolution,
             delimited(
-                just(Token::Separator('(')).context("Missing ("),
+                just(Token::Separator('(')),
                 separated_list0(
                     just(Token::Separator(',')),
                     mathematical_expression
@@ -317,7 +317,7 @@ fn old_namespace_resolution<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Span
 }
 
 // exaclty the same as above, but used when the rework has been done
-fn namespace_resolution<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
+pub(crate) fn namespace_resolution<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     let (input, first_name) = ident_local(input)?;
     fold_many0_once(
         preceded(
@@ -588,7 +588,7 @@ fn parse_type<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<HexTypeDef
                 to(just(Token::K(Keyword::BigEndian)), Endianness::Big)
             ))),
             choice((
-                |input: Tokens<'a>| match namespace_resolution(input) {
+                |input: Tokens<'a>| match namespace_resolution.parse(input) {
                     Ok((input, (n_access, span))) => match n_access {
                         Expr::Local { name: (name, _) } => Ok((input, (HexType::Custom(name), span))),
                         Expr::NamespaceAccess { previous, name } => Ok((input, (namespace_access_to_hextype(Expr::NamespaceAccess { previous, name }), span))),
@@ -728,8 +728,8 @@ fn member_variable<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>
         map_with_span(
             then(
                 then(
-                    parse_type,
-                    namespace_resolution
+                    parse_type.context("TODO: remove this context type"),
+                    namespace_resolution.context("TODO: remove this context name")
                 ),
                 then(
                     array_declaration,
@@ -756,25 +756,50 @@ fn member_variable<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>
             }
         ),
         map_with_span(
-            then(
+            choice((
                 then(
-                    parse_type,
-                    namespace_resolution
-                ),
-                choice((
+                    then(
+                        parse_type,
+                        namespace_resolution
+                    ),
                     preceded(
                         just(Token::Op("@")),
                         mathematical_expression
-                    ),
-                    map_with_span(
-                        separated_list1(
-                            just(Token::Separator(',')),
-                            ident_local
-                        ),
-                        |list, span| (Expr::ExprList { list }, span)
                     )
-                ))
-            ),
+                ),
+                map_with_span(
+                    then(
+                        then(
+                            parse_type,
+                            namespace_resolution
+                        ),
+                        opt(preceded(
+                            just(Token::Separator(',')),
+                            separated_list1(
+                                just(Token::Separator(',')),
+                                ident_local
+                            )
+                        ))
+                    ),
+                    |((value_type, name), names), span| {
+                        let names = match names {
+                            Some(mut names) => {
+                                let span = name.1.start..names.get(names.len()-1).unwrap().1.end;
+                                names.insert(0, name);
+                                (Expr::ExprList { list: names }, span)
+                            },
+                            None => name
+                        };
+                        (
+                            (
+                                value_type,
+                                names
+                            ),
+                            (Expr::Value { val: Value::Null }, span)
+                        )
+                    }
+                )
+            )),
             |((value_type, name), body), span| (
                 Expr::Definition {
                     value_type,
@@ -881,8 +906,8 @@ fn member_declaration<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Ex
     )(input)
 }
 
-fn member<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
-    terminated(
+pub(crate) fn member<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
+    expression_recovery(terminated(
         choice((
             assignment_expr,
             member_declaration,
@@ -910,9 +935,9 @@ fn member<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
                     just(Token::Separator(']'))
                 )
             )),
-            many1(just(Token::Separator(';')))
+            many1(just(Token::Separator(';'))).context("Missing ;")
         )
-    )(input)
+    ))(input)
 }
 
 fn parse_struct<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
@@ -1445,6 +1470,7 @@ fn numeric<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
         |(consumed, span): (Tokens<'a>, Range<usize>)|{
             match consumed.tokens[0].fragment() {
                 Token::Num(_) => Ok((Expr::Value { val: Value::Num(0.0) }, span)), // TODO: Parse the number instead of always being 0.0
+                Token::Bool(b) => Ok((Expr::Value { val: Value::Bool(*b) }, span)),
                 _ => Err(ErrorTree::Base {
                     location: consumed,
                     kind: BaseErrorKind::External(Box::new(tokio::io::Error::new(ErrorKind::Other, "Expceted number literal")))

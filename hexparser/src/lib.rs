@@ -15,6 +15,10 @@ pub mod m_parser;
 pub mod recovery_err;
 pub mod token;
 mod combinators;
+mod simple_debug;
+
+#[cfg(test)]
+mod tests;
 
 
 #[derive(Debug)]
