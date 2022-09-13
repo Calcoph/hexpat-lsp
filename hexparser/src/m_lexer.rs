@@ -7,7 +7,8 @@ use nom::{
         hex_digit1,
         oct_digit1,
         digit1,
-        space1
+        line_ending,
+        multispace1
     },
     branch::alt as choice,
     bytes::complete::{
@@ -25,8 +26,8 @@ use nom::{
     },
     sequence::{pair as then, delimited, preceded},
     multi::{
-        many0_count,
-        many_till as many_until, many0,
+        many_till as many_until,
+        many0,
     },
     InputTake
 };
@@ -320,7 +321,7 @@ fn lexer<'a>(input: StrSpan<'a>) -> StrResult<StrSpan, Vec<TokSpan>> {
                         just("define"),
                     ))
                 ),
-                take_until("\n"),
+                take_until(line_ending),
             ),
             |((pound, command), arg): ((StrSpan, StrSpan), StrSpan)| {
                 let pre = match *command.fragment() {
@@ -411,14 +412,12 @@ fn lexer<'a>(input: StrSpan<'a>) -> StrResult<StrSpan, Vec<TokSpan>> {
         preproc,
     ));
 
-    let comment = preceded(just("//"), take_until("\n"));
+    let comment = preceded(just("//"), take_until(line_ending));
 
     let padding = map(
         choice((
             comment,
-            just("\n"),
-            just("\r"),
-            space1
+            multispace1
         )),
         |s: StrSpan| {
             let state = s.extra;
