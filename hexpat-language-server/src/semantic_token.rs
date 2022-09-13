@@ -8,7 +8,7 @@ use hexparser::{ImCompleteSemanticToken, m_parser::{Expr, NamedNode}, token::Spa
 pub fn semantic_token_from_ast(ast: &(HashMap<String, Spanned<NamedNode>>, Spanned<Expr>)) -> Vec<ImCompleteSemanticToken> {
     let mut semantic_tokens = vec![];
 
-    semantic_token_from_expr(&ast.1, &mut semantic_tokens); // TODO: Uncomment this
+    semantic_token_from_expr(&ast.1, &mut semantic_tokens);
 
     semantic_tokens
 }
@@ -46,19 +46,7 @@ pub fn semantic_token_from_expr(
             semantic_token_from_expr(alternative, semantic_tokens);
         }
         Expr::Definition { value_type: (_, type_span), name, body } => {
-            match &name.0 {
-                Expr::Local { name: (_, name_span) } => {
-                    semantic_tokens.push(ImCompleteSemanticToken {
-                        start: name_span.start,
-                        length: name_span.len(),
-                        token_type: LEGEND_TYPE
-                            .iter()
-                            .position(|item| item == &SemanticTokenType::VARIABLE)
-                            .unwrap(),
-                    });     
-                },
-                _ => () // TODO
-            }
+            semantic_token_from_expr(name, semantic_tokens);
             semantic_tokens.push(ImCompleteSemanticToken {
                 start: type_span.start,
                 length: type_span.len(),
@@ -159,8 +147,21 @@ pub fn semantic_token_from_expr(
                     .position(|item| item == &SemanticTokenType::FUNCTION)
                     .unwrap(),
             });
+            for arg in &args.0 {
+                match &arg.0 {
+                    hexparser::m_parser::FuncArgument::Parameter(arg) => semantic_token_from_expr(arg, semantic_tokens),
+                    hexparser::m_parser::FuncArgument::ParameterPack((_, type_span)) => semantic_tokens.push(ImCompleteSemanticToken {
+                        start: type_span.start,
+                        length: type_span.len(),
+                        token_type: LEGEND_TYPE
+                            .iter()
+                            .position(|item| item == &SemanticTokenType::TYPE)
+                            .unwrap(),
+                    }),
+                }
+            }
             semantic_token_from_expr(body, semantic_tokens)
-        }, // TODO
+        },
         Expr::Struct { name: (_, name_span), body } => {
             semantic_tokens.push(ImCompleteSemanticToken {
                 start: name_span.start,
@@ -274,7 +275,7 @@ pub fn semantic_token_from_expr(
                 length: name_span.len(),
                 token_type: LEGEND_TYPE
                     .iter()
-                    .position(|item| item == &SemanticTokenType::STRUCT) // TODO: Make a tokentype for unions instead of reusing struct
+                    .position(|item| item == &SemanticTokenType::new("union"))
                     .unwrap(),
             });
             semantic_token_from_expr(body, semantic_tokens);
