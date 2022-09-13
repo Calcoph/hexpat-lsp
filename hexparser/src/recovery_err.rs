@@ -36,12 +36,17 @@ pub type StrSpan<'a> = LocatedSpan<&'a str, ParseState<'a>>;
 
 pub trait ToRange {
     fn span(&self) -> Range<usize>;
+    fn consumed_span(&self, next_start: usize) -> Range<usize>;
 }
 
 impl<'a> ToRange for StrSpan<'a> {
     fn span(&self) -> Range<usize> {
-        let start = self.get_utf8_column_first_line()-1;
+        let start = self.get_column_first_line()-1;
         start..start+self.fragment().chars().count()
+    }
+
+    fn consumed_span(&self, next_start: usize) -> Range<usize> {
+        unimplemented!()
     }
 }
 
@@ -62,7 +67,7 @@ where
 
 fn recover_from_error<'a>(e: TokError<'a>) -> TokResult<'a, Tokens<'a>, Spanned<Expr>> {
     match e {
-        GenericErrorTree::Stack { base, contexts } => {
+        GenericErrorTree::Stack { base: _, contexts } => {
             let (input, context) = contexts[contexts.len()-1];
             match context {
                 nom_supreme::error::StackContext::Context(error_msg) => dbg!(error_msg),

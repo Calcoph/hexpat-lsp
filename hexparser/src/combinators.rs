@@ -9,12 +9,11 @@ pub fn spanned<I, O, E: ParseError<I>, F>(
 ) -> impl FnMut(I) -> StrResult<I, Spanned<O>, E>
 where
   F: Parser<I, O, E>,
-  I: ToRange
+  I: ToRange + Copy
 {
     move |i: I| {
-        let full_span = i.span();
         let (remaining, o) = parser.parse(i)?;
-        let span = full_span.start..remaining.span().start;
+        let span = i.consumed_span(remaining.span().start);
 
         Ok((remaining, (o, span)))
     }
@@ -26,13 +25,12 @@ pub fn map_with_span<I, O1, O2, E: ParseError<I>, F, G>(
 ) -> impl FnMut(I) -> StrResult<I, O2, E>
 where
   F: Parser<I, O1, E>,
-  I: ToRange,
+  I: ToRange + Copy,
   G: FnMut(O1, Range<usize>) -> O2,
 {
     move |i: I| {
-        let full_span = i.span();
         let (remaining, o) = parser.parse(i)?;
-        let span = full_span.start..remaining.span().start;
+        let span = i.consumed_span(remaining.span().start);
 
         Ok((remaining, mapper(o, span)))
     }

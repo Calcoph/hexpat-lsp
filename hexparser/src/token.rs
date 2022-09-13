@@ -3,7 +3,7 @@ use std::{ops::Range, iter::{Enumerate, Copied}, slice::Iter, fmt::{self, Displa
 use nom::{Compare, CompareResult, InputLength, InputIter, InputTake, Needed};
 use nom_locate::LocatedSpan;
 
-use crate::{recovery_err::{ParseState, ToRange, TokResult, TokError}, Expr};
+use crate::recovery_err::{ParseState, ToRange};
 
 #[derive(Clone, Debug, Copy, PartialEq, Eq, Hash)]
 pub enum Token<'a> {
@@ -164,6 +164,10 @@ impl<'a> ToRange for TokSpan<'a> {
         let start = self.location_offset();
         start..start+self.extra.1
     }
+
+    fn consumed_span(&self, next_start: usize) -> Range<usize> {
+        unimplemented!()
+    }
 }
 
 impl<'a> ToRange for Tokens<'a> {
@@ -176,6 +180,21 @@ impl<'a> ToRange for Tokens<'a> {
                 end.location_offset()+end.extra.1
             }
         };
+        start..end
+    }
+
+    fn consumed_span(&self, next_start: usize) -> Range<usize> {
+        let start = self.span().start;
+        let mut end = start;
+        for token in self.tokens {
+            let tok_span = token.span();
+            if tok_span.start >= next_start {
+                break
+            } else {
+                end = tok_span.end
+            }
+        }
+
         start..end
     }
 }
