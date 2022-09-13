@@ -11,7 +11,9 @@ use nom::{
     },
     sequence::{pair as then, terminated, delimited, preceded, separated_pair},
     multi::{
-        many0, many1, separated_list0, separated_list1
+       many0,
+       many1,
+       separated_list1
     }
 };
 use nom_supreme::ParserExt;
@@ -267,19 +269,25 @@ pub(crate) fn func_arg<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<F
 }
 
 pub(crate) fn function_statement<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
-    expression_recovery(terminated(
-        choice((
-            assignment_expr,
-            function_controlflow_statement,
-            function_conditional,
-            function_while_loop,
-            function_for_loop,
-            function_assignment,
-            function_call,
-            function_variable_decl,
-        )),
-        many1(just(Token::Separator(';'))).context("Missing ;")
-    ))(input)
+    let semicolon_expr = choice((
+        assignment_expr,
+        function_controlflow_statement,
+        function_assignment,
+        function_call,
+        function_variable_decl,
+    ));
+    let no_semicolon_expr = choice((
+        function_conditional,
+        function_while_loop,
+        function_for_loop,
+    ));
+    expression_recovery(choice((
+        terminated(
+            semicolon_expr,
+            many1(just(Token::Separator(';'))).context("Missing ;")
+        ),
+        no_semicolon_expr,
+    )))(input)
 }
 
 fn function_assignment<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {

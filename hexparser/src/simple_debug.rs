@@ -20,7 +20,7 @@ impl<'a> SimpleDebug for TokSpan<'a> {
 
 impl<'a> SimpleDebug for Token<'a> {
     fn dbg(&self, indentation: i32) {
-        for i in 0..indentation {
+        for _ in 0..indentation {
             print!("  ");
         };
         match self {
@@ -41,7 +41,7 @@ impl<'a> SimpleDebug for Token<'a> {
     }
 
     fn dbg_ln(&self, indentation: i32) {
-        for i in 0..indentation {
+        for _ in 0..indentation {
             print!("  ");
         };
         match self {
@@ -67,7 +67,7 @@ where
     T: SimpleDebug
 {
     fn dbg(&self, indentation: i32) {
-        for i in 0..indentation {
+        for _ in 0..indentation {
             print!("  ");
         };
         self.iter().for_each(|t| t.dbg(0))
@@ -80,7 +80,7 @@ where
 
 impl<'a> SimpleDebug for Tokens<'a> {
     fn dbg(&self, indentation: i32) {
-        for i in 0..indentation {
+        for _ in 0..indentation {
             print!("  ");
         };
         self.tokens.iter().for_each(|t| t.dbg(0))
@@ -93,7 +93,7 @@ impl<'a> SimpleDebug for Tokens<'a> {
 
 impl<'a> SimpleDebug for TokResult<'a, Tokens<'a>, Spanned<Expr>> {
     fn dbg(&self, indentation: i32) {
-        for i in 0..indentation {
+        for _ in 0..indentation {
             print!("  ");
         };
         match self {
@@ -113,7 +113,7 @@ impl<'a> SimpleDebug for TokResult<'a, Tokens<'a>, Spanned<Expr>> {
     }
 
     fn dbg_ln(&self, indentation: i32) {
-        for i in 0..indentation {
+        for _ in 0..indentation {
             print!("  ");
         };
         match self {
@@ -156,7 +156,7 @@ where
 
 impl<'a> SimpleDebug for TokError<'a> {
     fn dbg(&self, indentation: i32) {
-        for i in 0..indentation {
+        for _ in 0..indentation {
             print!("  ");
         };
         match self {
@@ -258,7 +258,7 @@ impl<'a> SimpleDebug for TokError<'a> {
     }
 
     fn dbg_ln(&self, indentation: i32) {
-        for i in 0..indentation {
+        for _ in 0..indentation {
             print!("  ");
         };
         match self {
@@ -266,7 +266,7 @@ impl<'a> SimpleDebug for TokError<'a> {
                 println!("Base(");
                 location.dbg(indentation+1);
                 println!(",");
-                for i in 0..indentation {
+                for _ in 0..indentation {
                     print!("  ");
                 };
                 match kind {
@@ -274,7 +274,7 @@ impl<'a> SimpleDebug for TokError<'a> {
                     nom_supreme::error::BaseErrorKind::Kind(_) => println!("KIND"),
                     nom_supreme::error::BaseErrorKind::External(_) => println!("EXTERNAL"),
                 };
-                for i in 0..indentation {
+                for _ in 0..indentation {
                     print!("  ");
                 };
                 println!(")");
@@ -285,7 +285,7 @@ impl<'a> SimpleDebug for TokError<'a> {
                 println!(",");
                 contexts.dbg(indentation+1);
                 println!();
-                for i in 0..indentation {
+                for _ in 0..indentation {
                     print!("  ");
                 };
                 println!(")");
@@ -296,7 +296,7 @@ impl<'a> SimpleDebug for TokError<'a> {
                     a.dbg(indentation+1);
                     println!(",");
                 }
-                for i in 0..indentation {
+                for _ in 0..indentation {
                     print!("  ");
                 };
                 println!(")");
@@ -307,7 +307,7 @@ impl<'a> SimpleDebug for TokError<'a> {
 
 impl SimpleDebug for StackContext<&str> {
     fn dbg(&self, indentation: i32) {
-        for i in 0..indentation {
+        for _ in 0..indentation {
             print!("  ");
         };
         match self {
@@ -371,7 +371,7 @@ impl SimpleDebug for StackContext<&str> {
     }
 
     fn dbg_ln(&self, indentation: i32) {
-        for i in 0..indentation {
+        for _ in 0..indentation {
             print!("  ");
         };
         match self {
@@ -441,7 +441,7 @@ where
     U: SimpleDebug
 {
     fn dbg(&self, indentation: i32) {
-        for i in 0..indentation {
+        for _ in 0..indentation {
             print!("  ");
         };
         print!("(");
@@ -456,7 +456,7 @@ where
         self.0.dbg(indentation+1);
         println!(",");
         self.1.dbg_ln(indentation+1);
-        for i in 0..indentation {
+        for _ in 0..indentation {
             print!("  ");
         };
         println!(")");
@@ -465,13 +465,12 @@ where
 
 impl SimpleDebug for Expr {
     fn dbg(&self, indentation: i32) {
-        for i in 0..indentation {
+        for _ in 0..indentation {
             print!("  ");
         };
         match self {
             Expr::Error => print!("E::Error"),
-            Expr::Value { val } => print!("E::Value"),
-            Expr::Dollar => print!("E::Dollar"),
+            Expr::Value { .. } => print!("E::Value"),
             Expr::ExprList { list } => {
                 print!("E::ExprList(");
                 for (i, _) in list {
@@ -480,82 +479,81 @@ impl SimpleDebug for Expr {
                 };
                 print!(")")
             },
-            Expr::UnnamedParameter { type_ } => print!("E::UnnamedParameter"),
-            Expr::Local { name } => print!("E::Local"),
-            Expr::Unary { operation, operand } => print!("E::Unary"),
-            Expr::Binary { loperand, operator, roperand } => print!("E::Binary"),
-            Expr::Ternary { loperand, moperand, roperand } => print!("E::Ternary"),
-            Expr::Call { func_name, arguments } => print!("E::Call"),
-            Expr::If { test, consequent, alternative } => print!("E::If"),
-            Expr::Definition { value_type, name, body } => print!("E::Definition"),
-            Expr::BitFieldEntry { name, length } => print!("E::BitFieldEntry"),
-            Expr::EnumEntry { name, value } => print!("E::EnumEntry"),
-            Expr::NamespaceAccess { previous, name } => print!("E::NamespaceAccess"),
-            Expr::Using { new_name, old_name } => print!("E::Using"),
-            Expr::Return { value } => print!("E::Return"),
+            Expr::UnnamedParameter { .. } => print!("E::UnnamedParameter"),
+            Expr::Local { .. } => print!("E::Local"),
+            Expr::Unary { .. } => print!("E::Unary"),
+            Expr::Binary { .. } => print!("E::Binary"),
+            Expr::Ternary { .. } => print!("E::Ternary"),
+            Expr::Call { .. } => print!("E::Call"),
+            Expr::If { .. } => print!("E::If"),
+            Expr::Definition { .. } => print!("E::Definition"),
+            Expr::BitFieldEntry { .. } => print!("E::BitFieldEntry"),
+            Expr::EnumEntry { .. } => print!("E::EnumEntry"),
+            Expr::NamespaceAccess { .. } => print!("E::NamespaceAccess"),
+            Expr::Using { .. } => print!("E::Using"),
+            Expr::Return { .. } => print!("E::Return"),
             Expr::Continue => print!("E::Continue"),
             Expr::Break => print!("E::Break"),
-            Expr::Func { name, args, body } => print!("E::Func"),
-            Expr::Struct { name, body } => print!("E::Struct"),
-            Expr::Namespace { name, body } => print!("E::Namespace"),
-            Expr::Enum { name, value_type, body } => print!("E::Enum"),
-            Expr::Bitfield { name, body } => print!("E::BitField"),
-            Expr::Access { item, member } => print!("E::Access"),
-            Expr::Attribute { arguments } => print!("E::Attribute"),
-            Expr::AttributeArgument { name, value } => print!("E::AttributeArgument"),
-            Expr::WhileLoop { condition, body } => print!("E::WhileLoop"),
-            Expr::ForLoop { var_init, var_test, var_change, body } => print!("E::ForLoop"),
-            Expr::Cast { cast_operator, operand } => print!("E::Cast"),
-            Expr::Union { name, body } => print!("E::Union"),
+            Expr::Func { .. } => print!("E::Func"),
+            Expr::Struct { .. } => print!("E::Struct"),
+            Expr::Namespace { .. } => print!("E::Namespace"),
+            Expr::Enum { .. } => print!("E::Enum"),
+            Expr::Bitfield { .. } => print!("E::BitField"),
+            Expr::Access { .. } => print!("E::Access"),
+            Expr::Attribute { .. } => print!("E::Attribute"),
+            Expr::AttributeArgument { .. } => print!("E::AttributeArgument"),
+            Expr::WhileLoop { .. } => print!("E::WhileLoop"),
+            Expr::ForLoop { .. } => print!("E::ForLoop"),
+            Expr::Cast { .. } => print!("E::Cast"),
+            Expr::Union { .. } => print!("E::Union"),
         }
     }
 
     fn dbg_ln(&self, indentation: i32) {
-        for i in 0..indentation {
+        for _ in 0..indentation {
             print!("  ");
         };
         match self {
             Expr::Error => println!("E::Error"),
-            Expr::Value { val } => println!("E::Value"),
-            Expr::Dollar => println!("E::Dollar"),
+            Expr::Value { .. } => println!("E::Value"),
             Expr::ExprList { list } => {
                 println!("E::ExprList(");
                 for (i, _) in list {
                     i.dbg(indentation+1);
                     println!(",")
                 };
-                for i in 0..indentation {
+                for _ in 0..indentation {
                     print!("  ");
                 };
                 println!(")")
             },
-            Expr::UnnamedParameter { type_ } => println!("E::UnnamedParameter"),
-            Expr::Local { name } => println!("E::Local"),
-            Expr::Unary { operation, operand } => println!("E::Unary"),
-            Expr::Binary { loperand, operator, roperand } => println!("E::Binary"),
-            Expr::Ternary { loperand, moperand, roperand } => println!("E::Ternary"),
-            Expr::Call { func_name, arguments } => println!("E::Call"),
-            Expr::If { test, consequent, alternative } => println!("E::If"),
-            Expr::Definition { value_type, name, body } => println!("E::Definition"),
-            Expr::BitFieldEntry { name, length } => println!("E::BitFieldEntry"),
-            Expr::EnumEntry { name, value } => println!("E::EnumEntry"),
-            Expr::NamespaceAccess { previous, name } => println!("E::NamespaceAccess"),
-            Expr::Using { new_name, old_name } => println!("E::Using"),
-            Expr::Return { value } => println!("E::Return"),
+            Expr::UnnamedParameter { .. } => println!("E::UnnamedParameter"),
+            Expr::Local { .. } => println!("E::Local"),
+            Expr::Unary { .. } => println!("E::Unary"),
+            Expr::Binary { .. } => println!("E::Binary"),
+            Expr::Ternary { .. } => println!("E::Ternary"),
+            Expr::Call { .. } => println!("E::Call"),
+            Expr::If { .. } => println!("E::If"),
+            Expr::Definition { .. } => println!("E::Definition"),
+            Expr::BitFieldEntry { .. } => println!("E::BitFieldEntry"),
+            Expr::EnumEntry { .. } => println!("E::EnumEntry"),
+            Expr::NamespaceAccess { .. } => println!("E::NamespaceAccess"),
+            Expr::Using { .. } => println!("E::Using"),
+            Expr::Return { .. } => println!("E::Return"),
             Expr::Continue => println!("E::Continue"),
             Expr::Break => println!("E::Break"),
-            Expr::Func { name, args, body } => println!("E::Func"),
-            Expr::Struct { name, body } => println!("E::Struct"),
-            Expr::Namespace { name, body } => println!("E::Namespace"),
-            Expr::Enum { name, value_type, body } => println!("E::Enum"),
-            Expr::Bitfield { name, body } => println!("E::BitField"),
-            Expr::Access { item, member } => println!("E::Access"),
-            Expr::Attribute { arguments } => println!("E::Attribute"),
-            Expr::AttributeArgument { name, value } => println!("E::AttributeArgument"),
-            Expr::WhileLoop { condition, body } => println!("E::WhileLoop"),
-            Expr::ForLoop { var_init, var_test, var_change, body } => println!("E::ForLoop"),
-            Expr::Cast { cast_operator, operand } => println!("E::Cast"),
-            Expr::Union { name, body } => println!("E::Union"),
+            Expr::Func { .. } => println!("E::Func"),
+            Expr::Struct { .. } => println!("E::Struct"),
+            Expr::Namespace { .. } => println!("E::Namespace"),
+            Expr::Enum { .. } => println!("E::Enum"),
+            Expr::Bitfield { .. } => println!("E::BitField"),
+            Expr::Access { .. } => println!("E::Access"),
+            Expr::Attribute { .. } => println!("E::Attribute"),
+            Expr::AttributeArgument { .. } => println!("E::AttributeArgument"),
+            Expr::WhileLoop { .. } => println!("E::WhileLoop"),
+            Expr::ForLoop { .. } => println!("E::ForLoop"),
+            Expr::Cast { .. } => println!("E::Cast"),
+            Expr::Union { .. } => println!("E::Union"),
         }
     }
 }

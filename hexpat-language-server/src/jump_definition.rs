@@ -94,7 +94,6 @@ pub fn get_definition_of_expr(
         Expr::Definition { value_type, name, body } => {
             get_definition_of_expr(body, definition_ass_list.clone(), ident_offset)
         },
-        Expr::Dollar => (false, None), // TODO
         Expr::ExprList { list } => (false, None), // TODO
         Expr::UnnamedParameter { type_ } => (false, None), // TODO
         Expr::Unary { operation, operand } => (false, None), // TODO

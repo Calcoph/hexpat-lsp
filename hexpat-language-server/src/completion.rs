@@ -112,7 +112,7 @@ pub fn get_completion_of(
                 true
             }
         }
-        Expr::Binary { loperand, operator, roperand } => {
+        Expr::Binary { loperand, operator: _, roperand } => {
             match get_completion_of(loperand, definition_map, ident_offset) {
                 true => get_completion_of(roperand, definition_map, ident_offset),
                 false => false,
@@ -146,7 +146,6 @@ pub fn get_completion_of(
             match &name.0 {
                 Expr::Error => todo!(),
                 Expr::Value { val } => todo!(),
-                Expr::Dollar => todo!(),
                 Expr::ExprList { list } => todo!(),
                 Expr::UnnamedParameter { type_ } => todo!(),
                 Expr::Local { name } => {
@@ -183,7 +182,6 @@ pub fn get_completion_of(
             }
             get_completion_of(body, definition_map, ident_offset)
         },
-        Expr::Dollar => false, // TODO
         Expr::ExprList { list } => false, // TODO
         Expr::UnnamedParameter { type_ } => false, // TODO
         Expr::Unary { operation, operand } => false, // TODO

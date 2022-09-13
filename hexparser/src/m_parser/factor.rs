@@ -10,7 +10,7 @@ use nom::{
     sequence::{pair as then, delimited, preceded}
 };
 
-use crate::{token::{Spanned, Tokens, Token, Keyword, BuiltFunc}, combinators::{ignore, map_with_span, to}, m_parser::{numeric, operations::mathematical_expression, namespace_resolution, old_member_access, ident, value_type_any, member_access, function_call}, Expr, recovery_err::TokResult};
+use crate::{token::{Spanned, Tokens, Token, Keyword, BuiltFunc}, combinators::{ignore, map_with_span, to}, m_parser::{numeric, operations::mathematical_expression, namespace_resolution, ident, value_type_any, member_access, function_call}, Expr, recovery_err::TokResult};
 
 pub(crate) fn factor<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     choice((

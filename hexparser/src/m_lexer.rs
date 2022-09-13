@@ -30,7 +30,6 @@ use nom::{
     },
     InputTake
 };
-use nom_locate::LocatedSpan;
 use nom_supreme::error::{GenericErrorTree, ErrorTree};
 
 use crate::{recovery_err::{StrResult, StrSpan, RecoveredError, ParseState, ToRange}, token::{TokSpan, FromStrSpan, Token, PreProc, Keyword, BuiltFunc, ValueType}};
@@ -341,7 +340,7 @@ fn lexer<'a>(input: StrSpan<'a>) -> StrResult<StrSpan, Vec<TokSpan>> {
         recognize(
             then(
                 choice((alpha1, just("_"))),
-                many0_count(choice((alphanumeric1, just("_"))))
+                many0(choice((alphanumeric1, just("_"))))
             )
         ),
         |s: StrSpan| {

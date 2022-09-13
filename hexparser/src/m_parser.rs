@@ -1,4 +1,4 @@
-use std::{collections::HashMap, ops::Range, io::ErrorKind, error::Error};
+use std::{collections::HashMap, ops::Range, io::ErrorKind};
 
 use nom::{
     branch::alt as choice,
@@ -17,7 +17,6 @@ use nom::{
         many_till as many_until,
         many1,
         many0,
-        fold_many0,
         separated_list0,
         separated_list1
     }, InputTake, Parser
@@ -31,7 +30,7 @@ pub use operations::UnaryOp;
 
 mod function;
 mod factor;
-mod operations;
+pub(crate) mod operations;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Value {
@@ -61,7 +60,6 @@ impl std::fmt::Display for Value {
 pub enum Expr {
     Error,
     Value{ val: Value },
-    Dollar,
     ExprList { list: Vec<Spanned<Self>> },
     UnnamedParameter { type_: Spanned<HexType> },
     Local { name: Spanned<String> },
@@ -210,41 +208,6 @@ pub enum Assignment {
     BXor
 }
 
-// TODO: rework all parsers that use this
-fn old_function_call<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
-    map(
-        then(
-            old_namespace_resolution,
-            delimited(
-                just(Token::Separator('(')),
-                separated_list0(
-                    just(Token::Separator(',')),
-                    mathematical_expression
-                ),
-                just(Token::Separator(')')),
-            )
-        ),
-        |(func_name, arguments)| {
-            let args_span = if arguments.len() > 0 {
-                arguments.get(0).unwrap().1.start..arguments.get(arguments.len()-1).unwrap().1.end
-            } else {
-                func_name.1.clone()
-            };
-
-            let span = func_name.1.start..args_span.end;
-            let arguments = (arguments, args_span);
-
-            (
-                Expr::Call {
-                    func_name: Box::new(func_name),
-                    arguments
-                },
-                span
-            )
-        }
-    )(input)
-}
-
 // exaclty the same as above, but used when the rework has been done
 fn function_call<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     expression_recovery(map(
@@ -295,27 +258,6 @@ fn string_literal<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>>
     )(input)
 }
 
-// TODO: Rework all the parsers so "ident" is not parsed before namespace_resolution.
-fn old_namespace_resolution<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
-    let (input, first_name) = ident_local(input).unwrap(); // TODO: Error recovery instead of unwrap
-    fold_many0_once(
-        preceded(
-            just(Token::Op("::")),
-            ident
-        ),
-        || first_name,
-        |previous, name| {
-            let span = previous.1.start..name.1.end;
-            let expr = Expr::NamespaceAccess {
-                previous: Box::new(previous),
-                name
-            };
-
-            (expr, span)
-        }
-    )(input)
-}
-
 // exaclty the same as above, but used when the rework has been done
 pub(crate) fn namespace_resolution<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     let (input, first_name) = ident_local(input)?;
@@ -335,44 +277,6 @@ pub(crate) fn namespace_resolution<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a
             (expr, span)
         }
     )(input)
-}
-
-// r_value
-// TODO: Also parse the ident/parent/this that comes before this
-fn old_member_access<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
-    then(
-        choice((
-            ident,
-            map_with_span(
-                just(Token::K(Keyword::Parent)),
-                |_, span| (String::from("parent"), span)
-            ),
-            map_with_span(
-                just(Token::K(Keyword::This)),
-                |_, span| (String::from("this"), span)
-            )
-        )),
-        then(
-            opt(then(
-                just(Token::Separator('[')),
-                then(
-                    mathematical_expression,
-                    just(Token::Separator(']'))
-                )
-            )),
-            opt(then(
-                just(Token::Separator('.')),
-                then(
-                    choice((
-                        ident,
-                        to(just(Token::K(Keyword::Parent)), String::from("parent"))
-                    )),
-                    old_member_access
-                )
-            ))
-        )
-    )(input);
-    todo!()
 }
 
 // exaclty the same as above, but used when the rework has been done
@@ -907,37 +811,39 @@ fn member_declaration<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Ex
 }
 
 pub(crate) fn member<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
-    expression_recovery(terminated(
-        choice((
-            assignment_expr,
-            member_declaration,
-            preceded(
-                just(Token::V(ValueType::Padding)),
-                delimited(
-                    just(Token::Separator('[')),
-                    padding,
-                    just(Token::Separator(']'))
-                )
-            ),
-            conditional,
-            to(just(Token::K(Keyword::Break)), Expr::Break),
-            to(just(Token::K(Keyword::Continue)), Expr::Continue)
-        )),
-        then(
-            opt(delimited(
-                then(
-                    just(Token::Separator('[')),
-                    just(Token::Separator('['))
+    expression_recovery(choice((
+        conditional,
+        terminated(
+            choice((
+                assignment_expr,
+                member_declaration,
+                preceded(
+                    just(Token::V(ValueType::Padding)),
+                    delimited(
+                        just(Token::Separator('[')),
+                        padding,
+                        just(Token::Separator(']'))
+                    )
                 ),
-                attribute,
-                then(
-                    just(Token::Separator(']')),
-                    just(Token::Separator(']'))
-                )
+                to(just(Token::K(Keyword::Break)), Expr::Break),
+                to(just(Token::K(Keyword::Continue)), Expr::Continue)
             )),
-            many1(just(Token::Separator(';'))).context("Missing ;")
+            then(
+                opt(delimited(
+                    then(
+                        just(Token::Separator('[')),
+                        just(Token::Separator('['))
+                    ),
+                    attribute,
+                    then(
+                        just(Token::Separator(']')),
+                        just(Token::Separator(']'))
+                    )
+                )),
+                many1(just(Token::Separator(';'))).context("Missing ;")
+            )
         )
-    ))(input)
+    )))(input)
 }
 
 fn parse_struct<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
@@ -1394,8 +1300,8 @@ fn todo_placement<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>>
     ))(input)
 }
 
-fn statements_choice<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
-    choice((
+fn statements<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
+    let semicolon_expr = choice((
         using,
         normal_placement,
         todo_placement,
@@ -1405,26 +1311,42 @@ fn statements_choice<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Exp
         parse_bitfield,
         function_definition,
         parse_namespace,
-        function_statement
-    ))(input)
-}
+    ));
 
-fn statements<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
-    expression_recovery(terminated(
-        statements_choice.context("Invalid expression"),
-        then(
-            opt(
-                preceded(
-                    then(
-                        just(Token::Separator('[')),
-                        just(Token::Separator('['))
-                    ),
-                    attribute
-                )
-            ),
-            many1(just(Token::Separator(';'))).context("Missing ;")
+    let no_semicolon_expr = function_statement;
+
+    expression_recovery(choice((
+        terminated(
+            semicolon_expr.context("Invalid expression"),
+            then(
+                opt(
+                    preceded(
+                        then(
+                            just(Token::Separator('[')),
+                            just(Token::Separator('['))
+                        ),
+                        attribute
+                    )
+                ),
+                many1(just(Token::Separator(';'))).context("Missing ;")
+            )
+        ),
+        terminated(
+            no_semicolon_expr.context("Invalid expression"),
+            then(
+                opt(
+                    preceded(
+                        then(
+                            just(Token::Separator('[')),
+                            just(Token::Separator('['))
+                        ),
+                        attribute
+                    )
+                ),
+                many0(just(Token::Separator(';')))
+            )
         )
-    ))(input)
+    )))(input)
 }
 
 fn ident<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<String>> {

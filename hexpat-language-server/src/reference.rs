@@ -201,7 +201,6 @@ pub fn get_reference_of_expr(
                 include_self,
             );
         },
-        Expr::Dollar => (),
         Expr::Unary { operation, operand } => get_reference_of_expr(
             operand,
             definition_ass_list.clone(),

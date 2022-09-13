@@ -44,7 +44,6 @@ pub fn type_inference(expr: &Spanned<Expr>, symbol_type_table: &mut HashMap<Rang
         Expr::EnumEntry {..} => (), // TODO
         Expr::Ternary {..} => (), // TODO
         Expr::NamespaceAccess {..} => (), // TODO
-        Expr::Dollar => (), // TODO
         Expr::Unary {..} => (), // TODO
         Expr::Using {..} => (), // TODO
         Expr::Continue => (), // TODO
@@ -115,14 +114,25 @@ pub fn parse(
                         .position(|item| item == &SemanticTokenType::STRING)
                         .unwrap(),
                 }),
-                Token::Op(_) => Some(ImCompleteSemanticToken {
-                    start: span.start,
-                    length: span.len(),
-                    token_type: LEGEND_TYPE
-                        .iter()
-                        .position(|item| item == &SemanticTokenType::OPERATOR)
-                        .unwrap(),
-                }),
+                Token::Op(op) => match *op {
+                    "$" => Some(ImCompleteSemanticToken {
+                        start: span.start,
+                        length: span.len(),
+                        token_type: LEGEND_TYPE
+                            .iter()
+                            .position(|item| item == &SemanticTokenType::new("dollar"))
+                            .unwrap(),
+                    }),
+                    "::" => None,
+                    _ => Some(ImCompleteSemanticToken {
+                        start: span.start,
+                        length: span.len(),
+                        token_type: LEGEND_TYPE
+                            .iter()
+                            .position(|item| item == &SemanticTokenType::OPERATOR)
+                            .unwrap(),
+                    })
+                },
                 Token::Separator(_) => None,
                 Token::Ident(_) => None,
                 Token::K(k) => match k {
@@ -287,12 +297,12 @@ pub fn parse(
                             .unwrap(),
                     }),
                 }
-                Token::V(_) => Some(ImCompleteSemanticToken { // TODO: use the ValueType
+                Token::V(_) => Some(ImCompleteSemanticToken {
                     start: span.start,
                     length: span.len(),
                     token_type: LEGEND_TYPE
                         .iter()
-                        .position(|item| item == &SemanticTokenType::KEYWORD)
+                        .position(|item| item == &SemanticTokenType::TYPE)
                         .unwrap(),
                 }),
                 Token::B(b) => match b {
