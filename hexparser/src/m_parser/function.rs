@@ -362,7 +362,7 @@ pub(crate) fn function_conditional<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'
                     statement_body.context("Expected expression"),
                     opt(preceded(
                         just(Token::K(Keyword::Else)),
-                        non_opt(statement_body.context("Expected expression"))
+                        non_opt(statement_body).context("Expected expression")
                     ))
                 )
             )

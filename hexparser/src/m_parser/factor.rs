@@ -9,6 +9,7 @@ use nom::{
     },
     sequence::{pair as then, delimited, preceded}
 };
+use nom_supreme::ParserExt;
 
 use crate::{token::{Spanned, Tokens, Token, Keyword, BuiltFunc}, combinators::{ignore, map_with_span, to}, m_parser::{numeric, operations::mathematical_expression, namespace_resolution, ident, value_type_any, member_access, function_call}, Expr, recovery_err::TokResult};
 
@@ -18,12 +19,18 @@ pub(crate) fn factor<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned
         unary,
         delimited(
             just(Token::Separator('(')),
-            mathematical_expression,
-            just(Token::Separator(')'))
+            mathematical_expression.context("Expected mathematical expression"),
+            just(Token::Separator(')')).context("Missing )")
         ),
         function_call,
-        member_access, // TODO: make a member_access variant that starts with a namespace_resolution
-        namespace_resolution,
+        preceded(
+            peek(then(
+                ident,
+                just(Token::Op("::"))
+            )),
+            namespace_resolution
+        ),
+        member_access,
         special_variables,
         map_with_span(
             just(Token::Op("$")),

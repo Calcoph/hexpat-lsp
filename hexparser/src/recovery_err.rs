@@ -1,11 +1,11 @@
 use std::{cell::RefCell, ops::Range, error::Error};
 
-use nom::{Parser, InputTake};
+use nom::{Parser, InputTake, combinator::peek, bytes::complete::tag as just};
 use nom_locate::LocatedSpan;
 //use nom::error::{ParseError, ErrorKind, FromExternalError};
 use nom_supreme::error::{ErrorTree, GenericErrorTree};
 
-use crate::{token::{TokSpan, Tokens, Spanned}, Expr};
+use crate::{token::{TokSpan, Tokens, Spanned, Token}, Expr};
 
 pub type StrResult<I, O, E=ErrorTree<I>> = Result<(I, O), nom::Err<E>>;
 pub type TokError<'a, 'b> = GenericErrorTree<Tokens<'a, 'b>, &'a [TokSpan<'a, 'b>], &'static str, Box<dyn Error + 'a>>;
@@ -78,7 +78,19 @@ fn recover_from_error<'a, 'b>(e: TokError<'a, 'b>) -> TokResult<'a, 'b, Spanned<
                     (input, input.span())
                 },
                 _ => {
-                    let (rest, input) = input.take_split(1);
+                    let (mut rest, input) = input.take_split(1);
+                    let mut next_token = input;
+                    let mut continue_loop = |input| -> TokResult<'a, 'b, Tokens> {
+                        peek(just(Token::Separator(';')))(input) // TODO: Also end loop on Token::Separator('}')
+                    }(rest).is_err() && rest.tokens.len() > 0;
+                    while continue_loop { // TODO: First see where to split and then do it, instead of splitting by 1 at a time
+                        let (r, n_token) = next_token.take_split(1);
+                        rest = r;
+                        next_token = n_token;
+                        continue_loop = |input| -> TokResult<'a, 'b, Tokens> {
+                            peek(just(Token::Separator(';')))(input) // TODO: Also end loop on Token::Separator('}'), but count how many { are opened while searching for }
+                        }(rest).is_err() && rest.tokens.len() > 0;
+                    }
                     (rest, input.span())
                 }
             };

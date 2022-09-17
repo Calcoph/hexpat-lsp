@@ -279,7 +279,6 @@ pub(crate) fn namespace_resolution<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'
     )(input)
 }
 
-// exaclty the same as above, but used when the rework has been done
 // r_value
 fn member_access<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
     map_with_span(
@@ -390,14 +389,14 @@ fn statement_body<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Ex
 }
 
 fn conditional<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
-    map_with_span(
+    expression_recovery(map_with_span(
         preceded(
             just(Token::K(Keyword::If)),
             then(
                 delimited(
-                    just(Token::Separator('(')),
+                    just(Token::Separator('(')).context("Missing ("),
                     mathematical_expression,
-                    just(Token::Separator(')'))
+                    just(Token::Separator(')')).context("Missing )")
                 ),
                 then(
                     choice((
@@ -405,11 +404,11 @@ fn conditional<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>
                             delimited(
                                 just(Token::Separator('{')),
                                 spanned(many0(member)),
-                                just(Token::Separator('}'))
+                                just(Token::Separator('}')).context("Missing }")
                             ),
                             |(list, span)| (Expr::ExprList { list }, span)
                         ),
-                        member,
+                        member.context("Invalid expression"),
                     )),
                     opt(preceded(
                         just(Token::K(Keyword::Else)),
@@ -418,11 +417,11 @@ fn conditional<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>
                                 delimited(
                                     just(Token::Separator('{')),
                                     spanned(many0(member)),
-                                    just(Token::Separator('}'))
+                                    non_opt(just(Token::Separator('}'))).context("Missing }")
                                 ),
                                 |(list, span)| (Expr::ExprList { list }, span)
                             ),
-                            member
+                            member.context("Invalid expression")
                         ))
                     ))
                 )
@@ -442,7 +441,7 @@ fn conditional<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>
                 span
             )
         }
-    )(input)
+    ))(input)
 }
 
 #[derive(Debug, Clone)]
@@ -632,14 +631,14 @@ fn member_variable<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<E
         map_with_span(
             then(
                 then(
-                    parse_type.context("TODO: remove this context type"),
-                    namespace_resolution.context("TODO: remove this context name")
+                    parse_type,
+                    namespace_resolution
                 ),
                 then(
                     array_declaration,
                     opt(preceded(
                         just(Token::Op("@")),
-                        mathematical_expression
+                        non_opt(mathematical_expression).context("Expected mathematical expression")
                     ))
                 )
             ),
@@ -668,7 +667,7 @@ fn member_variable<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<E
                     ),
                     preceded(
                         just(Token::Op("@")),
-                        mathematical_expression
+                        mathematical_expression.context("Expected mathematical expression")
                     )
                 ),
                 map_with_span(
@@ -725,7 +724,7 @@ fn member_variable<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<E
                     ),
                     opt(preceded(
                         just(Token::Op("@")),
-                        mathematical_expression
+                        non_opt(mathematical_expression).context("Expected mathematical expression")
                     ))
                 )
             ),
@@ -763,7 +762,7 @@ fn member_variable<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<E
                                 pointer_size_type,
                                 opt(preceded(
                                     just(Token::Op("@")),
-                                    mathematical_expression
+                                    non_opt(mathematical_expression).context("Expected mathematical expression")
                                 ))
                             )
                         )
@@ -820,9 +819,9 @@ pub(crate) fn member<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned
                 preceded(
                     just(Token::V(ValueType::Padding)),
                     delimited(
-                        just(Token::Separator('[')),
-                        padding,
-                        just(Token::Separator(']'))
+                        just(Token::Separator('[')).context("Missing ["),
+                        padding.context("Expected padding expression"),
+                        just(Token::Separator(']')).context("Missing ]")
                     )
                 ),
                 to(just(Token::K(Keyword::Break)), Expr::Break),
@@ -835,10 +834,10 @@ pub(crate) fn member<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned
                         just(Token::Separator('['))
                     ),
                     attribute,
-                    then(
-                        just(Token::Separator(']')),
-                        just(Token::Separator(']'))
-                    )
+                    non_opt(then(
+                        just(Token::Separator(']')).context("Missing ]]"),
+                        just(Token::Separator(']')).context("Missing ]")
+                    ))
                 )),
                 many1(just(Token::Separator(';'))).context("Missing ;")
             )
@@ -1087,7 +1086,7 @@ fn array_variable_placement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, 
                 array_declaration,
                 preceded(
                     just(Token::Op("@")),
-                    mathematical_expression
+                    mathematical_expression.context("Expected mathematical expression")
                 )
             )
         ),
@@ -1182,7 +1181,7 @@ fn placement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> 
                             map(
                                 preceded(
                                     just(Token::Op("@")),
-                                    mathematical_expression
+                                    non_opt(mathematical_expression).context("Expected mathematical expression")
                                 ),
                                 |a| Some(a)
                             ),
