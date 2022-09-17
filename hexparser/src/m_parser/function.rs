@@ -20,7 +20,7 @@ use nom_supreme::ParserExt;
 
 use crate::{token::{Spanned, Tokens, Token, Keyword, ValueType}, combinators::{map_with_span, spanned}, m_parser::{ident, parse_type, mathematical_expression, statement_body, FuncArgument, ident_local, Assignment, BinaryOp, member_access, function_call, assignment_expr}, Expr, Value, recovery_err::{TokResult, expression_recovery, non_opt}};
 
-fn function_arguments<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Vec<Spanned<FuncArgument>>>> {
+fn function_arguments<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Vec<Spanned<FuncArgument>>>> {
     map_with_span(
         then(
             separated_list1( // TODO: maybe also parse parameter packs here, with the sole purpose of giving better error messages
@@ -61,7 +61,7 @@ fn function_arguments<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Ve
     )(input)
 }
 
-pub(crate) fn function_definition<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
+pub(crate) fn function_definition<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
     expression_recovery(map_with_span(
         preceded(
             just(Token::K(Keyword::Fn)),
@@ -92,7 +92,7 @@ pub(crate) fn function_definition<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>
     ))(input)
 }
 
-pub(crate) fn function_variable_decl<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
+pub(crate) fn function_variable_decl<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
     expression_recovery(choice((
         map_with_span(
             then(
@@ -177,7 +177,7 @@ pub(crate) fn function_variable_decl<'a>(input: Tokens<'a>) -> TokResult<Tokens<
     )))(input)
 }
 
-pub(crate) fn function_while_loop<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
+pub(crate) fn function_while_loop<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
     expression_recovery(map_with_span(
         preceded(
             just(Token::K(Keyword::While)),
@@ -200,7 +200,7 @@ pub(crate) fn function_while_loop<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>
     ))(input)
 }
 
-pub(crate) fn function_for_loop<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
+pub(crate) fn function_for_loop<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
     expression_recovery(map_with_span(
         preceded(
             just(Token::K(Keyword::For)),
@@ -238,7 +238,7 @@ pub(crate) fn function_for_loop<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, 
     ))(input)
 }
 
-pub(crate) fn func_arg<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<FuncArgument>> {
+pub(crate) fn func_arg<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<FuncArgument>> {
     map_with_span(
         then(
             then(
@@ -268,7 +268,7 @@ pub(crate) fn func_arg<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<F
     )(input)
 }
 
-pub(crate) fn function_statement<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
+pub(crate) fn function_statement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
     let semicolon_expr = choice((
         assignment_expr,
         function_controlflow_statement,
@@ -290,7 +290,7 @@ pub(crate) fn function_statement<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>,
     )))(input)
 }
 
-fn function_assignment<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
+fn function_assignment<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
     expression_recovery(map_with_span(
         preceded(
             peek(then(
@@ -317,7 +317,7 @@ fn function_assignment<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<E
     ))(input)
 }
 
-pub(crate) fn function_controlflow_statement<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
+pub(crate) fn function_controlflow_statement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
     expression_recovery(choice(( // TODO: Probably this can do a more personalized recovery, instead of expression_recovery
         map_with_span(
             preceded(
@@ -348,7 +348,7 @@ pub(crate) fn function_controlflow_statement<'a>(input: Tokens<'a>) -> TokResult
     )))(input)
 }
 
-pub(crate) fn function_conditional<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
+pub(crate) fn function_conditional<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
     expression_recovery(map_with_span(
         preceded(
             just(Token::K(Keyword::If)),

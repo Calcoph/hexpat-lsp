@@ -8,7 +8,7 @@ pub trait SimpleDebug {
     fn dbg_ln(&self, indentation: i32);
 }
 
-impl<'a> SimpleDebug for TokSpan<'a> {
+impl<'a, 'b> SimpleDebug for TokSpan<'a, 'b> {
     fn dbg(&self, indentation: i32) {
         self.fragment().dbg(indentation);
     }
@@ -78,7 +78,7 @@ where
     }
 }
 
-impl<'a> SimpleDebug for Tokens<'a> {
+impl<'a, 'b> SimpleDebug for Tokens<'a, 'b> {
     fn dbg(&self, indentation: i32) {
         for _ in 0..indentation {
             print!("  ");
@@ -91,7 +91,7 @@ impl<'a> SimpleDebug for Tokens<'a> {
     }
 }
 
-impl<'a> SimpleDebug for TokResult<'a, Tokens<'a>, Spanned<Expr>> {
+impl<'a, 'b> SimpleDebug for TokResult<'a, 'b, Spanned<Expr>> {
     fn dbg(&self, indentation: i32) {
         for _ in 0..indentation {
             print!("  ");
@@ -154,7 +154,7 @@ where
     }
 }
 
-impl<'a> SimpleDebug for TokError<'a> {
+impl<'a, 'b> SimpleDebug for TokError<'a, 'b> {
     fn dbg(&self, indentation: i32) {
         for _ in 0..indentation {
             print!("  ");

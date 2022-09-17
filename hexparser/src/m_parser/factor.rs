@@ -12,7 +12,7 @@ use nom::{
 
 use crate::{token::{Spanned, Tokens, Token, Keyword, BuiltFunc}, combinators::{ignore, map_with_span, to}, m_parser::{numeric, operations::mathematical_expression, namespace_resolution, ident, value_type_any, member_access, function_call}, Expr, recovery_err::TokResult};
 
-pub(crate) fn factor<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
+pub(crate) fn factor<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
     choice((
         numeric,
         unary,
@@ -33,7 +33,7 @@ pub(crate) fn factor<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Exp
     ))(input)
 }
 
-fn unary<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
+fn unary<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
     preceded(
         peek(choice((
             just(Token::Op("+")),
@@ -45,7 +45,7 @@ fn unary<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     )(input)
 }
 
-fn builtin_func<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
+fn builtin_func<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
     map_with_span(
         then(
             choice((
@@ -94,7 +94,7 @@ fn builtin_func<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     )(input)
 }
 
-fn special_variables<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
+fn special_variables<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
     map_with_span(
         then(
             peek(choice((

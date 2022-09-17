@@ -8,8 +8,8 @@ use nom_supreme::error::{ErrorTree, GenericErrorTree};
 use crate::{token::{TokSpan, Tokens, Spanned}, Expr};
 
 pub type StrResult<I, O, E=ErrorTree<I>> = Result<(I, O), nom::Err<E>>;
-pub type TokError<'a> = GenericErrorTree<Tokens<'a>, &'a [TokSpan<'a>], &'static str, Box<dyn Error + 'a>>;
-pub type TokResult<'a, I, O, E=TokError<'a>> = Result<(I, O), nom::Err<E>>;
+pub type TokError<'a, 'b> = GenericErrorTree<Tokens<'a, 'b>, &'a [TokSpan<'a, 'b>], &'static str, Box<dyn Error + 'a>>;
+pub type TokResult<'a, 'b, O, I=Tokens<'a, 'b>, E=TokError<'a, 'b>> = Result<(I, O), nom::Err<E>>;
 
 /// Carried around in the `LocatedSpan::extra` field in
 /// between `nom` parsers.
@@ -32,14 +32,14 @@ impl<'a> ParseState<'a> {
 #[derive(Debug)]
 pub struct RecoveredError(pub Range<usize>, pub String);
 
-pub type StrSpan<'a> = LocatedSpan<&'a str, ParseState<'a>>;
+pub type StrSpan<'a, 'b> = LocatedSpan<&'a str, ParseState<'b>>;
 
 pub trait ToRange {
     fn span(&self) -> Range<usize>;
     fn consumed_span(&self, next_start: usize) -> Range<usize>;
 }
 
-impl<'a> ToRange for StrSpan<'a> {
+impl<'a, 'b> ToRange for StrSpan<'a, 'b> {
     fn span(&self) -> Range<usize> {
         let start = self.get_column_first_line()-1;
         start..start+self.fragment().chars().count()
@@ -50,11 +50,11 @@ impl<'a> ToRange for StrSpan<'a> {
     }
 }
 
-pub fn expression_recovery<'a, F>(mut func: F) -> impl FnMut(Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>>
+pub fn expression_recovery<'a, 'b: 'a, F>(mut func: F) -> impl FnMut(Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>>
 where
-    F: Parser<Tokens<'a>, Spanned<Expr>, TokError<'a>>
+    F: Parser<Tokens<'a, 'b>, Spanned<Expr>, TokError<'a, 'b>>
 {
-    move |input: Tokens<'a>| -> TokResult<Tokens<'a>, Spanned<Expr>> {
+    move |input: Tokens<'a, 'b>| -> TokResult<'a, 'b, Spanned<Expr>> {
         match func.parse(input) {
             Ok(r) => Ok(r),
             Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => {
@@ -65,7 +65,7 @@ where
     }
 }
 
-fn recover_from_error<'a>(e: TokError<'a>) -> TokResult<'a, Tokens<'a>, Spanned<Expr>> {
+fn recover_from_error<'a, 'b>(e: TokError<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
     match e {
         GenericErrorTree::Stack { base: _, contexts } => {
             let (input, context) = contexts[contexts.len()-1];
@@ -108,11 +108,11 @@ fn recover_from_error<'a>(e: TokError<'a>) -> TokResult<'a, Tokens<'a>, Spanned<
     }
 }
 
-pub fn non_opt<'a, F, I, O>(mut func: F) -> impl FnMut(I) -> TokResult<'a, I, O>
+pub fn non_opt<'a, 'b: 'a, F, I, O>(mut func: F) -> impl FnMut(I) -> TokResult<'a, 'b, O, I>
 where
-    F: Parser<I, O, TokError<'a>>
+    F: Parser<I, O, TokError<'a, 'b>>,
 {
-    move |input: I| -> TokResult<I, O> {
+    move |input: I| -> TokResult<O, I> {
         match func.parse(input) {
             Ok(r) => Ok(r),
             Err(nom::Err::Error(e)) => Err(nom::Err::Failure(e)),

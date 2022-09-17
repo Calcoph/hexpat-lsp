@@ -146,20 +146,20 @@ impl ToString for BuiltFunc {
 
 pub type Spanned<T> = (T, Range<usize>);
 
-pub type TokSpan<'a> = LocatedSpan<Token<'a>, (ParseState<'a>, usize)>;
+pub type TokSpan<'a, 'b> = LocatedSpan<Token<'a>, (ParseState<'b>, usize)>;
 
-pub trait FromStrSpan<'a> {
-    fn from_strspan(token: Token<'a>, state: ParseState<'a>, span: Range<usize>) -> TokSpan<'a>;
+pub trait FromStrSpan<'a, 'b> {
+    fn from_strspan(token: Token<'a>, state: ParseState<'b>, span: Range<usize>) -> TokSpan<'a, 'b>;
 }
 
-impl<'a> FromStrSpan<'a> for TokSpan<'a> {
+impl<'a, 'b> FromStrSpan<'a, 'b> for TokSpan<'a, 'b> {
     #[inline]
-    fn from_strspan(token: Token<'a>, state: ParseState<'a>, span: Range<usize>) -> TokSpan<'a> {
+    fn from_strspan(token: Token<'a>, state: ParseState<'b>, span: Range<usize>) -> TokSpan<'a, 'b> {
         unsafe{TokSpan::new_from_raw_offset(span.start, 0, token, (state, span.end-span.start))}
     }
 }
 
-impl<'a> ToRange for TokSpan<'a> {
+impl<'a, 'b> ToRange for TokSpan<'a, 'b> {
     fn span(&self) -> Range<usize> {
         let start = self.location_offset();
         start..start+self.extra.1
@@ -170,7 +170,7 @@ impl<'a> ToRange for TokSpan<'a> {
     }
 }
 
-impl<'a> ToRange for Tokens<'a> {
+impl<'a, 'b> ToRange for Tokens<'a, 'b> {
     fn span(&self) -> Range<usize> {
         let start = self.offset;
         let end = match self.tokens.len() {
@@ -200,19 +200,19 @@ impl<'a> ToRange for Tokens<'a> {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct Tokens<'a> {
-    pub tokens: &'a [TokSpan<'a>],
+pub struct Tokens<'a, 'b> {
+    pub tokens: &'a [TokSpan<'a, 'b>],
     offset: usize,
     pub state: ParseState<'a>
 }
 
-impl<'a> Tokens<'a> {
-    pub fn new(tokens: &'a [TokSpan<'a>], state: ParseState<'a>) -> Tokens<'a> {
+impl<'a, 'b> Tokens<'a, 'b> {
+    pub fn new(tokens: &'a [TokSpan<'a, 'b>], state: ParseState<'a>) -> Tokens<'a, 'b> {
         Tokens { tokens, offset: 0, state }
     }
 }
 
-impl<'a> Display for Tokens<'a> {
+impl<'a, 'b> Display for Tokens<'a, 'b> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self.tokens)
     }
@@ -243,7 +243,7 @@ impl<'a> Display for Tokens<'a> {
     }
 } */
 
-impl<'a> Compare<Token<'a>> for Tokens<'a> {
+impl<'a, 'b> Compare<Token<'a>> for Tokens<'a, 'b> {
     fn compare(&self, t: Token) -> CompareResult {
         if self.tokens.len() == 0 || *self.tokens[0].fragment() != t {
             CompareResult::Error
@@ -263,8 +263,8 @@ impl<'a> Compare<Token<'a>> for Tokens<'a> {
 
 // impl FindToken
 
-impl<'a> InputIter for Tokens<'a> {
-    type Item = TokSpan<'a>;
+impl<'a, 'b> InputIter for Tokens<'a, 'b> {
+    type Item = TokSpan<'a, 'b>;
 
     type Iter = Enumerate<Self::IterElem>;
 
@@ -293,7 +293,7 @@ impl<'a> InputIter for Tokens<'a> {
     }
 }
 
-impl<'a> InputLength for Tokens<'a> {
+impl<'a, 'b> InputLength for Tokens<'a, 'b> {
     #[inline]
     fn input_len(&self) -> usize {
         self.tokens.input_len()
@@ -307,7 +307,7 @@ impl<'a> InputLength for Token<'a> {
     }
 }
 
-impl<'a> InputTake for Tokens<'a> {
+impl<'a, 'b> InputTake for Tokens<'a, 'b> {
     fn take(&self, count: usize) -> Self {
         Tokens::new(&self.tokens[0..count], self.state)
     }

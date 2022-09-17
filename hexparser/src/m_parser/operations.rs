@@ -14,7 +14,7 @@ use nom::{
 
 use crate::{token::{Spanned, Tokens, Token, Keyword}, combinators::{ignore, to, map_with_span, fold_many0_once}, m_parser::{value_type_any, parse_type, factor::factor, string_literal, BinaryOp}, Expr, recovery_err::TokResult};
 
-fn cast_expression<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
+fn cast_expression<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
     choice((
         map_with_span(
             preceded(
@@ -51,7 +51,7 @@ pub enum UnaryOp {
     BNot,
 }
 
-fn unary_expression<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
+fn unary_expression<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
     choice((
         map(
             then(
@@ -89,7 +89,7 @@ fn binary_fold((loperand, l_span): Spanned<Expr>, ((operator, _), (roperand, r_s
     )
 }
 
-fn multiplicative_expression<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
+fn multiplicative_expression<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
     let (input, first_expr) = unary_expression(input)?;
     fold_many0_once(
         then(
@@ -105,7 +105,7 @@ fn multiplicative_expression<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spa
     )(input)
 }
 
-fn additive_expression<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
+fn additive_expression<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
     let (input, first_expr) = multiplicative_expression(input)?;
     fold_many0_once(
         then(
@@ -120,7 +120,7 @@ fn additive_expression<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<E
     )(input)
 }
 
-fn shift_expression<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
+fn shift_expression<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
     let (input, first_expr) = additive_expression(input)?;
     fold_many0_once(
         then(
@@ -135,7 +135,7 @@ fn shift_expression<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr
     )(input)
 }
 
-fn binary_and_expression<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
+fn binary_and_expression<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
     let (input, first_expr) = shift_expression(input)?;
     fold_many0_once(
         then(
@@ -147,7 +147,7 @@ fn binary_and_expression<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned
     )(input)
 }
 
-fn binary_xor_expression<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
+fn binary_xor_expression<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
     let (input, first_expr) = binary_and_expression(input)?;
     fold_many0_once(
         then(
@@ -159,7 +159,7 @@ fn binary_xor_expression<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned
     )(input)
 }
 
-fn binary_or_expression<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
+fn binary_or_expression<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
     let (input, first_expr) = binary_xor_expression(input)?;
     fold_many0_once(
         then(
@@ -171,7 +171,7 @@ fn binary_or_expression<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<
     )(input)
 }
 
-fn relation_expression<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
+fn relation_expression<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
     let (input, first_expr) = binary_or_expression(input)?;
     fold_many0_once(
         then(
@@ -188,7 +188,7 @@ fn relation_expression<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<E
     )(input)
 }
 
-fn equality_expression<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
+fn equality_expression<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
     let (input, first_expr) = relation_expression(input)?;
     fold_many0_once(
         then(
@@ -203,7 +203,7 @@ fn equality_expression<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<E
     )(input)
 }
 
-fn boolean_and<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
+fn boolean_and<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
     let (input, first_expr) = equality_expression(input)?;
     fold_many0_once(
         then(
@@ -215,7 +215,7 @@ fn boolean_and<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     )(input)
 }
 
-fn boolean_xor<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
+fn boolean_xor<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
     let (input, first_expr) = boolean_and(input)?;
     fold_many0_once(
         then(
@@ -227,7 +227,7 @@ fn boolean_xor<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     )(input)
 }
 
-fn boolean_or<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
+fn boolean_or<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
     let (input, first_expr) = boolean_xor(input)?;
     fold_many0_once(
         then(
@@ -239,7 +239,7 @@ fn boolean_or<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
     )(input)
 }
 
-fn ternary_conditional<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
+fn ternary_conditional<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
     let (input, first_expr) = boolean_or(input)?;
     fold_many0_once(
         preceded(
@@ -264,6 +264,6 @@ fn ternary_conditional<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<E
     )(input)
 }
 
-pub(crate) fn mathematical_expression<'a>(input: Tokens<'a>) -> TokResult<Tokens<'a>, Spanned<Expr>> {
+pub(crate) fn mathematical_expression<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
     ternary_conditional(input)
 }
