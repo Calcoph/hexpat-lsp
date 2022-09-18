@@ -22,14 +22,14 @@ use crate::{token::{Spanned, Tokens, Token, Keyword, ValueType}, combinators::{m
 
 fn function_arguments<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Vec<Spanned<FuncArgument>>>> {
     map_with_span(
-        then(
-            separated_list1( // TODO: maybe also parse parameter packs here, with the sole purpose of giving better error messages
-                just(Token::Separator(',')),
-                func_arg
-            ),
-            opt(preceded(
-                just(Token::Separator(',')),
-                choice((
+        choice((
+            then(
+                separated_list1( // TODO: maybe also parse parameter packs here, with the sole purpose of giving better error messages
+                    just(Token::Separator(',')),
+                    func_arg
+                ),
+                opt(preceded(
+                    just(Token::Separator(',')),
                     map_with_span(
                         separated_pair(
                             just(Token::V(ValueType::Auto)), // TODO: Maybe don't ignore this
@@ -45,11 +45,29 @@ fn function_arguments<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanne
                         |(_, name), span| {
                             (FuncArgument::ParameterPack(name), span)
                         }
-                    ),
-                    func_arg
+                    )
                 ))
-            ))
-        ),
+            ),
+            map(
+                opt(map_with_span(
+                    separated_pair(
+                        just(Token::V(ValueType::Auto)), // TODO: Maybe don't ignore this
+                        then(
+                            just(Token::Separator('.')),
+                            then(
+                                just(Token::Separator('.')),
+                                just(Token::Separator('.')),
+                            )
+                        ),
+                        ident
+                    ),
+                    |(_, name), span| {
+                        (FuncArgument::ParameterPack(name), span)
+                    }
+                )),
+                |a| (vec![], a)
+            ),
+        )),
         |(mut args, arg_pack), span| {
             match arg_pack {
                 Some(arg_pack) => args.push(arg_pack),
@@ -243,7 +261,10 @@ pub(crate) fn func_arg<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spann
         then(
             then(
                 parse_type,
-                opt(ident_local)
+                preceded(
+                    not(just(Token::Separator('.'))),
+                    opt(ident_local)
+                )
             ),
             opt(
                 preceded(

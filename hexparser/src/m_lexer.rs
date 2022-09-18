@@ -7,13 +7,12 @@ use nom::{
         hex_digit1,
         oct_digit1,
         digit1,
-        line_ending,
-        multispace1, not_line_ending
+        multispace1,
+        not_line_ending
     },
     branch::alt as choice,
     bytes::complete::{
         tag as just,
-        take_until,
         tag_no_case as just_no_case,
         take,
         is_a
@@ -22,7 +21,7 @@ use nom::{
         recognize,
         eof,
         map,
-        map_opt, not
+        map_opt
     },
     sequence::{pair as then, delimited, preceded},
     multi::{

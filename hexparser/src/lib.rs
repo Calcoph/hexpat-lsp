@@ -1,11 +1,10 @@
 use std::cell::RefCell;
-use std::rc::Rc;
 use std::{collections::HashMap, ops::Range};
 use std::path::Path;
 use nom::IResult;
 use nom::bytes::complete::{tag as just, take_until};
-use nom::character::complete::{multispace1, line_ending, alpha1, alphanumeric1, not_line_ending};
-use nom::combinator::{map, eof, recognize, not};
+use nom::character::complete::{multispace1, alpha1, alphanumeric1, not_line_ending};
+use nom::combinator::{map, eof, recognize};
 use nom::branch::alt as choice;
 use nom::multi::many0;
 use nom::sequence::{pair as then, preceded, terminated, delimited};
@@ -13,11 +12,10 @@ use tower_lsp::lsp_types::SemanticTokenType;
 
 use parserlib::LEGEND_TYPE;
 
-use crate::combinators::map_with_span;
 use crate::m_lexer::lex_tokens;
 use crate::m_parser::NamedNode;
-use crate::recovery_err::{StrSpan, ToRange, StrResult, ParseState};
-use crate::token::{Token, Keyword, BuiltFunc, TokSpan, FromStrSpan, ValueType};
+use crate::recovery_err::{ToRange, ParseState};
+use crate::token::{Token, Keyword, BuiltFunc, TokSpan, FromStrSpan};
 use crate::{m_lexer::lex, recovery_err::RecoveredError, m_parser::token_parse, token::Spanned};
 
 pub use self::m_parser::{Expr, Value};
@@ -46,7 +44,7 @@ pub fn type_inference(expr: &Spanned<Expr>, symbol_type_table: &mut HashMap<Rang
         Expr::Local {..} => {}
         Expr::Binary {..} => {}
         Expr::Call {..} => {}
-        Expr::If { test: test_, consequent, alternative } => {
+        Expr::If { test: _test, consequent, alternative } => {
             type_inference(consequent, symbol_type_table);
             type_inference(alternative, symbol_type_table);
         },

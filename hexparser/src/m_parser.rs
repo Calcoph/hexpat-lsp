@@ -24,7 +24,7 @@ use nom::{
 use nom_supreme::{error::{ErrorTree, BaseErrorKind, GenericErrorTree}, ParserExt};
 use serde::{Deserialize, Serialize};
 
-use crate::{token::{Spanned, TokSpan, Tokens, Token, Keyword, ValueType}, combinators::{spanned, ignore, to, map_with_span, fold_many0_once}, m_parser::{function::{function_statement, function_definition}, operations::mathematical_expression}, recovery_err::{TokResult, ToRange, RecoveredError, TokError, expression_recovery, non_opt}};
+use crate::{token::{Spanned, TokSpan, Tokens, Token, Keyword, ValueType}, combinators::{spanned, ignore, to, map_with_span, fold_many0_once}, m_parser::{function::{function_statement, function_definition}, operations::mathematical_expression}, recovery_err::{TokResult, ToRange, RecoveredError, TokError, expression_recovery, non_opt}, simple_debug::SimpleDebug};
 
 pub use operations::UnaryOp;
 
@@ -1133,7 +1133,7 @@ fn pointer_array_variable_placement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<
     )(input)
 }
 
-fn parse_namespace<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
+pub(crate) fn parse_namespace<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
     expression_recovery(map_with_span(
         preceded(
             just(Token::K(Keyword::Namespace)),
@@ -1141,7 +1141,7 @@ fn parse_namespace<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<E
                 separated_list1(
                     just(Token::Op("::")),
                     ident
-                ).context("Expected namespace name"),
+                ),
                 delimited(
                     just(Token::Separator('{')).context("Missing {"),
                     spanned(many0(statements)),
@@ -1309,14 +1309,16 @@ fn statements<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>>
         parse_enum,
         parse_bitfield,
         function_definition,
-        parse_namespace,
     ));
 
-    let no_semicolon_expr = function_statement;
+    let no_semicolon_expr = choice((
+        parse_namespace,
+        function_statement
+    ));
 
     expression_recovery(choice((
         terminated(
-            semicolon_expr.context("Invalid expression"),
+            semicolon_expr,
             then(
                 opt(
                     preceded(
@@ -1348,7 +1350,7 @@ fn statements<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>>
     )))(input)
 }
 
-fn ident<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<String>> {
+pub(crate) fn ident<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<String>> {
     map_res(
         spanned(take(1 as usize)),
         |(consumed, span): (Tokens, Range<usize>)|{
@@ -1443,7 +1445,10 @@ pub enum NamedNode {
 // Hashmap contains the names of named expressions and their clones
 pub(crate) fn token_parse(tokens: Vec<TokSpan>) -> (HashMap<String, Spanned<NamedNode>>, Spanned<Expr>) {
     let hmap = HashMap::new();
-    let (_, ex) = parser(Tokens::new(&tokens, tokens[0].extra.0)).expect("Unrecovered error happenned in parser");
+    let ex = match tokens.len() {
+        0 => (Expr::Value { val: Value::Null }, 0..0),
+        _ => parser(Tokens::new(&tokens, tokens[0].extra.0)).expect("Unrecovered error happened in parser").1
+    };
     //let ex = (Expr::Dollar, 0..1);
     (hmap, ex)
 }
