@@ -25,9 +25,9 @@ pub fn semantic_token_from_expr(
                 start: name_span.start,
                 length: name_span.len(),
                 token_type: LEGEND_TYPE
-                    .iter()
-                    .position(|item| item == &SemanticTokenType::VARIABLE)
-                    .unwrap(),
+                .iter()
+                .position(|item| item == &SemanticTokenType::VARIABLE)
+                .unwrap(),
             });
         }
         Expr::Binary { loperand, operator: _, roperand } => {
@@ -40,11 +40,13 @@ pub fn semantic_token_from_expr(
                 semantic_token_from_expr(p, semantic_tokens);
             });
         }
-        Expr::If { test, consequent, alternative } => {
+        Expr::If { test, consequent } => {
             semantic_token_from_expr(test, semantic_tokens);
             semantic_token_from_expr(consequent, semantic_tokens);
-            semantic_token_from_expr(alternative, semantic_tokens);
         }
+        Expr::IfBlock { ifs, alternative } => {
+            // TODO
+        },
         Expr::Definition { value_type: (_, type_span), name, body } => {
             semantic_token_from_expr(name, semantic_tokens);
             semantic_tokens.push(ImCompleteSemanticToken {

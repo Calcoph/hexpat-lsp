@@ -44,10 +44,8 @@ pub fn type_inference(expr: &Spanned<Expr>, symbol_type_table: &mut HashMap<Rang
         Expr::Local {..} => {}
         Expr::Binary {..} => {}
         Expr::Call {..} => {}
-        Expr::If { test: _test, consequent, alternative } => {
-            type_inference(consequent, symbol_type_table);
-            type_inference(alternative, symbol_type_table);
-        },
+        Expr::If { .. } => (), // TODO
+        Expr::IfBlock { .. } => (), // TODO
         Expr::Definition {..} => (), // TODO
         Expr::BitFieldEntry {..} => (), // TODO
         Expr::EnumEntry {..} => (), // TODO

@@ -131,17 +131,14 @@ pub fn get_completion_of(
             }
             true
         }
-        Expr::If { test, consequent, alternative } => {
+        Expr::If { test, consequent } => {
             match get_completion_of(test, definition_map, ident_offset) {
                 true => {}
                 false => return false,
             }
-            match get_completion_of(consequent, definition_map, ident_offset) {
-                true => {}
-                false => return false,
-            }
-            get_completion_of(alternative, definition_map, ident_offset)
+            get_completion_of(consequent, definition_map, ident_offset)
         }
+        Expr::IfBlock { ifs, alternative } => false, // TODO
         Expr::Definition { value_type, name, body } => {
             match &name.0 {
                 Expr::Error => todo!(),
@@ -158,7 +155,8 @@ pub fn get_completion_of(
                 Expr::Binary { loperand, operator, roperand } => todo!(),
                 Expr::Ternary { loperand, moperand, roperand } => todo!(),
                 Expr::Call { func_name, arguments } => todo!(),
-                Expr::If { test, consequent, alternative } => todo!(),
+                Expr::If { test, consequent } => todo!(),
+                Expr::IfBlock { ifs, alternative } => todo!(),
                 Expr::Definition { value_type, name, body } => todo!(),
                 Expr::BitFieldEntry { name, length } => todo!(),
                 Expr::EnumEntry { name, value } => todo!(),

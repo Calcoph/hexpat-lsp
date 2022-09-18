@@ -71,7 +71,7 @@ pub fn get_definition_of_expr(
             }
             (true, None)
         }
-        Expr::If { test, consequent, alternative } => {
+        Expr::If { test, consequent } => {
             match get_definition_of_expr(test, definition_ass_list.clone(), ident_offset) {
                 (true, None) => {}
                 (true, Some(value)) => return (false, Some(value)),
@@ -79,18 +79,13 @@ pub fn get_definition_of_expr(
                 (false, Some(value)) => return (false, Some(value)),
             }
             match get_definition_of_expr(consequent, definition_ass_list.clone(), ident_offset) {
-                (true, None) => {}
-                (true, Some(value)) => return (false, Some(value)),
-                (false, None) => return (false, None),
-                (false, Some(value)) => return (false, Some(value)),
-            }
-            match get_definition_of_expr(alternative, definition_ass_list, ident_offset) {
                 (true, None) => return (true, None),
                 (true, Some(value)) => return (false, Some(value)),
                 (false, None) => return (false, None),
                 (false, Some(value)) => return (false, Some(value)),
             }
         }
+        Expr::IfBlock { ifs, alternative } => (false, None), // TODO
         Expr::Definition { value_type, name, body } => {
             get_definition_of_expr(body, definition_ass_list.clone(), ident_offset)
         },
@@ -116,6 +111,6 @@ pub fn get_definition_of_expr(
         Expr::WhileLoop { condition, body } => (false, None), // TODO
         Expr::ForLoop { var_init, var_test, var_change, body } => (false, None), // TODO
         Expr::Cast { cast_operator, operand } => (false, None), // TODO
-        Expr::Union { name, body } => (false, None), // TODO
+        Expr::Union { name, body } => (false, None),
     }
 }

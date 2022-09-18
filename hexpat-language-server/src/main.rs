@@ -482,7 +482,6 @@ struct TextDocumentItem {
 }
 impl Backend {
     async fn inlay_hint(&self, params: InlayHintParams) -> Result<Vec<(usize, usize, String)>> {
-        dbg!("INLAY_STARTED");
         let mut hashmap = HashMap::new();
         if let Some(ast) = self.ast_map.get(&params.path) {
             type_inference(&ast.1, &mut hashmap);
@@ -505,7 +504,6 @@ impl Backend {
                 )
             })
             .collect::<Vec<_>>();
-        dbg!("INLAY_ENDED");
         Ok(inlay_hint_list)
     }
 

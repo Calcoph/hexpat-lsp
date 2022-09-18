@@ -93,7 +93,7 @@ pub fn get_reference_of_expr(
                 );
             }
         }
-        Expr::If { test, consequent, alternative } => {
+        Expr::If { test, consequent } => {
             get_reference_of_expr(
                 consequent,
                 definition_ass_list.clone(),
@@ -101,14 +101,8 @@ pub fn get_reference_of_expr(
                 reference_list,
                 include_self,
             );
-            get_reference_of_expr(
-                alternative,
-                definition_ass_list,
-                reference_symbol.clone(),
-                reference_list,
-                include_self,
-            );
         }
+        Expr::IfBlock { ifs, alternative } => (), // TODO
         Expr::Definition { value_type, name, body } => {
             let next_symbol = match &name.0 {
                 Expr::Local { name: (name, name_span) } => {
