@@ -45,7 +45,8 @@ pub fn semantic_token_from_expr(
             semantic_token_from_expr(consequent, semantic_tokens);
         }
         Expr::IfBlock { ifs, alternative } => {
-            // TODO
+            semantic_token_from_expr(ifs, semantic_tokens);
+            semantic_token_from_expr(alternative, semantic_tokens);
         },
         Expr::Definition { value_type: (_, type_span), name, body } => {
             semantic_token_from_expr(name, semantic_tokens);
@@ -79,7 +80,7 @@ pub fn semantic_token_from_expr(
                     .position(|item| item == &SemanticTokenType::ENUM_MEMBER)
                     .unwrap(),
             });
-            semantic_token_from_expr(value, semantic_tokens);
+            // semantic_token_from_expr(value, semantic_tokens); // TODO: Make value an expr so it can be tokenized
         },
         Expr::Ternary { loperand, moperand, roperand } => {
             semantic_token_from_expr(loperand, semantic_tokens);

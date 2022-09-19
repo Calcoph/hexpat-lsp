@@ -100,7 +100,7 @@ pub enum Expr {
     },
     EnumEntry {
         name: Spanned<String>,
-        value: Box<Spanned<Self>>
+        value: Value
     },
     NamespaceAccess {
         previous: Box<Spanned<Self>>,
@@ -908,27 +908,31 @@ fn parse_enum<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>>
                         just(Token::Separator(',')),
                         choice((
                             terminated(
-                                ident_local,
+                                ident,
                                 then(
                                     just(Token::Op("=")),
                                     mathematical_expression
                                 )
                             ),
-                            ident_local
+                            ident
                         )),
                     )),
                     just(Token::Separator('}')).context("Expected } or valid enum expression")
                 )
             )
         ),
-        |((name, value_type), (entries, entries_span)), span| (
-            Expr::Enum {
-                name,
-                value_type,
-                body: Box::new((Expr::ExprList { list: entries }, entries_span))
-            },
-            span
-        )
+        |((name, value_type), (entries, entries_span)), span| {
+            let entries = entries.into_iter()
+                .map(|(name, name_span)| (Expr::EnumEntry { name: (name, name_span.clone()), value: Value::Null }, name_span)).collect(); // TODO: give each entry its value
+            (
+                Expr::Enum {
+                    name,
+                    value_type,
+                    body: Box::new((Expr::ExprList { list: entries }, entries_span))
+                },
+                span
+            )
+        }
     ))(input)
 }
 

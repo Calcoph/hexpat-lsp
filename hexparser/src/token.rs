@@ -165,6 +165,7 @@ impl<'a, 'b> ToRange for TokSpan<'a, 'b> {
         start..start+self.extra.1
     }
 
+    #[allow(unused_variables)]
     fn consumed_span(&self, next_start: usize) -> Range<usize> {
         unimplemented!()
     }

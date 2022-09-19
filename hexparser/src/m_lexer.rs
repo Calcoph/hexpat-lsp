@@ -41,7 +41,7 @@ fn hex_num<'a, 'b>(input: StrSpan<'a, 'b>) -> StrResult<StrSpan<'a, 'b>, TokSpan
             |input: StrSpan<'a, 'b>| match hex_digit1(input) {
                 Ok((p, s)) => {
                     let state = s.extra;
-                    Ok((p, TokSpan::from_strspan(Token::Num(s.fragment()), state, s.span())))
+                    Ok((p, (Token::Num(s.fragment()), state, s.span())))
                 },
                 Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => {
                     let input = match e {
@@ -59,12 +59,12 @@ fn hex_num<'a, 'b>(input: StrSpan<'a, 'b>) -> StrResult<StrSpan<'a, 'b>, TokSpan
                     };
                     let span = input.span();
                     let state = input.extra;
-                    Ok((input, TokSpan::from_strspan(Token::Err, state, span)))
+                    Ok((input, (Token::Err, state, span)))
                 },
                 Err(e) => Err(e)
             }
         ),
-        |(_, t)| t
+        |(head, t)| TokSpan::from_strspan(t.0, t.1, head.span().start..t.2.end)
     )(input)
 }
 
@@ -75,7 +75,7 @@ fn oct_num<'a, 'b>(input: StrSpan<'a, 'b>) -> StrResult<StrSpan<'a, 'b>, TokSpan
             |input: StrSpan<'a, 'b>| match oct_digit1(input) {
                 Ok((p, s)) => {
                     let state = s.extra;
-                    Ok((p, TokSpan::from_strspan(Token::Num(s.fragment()), state, s.span())))
+                    Ok((p, (Token::Num(s.fragment()), state, s.span())))
                 },
                 Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => {
                     let input = match e {
@@ -93,12 +93,12 @@ fn oct_num<'a, 'b>(input: StrSpan<'a, 'b>) -> StrResult<StrSpan<'a, 'b>, TokSpan
                     };
                     let span = input.span();
                     let state = input.extra;
-                    Ok((input, TokSpan::from_strspan(Token::Err, state, span)))
+                    Ok((input, (Token::Err, state, span)))
                 },
                 Err(e) => Err(e)
             }
         ),
-        |(_, t)| t
+        |(head, t)| TokSpan::from_strspan(t.0, t.1, head.span().start..t.2.end)
     )(input)
 }
 
@@ -229,7 +229,7 @@ fn str_<'a, 'b>(input: StrSpan<'a, 'b>) -> StrResult<StrSpan<'a, 'b>, TokSpan<'a
             } else {
                 (inp_start..inp_start+2, "")
             };
-            TokSpan::from_strspan(Token::Str(s), state, span) // TODO: Don't return empty str
+            TokSpan::from_strspan(Token::Str(s), state, span)
         }
     )(input)
 }

@@ -486,7 +486,7 @@ impl SimpleDebug for Expr {
             Expr::Ternary { .. } => print!("E::Ternary"),
             Expr::Call { .. } => print!("E::Call"),
             Expr::If { .. } => print!("E::If"),
-            Expr::IfBlock { ifs, alternative } => print!("E:IfBlock"),
+            Expr::IfBlock { .. } => print!("E:IfBlock"),
             Expr::Definition { .. } => print!("E::Definition"),
             Expr::BitFieldEntry { .. } => print!("E::BitFieldEntry"),
             Expr::EnumEntry { .. } => print!("E::EnumEntry"),
