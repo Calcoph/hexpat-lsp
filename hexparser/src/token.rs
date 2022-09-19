@@ -68,7 +68,7 @@ impl<'a> fmt::Display for Token<'a> {
             Token::V(_) => write!(f, "V"), // TODO
             Token::Pre(_) => write!(f, "PreProc"),
             Token::Comment(s) => write!(f, "{}", s),
-            Token::Err => todo!(), // TODO
+            Token::Err => write!(f, "Err"),
             //TokenType::PreprocStart(s) => write!(f, "{}", s),
             //TokenType::PreprocStr(s) => write!(f, "{}", s),
         }
@@ -272,11 +272,11 @@ impl<'a, 'b> InputIter for Tokens<'a, 'b> {
     type IterElem = Copied<Iter<'a, Self::Item>>;
 
     fn iter_indices(&self) -> Self::Iter {
-        todo!()
+        unimplemented!()
     }
 
     fn iter_elements(&self) -> Self::IterElem {
-        todo!()
+        unimplemented!()
     }
 
     fn position<P>(&self, predicate: P) -> Option<usize>

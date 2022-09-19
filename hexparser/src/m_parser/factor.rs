@@ -62,22 +62,19 @@ fn builtin_func<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr
             delimited(
                 just(Token::Separator('(')),
                 choice((
-                    map(
-                        then(
-                            peek(choice((
-                                ident,
-                                map_with_span(
-                                    just(Token::K(Keyword::Parent)),
-                                    |_, span| (String::from("parent"), span)
-                                ),
-                                map_with_span(
-                                    just(Token::K(Keyword::This)),
-                                    |_, span| (String::from("this"), span)
-                                )
-                            ))),
-                            member_access
-                        ),
-                        |(_, expr)| expr // TODO
+                    preceded(
+                        peek(choice((
+                            ident,
+                            map_with_span(
+                                just(Token::K(Keyword::Parent)),
+                                |_, span| (String::from("parent"), span)
+                            ),
+                            map_with_span(
+                                just(Token::K(Keyword::This)),
+                                |_, span| (String::from("this"), span)
+                            )
+                        ))),
+                        member_access
                     ),
                     map(
                         value_type_any,

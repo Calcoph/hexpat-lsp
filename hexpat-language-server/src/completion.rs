@@ -141,42 +141,13 @@ pub fn get_completion_of(
         Expr::IfBlock { ifs, alternative } => false, // TODO
         Expr::Definition { value_type, name, body } => {
             match &name.0 {
-                Expr::Error => todo!(),
-                Expr::Value { val } => todo!(),
-                Expr::ExprList { list } => todo!(),
-                Expr::UnnamedParameter { type_ } => todo!(),
                 Expr::Local { name } => {
                     definition_map.insert(
                         name.0.clone(),
                         ImCompleteCompletionItem::Variable(name.0.clone()),
                     );
                 },
-                Expr::Unary { operation, operand } => todo!(),
-                Expr::Binary { loperand, operator, roperand } => todo!(),
-                Expr::Ternary { loperand, moperand, roperand } => todo!(),
-                Expr::Call { func_name, arguments } => todo!(),
-                Expr::If { test, consequent } => todo!(),
-                Expr::IfBlock { ifs, alternative } => todo!(),
-                Expr::Definition { value_type, name, body } => todo!(),
-                Expr::BitFieldEntry { name, length } => todo!(),
-                Expr::EnumEntry { name, value } => todo!(),
-                Expr::NamespaceAccess { previous, name } => todo!(),
-                Expr::Using { new_name, old_name } => todo!(),
-                Expr::Return { value } => todo!(),
-                Expr::Continue => todo!(),
-                Expr::Break => todo!(),
-                Expr::Func { name, args, body } => todo!(),
-                Expr::Struct { name, body } => todo!(),
-                Expr::Namespace { name, body } => todo!(),
-                Expr::Enum { name, value_type, body } => todo!(),
-                Expr::Bitfield { name, body } => todo!(),
-                Expr::Access { item, member } => todo!(),
-                Expr::Attribute { arguments } => todo!(),
-                Expr::AttributeArgument { name, value } => todo!(),
-                Expr::WhileLoop { condition, body } => todo!(),
-                Expr::ForLoop { var_init, var_test, var_change, body } => todo!(),
-                Expr::Cast { cast_operator, operand } => todo!(),
-                Expr::Union { name, body } => todo!(),
+                _ => return false // TODO
             }
             get_completion_of(body, definition_map, ident_offset)
         },

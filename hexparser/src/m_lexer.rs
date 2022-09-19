@@ -237,7 +237,7 @@ fn str_<'a, 'b>(input: StrSpan<'a, 'b>) -> StrResult<StrSpan<'a, 'b>, TokSpan<'a
 fn lexer<'a, 'b>(input: StrSpan<'a, 'b>) -> StrResult<StrSpan<'a, 'b>, Vec<TokSpan<'a, 'b>>> {
     // Integer parser
     // TODO: Floats
-    let num = choice(( // TODO: Better error highlighting for hex, oct and bin
+    let num = choice((
         hex_num,
         oct_num,
         bin_num,

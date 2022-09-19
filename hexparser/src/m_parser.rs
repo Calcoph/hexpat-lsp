@@ -488,7 +488,7 @@ fn recursive_namespace_access_to_hextype(expr: Expr, v: &mut Vec<String>) {
             v.push(name);
             recursive_namespace_access_to_hextype(previous.0, v)
         },
-        Expr::Error => todo!(),
+        Expr::Error => (),
         _ => unreachable!()
     }
 }
@@ -505,7 +505,7 @@ fn parse_type<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<HexTyp
                     Ok((input, (n_access, span))) => match n_access {
                         Expr::Local { name: (name, _) } => Ok((input, (HexType::Custom(name), span))),
                         Expr::NamespaceAccess { previous, name } => Ok((input, (namespace_access_to_hextype(Expr::NamespaceAccess { previous, name }), span))),
-                        Expr::Error => todo!(),
+                        Expr::Error => Ok((input, (HexType::Null, span))),
                         _ => unreachable!()
                     },
                     Err(e) => Err(e),
