@@ -100,7 +100,7 @@ pub enum Expr {
     },
     EnumEntry {
         name: Spanned<String>,
-        value: Value
+        value: Box<Spanned<Self>>
     },
     NamespaceAccess {
         previous: Box<Spanned<Self>>,
@@ -172,7 +172,7 @@ pub enum FuncArgument {
     ParameterPack(Spanned<String>)
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BinaryOp {
     Add,
     Sub,
@@ -196,7 +196,7 @@ pub enum BinaryOp {
     Assign(Assignment)
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Assignment {
     Just,
     Add,
@@ -456,8 +456,8 @@ fn conditional<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>
 
 #[derive(Debug, Clone)]
 pub struct HexTypeDef {
-    endianness: Endianness,
-    name: Spanned<HexType>
+    pub(crate) endianness: Endianness,
+    pub(crate) name: Spanned<HexType>
 }
 
 #[derive(Debug, Clone)]
@@ -468,7 +468,7 @@ pub enum HexType {
     Null
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Endianness {
     Little,
     Big,
@@ -485,8 +485,8 @@ fn recursive_namespace_access_to_hextype(expr: Expr, v: &mut Vec<String>) {
     match expr {
         Expr::Local { name: (name, _) } => v.push(name),
         Expr::NamespaceAccess { previous, name: (name, _) } => {
+            recursive_namespace_access_to_hextype(previous.0, v);
             v.push(name);
-            recursive_namespace_access_to_hextype(previous.0, v)
         },
         Expr::Error => (),
         _ => unreachable!()
@@ -907,14 +907,14 @@ fn parse_enum<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>>
                     spanned(separated_list0(
                         just(Token::Separator(',')),
                         choice((
-                            terminated(
+                            then(
                                 ident,
-                                then(
+                                preceded(
                                     just(Token::Op("=")),
                                     mathematical_expression
                                 )
                             ),
-                            ident
+                            map(ident, |(a, a_span)| ((a, a_span.clone()), (Expr::Value { val: Value::Null }, a_span)))
                         )),
                     )),
                     just(Token::Separator('}')).context("Expected } or valid enum expression")
@@ -923,7 +923,7 @@ fn parse_enum<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>>
         ),
         |((name, value_type), (entries, entries_span)), span| {
             let entries = entries.into_iter()
-                .map(|(name, name_span)| (Expr::EnumEntry { name: (name, name_span.clone()), value: Value::Null }, name_span)).collect(); // TODO: give each entry its value
+                .map(|((name, name_span), value)| (Expr::EnumEntry { name: (name, name_span.clone()), value: Box::new(value) }, name_span)).collect();
             (
                 Expr::Enum {
                     name,

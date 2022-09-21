@@ -43,7 +43,7 @@ fn cast_expression<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<E
     ))(input)
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum UnaryOp {
     Add,
     Sub,
