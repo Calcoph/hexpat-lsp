@@ -18,7 +18,7 @@ use nom::{
 };
 use nom_supreme::ParserExt;
 
-use crate::{token::{Spanned, Tokens, Token, Keyword, ValueType}, combinators::{map_with_span, spanned}, m_parser::{ident, parse_type, mathematical_expression, statement_body, FuncArgument, ident_local, Assignment, BinaryOp, member_access, function_call, assignment_expr}, Expr, Value, recovery_err::{TokResult, expression_recovery, non_opt}};
+use crate::{token::{Spanned, Tokens, Token, Keyword, ValueType}, combinators::{map_with_span, spanned}, m_parser::{ident, parse_type, mathematical_expression, statement_body, FuncArgument, ident_local, Assignment, BinaryOp, member_access, function_call, assignment_expr, HexTypeDef}, Expr, Value, recovery_err::{TokResult, expression_recovery, non_opt}};
 
 fn function_arguments<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Vec<Spanned<FuncArgument>>>> {
     map_with_span(
@@ -175,21 +175,30 @@ pub(crate) fn function_variable_decl<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult
                     ))
                 )
             ),
-            |(value_type, (names, body)), span| {
+            |(value_type, (mut names, body)), span| {
                 let body = Box::new(match body {
                     Some(body) => body,
                     None => (Expr::Value { val: Value::Null }, span.clone()),
                 });
                 let names_span = names.get(0).unwrap().1.start..names.get(names.len()-1).unwrap().1.end;
-
-                (
-                    Expr::Definition {
-                        value_type,
-                        name: Box::new((Expr::ExprList { list: names }, names_span)),
-                        body
-                    },
-                    span
-                )
+                match names.len() {
+                    1 => (
+                        Expr::Definition {
+                            value_type,
+                            name: Box::new((names.pop().unwrap().0, names_span)),
+                            body
+                        },
+                        span
+                    ),
+                    _ => (
+                        Expr::Definition {
+                            value_type,
+                            name: Box::new((Expr::ExprList { list: names }, names_span)),
+                            body
+                        },
+                        span
+                    )
+                }
             }
         )
     )))(input)
@@ -274,15 +283,17 @@ pub(crate) fn func_arg<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spann
             )
         ),
         |((value_type, name), body), span| {
-            let name = match name {
-                Some(name) => Box::new(name),
-                None => Box::new((Expr::Value { val: Value::Null }, span.clone())),
-            };
             let body = match body {
                 Some(body) => Box::new(body),
                 None => Box::new((Expr::Value { val: Value::Null }, span.clone())),
             };
-            let expr = Expr::Definition { value_type, name, body };
+            let expr = match name {
+                Some(name) => Expr::Definition { value_type, name: Box::new(name), body },
+                None => {
+                    let (HexTypeDef{ endianness: _, name: value_type }, _) = value_type;
+                    Expr::UnnamedParameter { type_: value_type }
+                },
+            };
 
             (FuncArgument::Parameter(Box::new((expr, span.clone()))), span)
         }

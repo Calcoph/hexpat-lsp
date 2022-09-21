@@ -260,9 +260,9 @@ fn expr_comparer(expr1: &Expr, expr2: &Expr) -> Result<(), CompErr>{
                             },
                             (FuncArgument::ParameterPack((s1, _)), FuncArgument::ParameterPack((s2, _))) => match s1 == s2{
                                 true => (),
-                                false => return Err(CompErr),
+                                false => {println!("Different parameter pack name |{s1:?}, {s2:?}|");return Err(CompErr)},
                             },
-                            _ => return Err(CompErr)
+                            _ => {println!("Expected {arg1:?}, found {arg1:?}");return Err(CompErr)}
                         }
                     };
                     if ar1.len() == ar2.len() {
@@ -274,7 +274,7 @@ fn expr_comparer(expr1: &Expr, expr2: &Expr) -> Result<(), CompErr>{
                 },
                 Err(e) => Err(e),
             },
-            false => Err(CompErr),
+            false => {println!("Different names |{n1:?}, {n2:?}|");Err(CompErr)},
         },
         (Expr::Struct { name: (n1, _), body: b1 },
             Expr::Struct { name: (n2, _), body: b2 }
@@ -283,7 +283,7 @@ fn expr_comparer(expr1: &Expr, expr2: &Expr) -> Result<(), CompErr>{
                 Ok(_) => Ok(()),
                 Err(e) => Err(e),
             },
-            false => Err(CompErr),
+            false => {println!("Different names |{n1:?}, {n2:?}|");Err(CompErr)},
         },
         (Expr::Namespace { name: n1, body: b1 },
             Expr::Namespace { name: n2, body: b2 }
@@ -320,7 +320,7 @@ fn expr_comparer(expr1: &Expr, expr2: &Expr) -> Result<(), CompErr>{
                 Ok(_) => Ok(()),
                 Err(e) => Err(e),
             },
-            false => Err(CompErr),
+            false => {println!("Different names |{n1:?}, {n2:?}|");Err(CompErr)},
         },
         (Expr::Access { item: i1, member: m1 },
             Expr::Access { item: i2, member: m2 }
@@ -354,7 +354,7 @@ fn expr_comparer(expr1: &Expr, expr2: &Expr) -> Result<(), CompErr>{
                 Ok(_) => Ok(()),
                 Err(e) => Err(e),
             },
-            false => Err(CompErr),
+            false => {println!("Different names |{n1:?}, {n2:?}|");Err(CompErr)},
         },
         (Expr::WhileLoop { condition: c1, body: b1 },
             Expr::WhileLoop { condition: c2, body: b2 }
@@ -392,9 +392,9 @@ fn expr_comparer(expr1: &Expr, expr2: &Expr) -> Result<(), CompErr>{
                     Ok(_) => Ok(()),
                     Err(e) => Err(e),
                 },
-                false => Err(CompErr),
+                false => {println!("Different types |{hn1:?}, {hn2:?}|");Err(CompErr)},
             },
-            false => Err(CompErr),
+            false => {println!("Different endianness |{e1:?}, {e2:?}|");Err(CompErr)},
         },
         (Expr::Union { name: (n1, _), body: b1 },
             Expr::Union { name: (n2, _), body: b2 }
@@ -403,7 +403,7 @@ fn expr_comparer(expr1: &Expr, expr2: &Expr) -> Result<(), CompErr>{
                 Ok(_) => Ok(()),
                 Err(e) => Err(e),
             },
-            false => Err(CompErr),
+            false => {println!("Different names |{n1:?}, {n2:?}|");Err(CompErr)},
         },
         (e1, e2) => {println!("Expected {e1:?}. Got {e2:?}");Err(CompErr)}
     }
@@ -1072,7 +1072,7 @@ fn test_pattern_nested_structs() {
 
     let expected_output = Expr::ExprList { list: vec![
         (Expr::Func {
-            name: (String::from("end_of_body()"), 0..0),
+            name: (String::from("end_of_body"), 0..0),
             args: (vec![], 0..0),
             body: Box::new((Expr::ExprList { list: vec![
                 (Expr::Definition {
@@ -1081,13 +1081,110 @@ fn test_pattern_nested_structs() {
                         name: (HexType::V(ValueType::U32), 0..0)
                     }, 0..0),
                     name: Box::new((Expr::Local { name: (String::from("start"), 0..0) }, 0..0)),
-                    body: Box::new((Expr::ExprList { list: vec![
-                        todo!()
-                    ] }, 0..0))
+                    body: Box::new((Expr::Call {
+                        func_name: Box::new((Expr::Local { name: (String::from("addressof"), 0..0) }, 0..0)),
+                        arguments: (vec![
+                            (Expr::Access {
+                                item: Box::new((Expr::Local { name: (String::from("parent"), 0..0) }, 0..0)),
+                                member: Box::new((Expr::Access {
+                                    item: Box::new((Expr::Local { name: (String::from("parent"), 0..0) }, 0..0)),
+                                    member: Box::new((Expr::Local { name: (String::from("hdr"), 0..0) }, 0..0))
+                                }, 0..0))
+                            }, 0..0)
+                        ], 0..0)
+                    }, 0..0))
+                }, 0..0),
+                (Expr::Definition {
+                    value_type: (HexTypeDef {
+                        endianness: Endianness::Unkown,
+                        name: (HexType::V(ValueType::U32), 0..0)
+                    }, 0..0),
+                    name: Box::new((Expr::Local { name: (String::from("len"), 0..0) }, 0..0)),
+                    body: Box::new((Expr::Access {
+                        item: Box::new((Expr::Local { name: (String::from("parent"), 0..0) }, 0..0)),
+                        member: Box::new((Expr::Access {
+                            item: Box::new((Expr::Local { name: (String::from("parent"), 0..0) }, 0..0)),
+                            member: Box::new((Expr::Access {
+                                item: Box::new((Expr::Local { name: (String::from("hdr"), 0..0) }, 0..0)),
+                                member: Box::new((Expr::Local { name: (String::from("len"), 0..0) }, 0..0))
+                            }, 0..0))
+                        }, 0..0))
+                    }, 0..0))
+                }, 0..0),
+                (Expr::Definition {
+                    value_type: (HexTypeDef {
+                        endianness: Endianness::Unkown,
+                        name: (HexType::V(ValueType::U32), 0..0)
+                    }, 0..0),
+                    name: Box::new((Expr::Local { name: (String::from("end"), 0..0) }, 0..0)),
+                    body: Box::new((Expr::Binary {
+                        loperand: Box::new((Expr::Local { name: (String::from("start"), 0..0) }, 0..0)),
+                        operator: BinaryOp::Add,
+                        roperand: Box::new((Expr::Local { name: (String::from("len"), 0..0) }, 0..0)),
+                    }, 0..0))
+                }, 0..0),
+                (Expr::Return { value: Box::new((Expr::Binary {
+                    loperand: Box::new((Expr::Local { name: (String::from("$"), 0..0) }, 0..0)),
+                    operator: BinaryOp::GreaterEqual,
+                    roperand: Box::new((Expr::Local { name: (String::from("end"), 0..0) }, 0..0))
+                }, 0..0)) }, 0..0)
+            ] }, 0..0))
+        }, 0..0),
+        (Expr::Struct {
+            name: (String::from("Header"), 0..0),
+            body: Box::new((Expr::ExprList { list: vec![
+                (Expr::Definition {
+                    value_type: (HexTypeDef {
+                        endianness: Endianness::Unkown,
+                        name: (HexType::V(ValueType::U8), 0..0)
+                    }, 0..0),
+                    name: Box::new((Expr::Local { name: (String::from("len"), 0..0) }, 0..0)),
+                    body: Box::new((Expr::Value { val: Value::Null }, 0..0))
                 }, 0..0)
             ] }, 0..0))
         }, 0..0),
-        todo!()
+        (Expr::Struct {
+            name: (String::from("Body"), 0..0),
+            body: Box::new((Expr::ExprList { list: vec![
+                (Expr::Definition {
+                    value_type: (HexTypeDef {
+                        endianness: Endianness::Unkown,
+                        name: (HexType::V(ValueType::U8), 0..0)
+                    }, 0..0),
+                    name: Box::new((Expr::Local { name: (String::from("arr"), 0..0) }, 0..0)),
+                    body: Box::new((Expr::Value { val: Value::Null }, 0..0))
+                }, 0..0)
+            ] }, 0..0))
+        }, 0..0),
+        (Expr::Struct {
+            name: (String::from("Data"), 0..0),
+            body: Box::new((Expr::ExprList { list: vec![
+                (Expr::Definition {
+                    value_type: (HexTypeDef {
+                        endianness: Endianness::Unkown,
+                        name: (HexType::Custom(String::from("Header")), 0..0)
+                    }, 0..0),
+                    name: Box::new((Expr::Local { name: (String::from("hdr"), 0..0) }, 0..0)),
+                    body: Box::new((Expr::Value { val: Value::Null }, 0..0))
+                }, 0..0),
+                (Expr::Definition {
+                    value_type: (HexTypeDef {
+                        endianness: Endianness::Unkown,
+                        name: (HexType::Custom(String::from("Body")), 0..0)
+                    }, 0..0),
+                    name: Box::new((Expr::Local { name: (String::from("body"), 0..0) }, 0..0)),
+                    body: Box::new((Expr::Value { val: Value::Null }, 0..0))
+                }, 0..0)
+            ] }, 0..0))
+        }, 0..0),
+        (Expr::Definition {
+            value_type: (HexTypeDef {
+                endianness: Endianness::Unkown,
+                name: (HexType::Custom(String::from("Data")), 0..0)
+            }, 0..0),
+            name: Box::new((Expr::Local { name: (String::from("data"), 0..0) }, 0..0)),
+            body: Box::new((Expr::Value { val: Value::Num(0.0) }, 0..0))
+        }, 0..0)
     ] };
 
     let ((_, (ex, _)), _, _) = parse(test_str, &includeable_folders);
@@ -1128,7 +1225,7 @@ fn test_pattern_padding() {
                         }, 0..0)),
                         body: Box::new((Expr::Value { val: Value::Null }, 0..0))
                     }, 0..0),
-                    todo!(), // padding
+                    (Expr::Value { val: Value::Num(0.0) }, 0..0), // padding // TODO: Expr for padding instead of value
                     (Expr::Definition {
                         value_type: (HexTypeDef {
                             endianness: Endianness::Unkown,
@@ -1243,11 +1340,7 @@ fn test_pattern_pointers() {
             body: Box::new((Expr::ExprList {
                 list: vec![
                     (Expr::Return {
-                        value: Box::new((Expr::Binary {
-                            loperand: Box::new((Expr::Local { name: (String::from("$"), 0..0) }, 0..0)),
-                            operator: BinaryOp::GreaterEqual,
-                            roperand: Box::new((Expr::Value { val: Value::Num(0.0) }, 0..0))
-                        }, 0..0))
+                        value: Box::new((Expr::Value { val: Value::Num(0.0) }, 0..0))
                     }, 0..0)
                 ]
             }, 0..0))

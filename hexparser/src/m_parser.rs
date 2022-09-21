@@ -1122,10 +1122,13 @@ fn pointer_array_variable_placement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<
                     ))
                 )
             ),
+            just(Token::Separator(']')),
+            just(Token::Op(":")),
             pointer_size_type,
+            just(Token::Op("@")),
             mathematical_expression
         )),
-        |(a, b, c)| c // TODO
+        |(a, b, c, d, e, f)| f // TODO
     )(input)
 }
 
@@ -1203,8 +1206,9 @@ fn placement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> 
                         separated_pair(
                             ident_local,
                             just(Token::Op(":")),
-                            then(
+                            separated_pair(
                                 pointer_size_type,
+                                just(Token::Op("@")),
                                 mathematical_expression
                             )
                         )
@@ -1217,7 +1221,7 @@ fn placement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> 
                         then(
                             ident_local,
                             preceded( // TODO: This is probably wrong
-                                just(Token::Separator('{')),
+                                just(Token::Separator('[')),
                                 pointer_array_variable_placement
                             )
                         )

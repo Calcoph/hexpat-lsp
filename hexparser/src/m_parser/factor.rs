@@ -31,7 +31,6 @@ pub(crate) fn factor<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned
             namespace_resolution
         ),
         member_access,
-        special_variables,
         map_with_span(
             just(Token::Op("$")),
             |_, span| (Expr::Local { name: (String::from("$"), span.clone()) }, span)
@@ -94,28 +93,6 @@ fn builtin_func<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr
         |((name, name_span), (argument, arg_span)), span| {
             let func_name = Box::new((Expr::Local { name: (name, name_span.clone()) }, name_span));
             (Expr::Call { func_name, arguments: (vec![(argument, arg_span.clone())], arg_span) }, span)
-        }
-    )(input)
-}
-
-fn special_variables<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
-    map_with_span(
-        then(
-            peek(choice((
-                to(just(Token::K(Keyword::Parent)), String::from("parent")),
-                to(just(Token::K(Keyword::This)), String::from("this"))
-            ))),
-            member_access
-        ),
-        |((name, name_span), member_access), span| {
-            let item = Box::new((Expr::Local { name: (name, name_span.clone()) }, name_span));
-            (
-                Expr::Access {
-                    item,
-                    member: Box::new(member_access)
-                },
-                span
-            )
         }
     )(input)
 }
