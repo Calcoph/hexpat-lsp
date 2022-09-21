@@ -298,7 +298,7 @@ dependencies = [
 
 [[package]]
 name = "hexparser"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "expand_str",
  "nom",
@@ -313,7 +313,7 @@ dependencies = [
 
 [[package]]
 name = "hexpat-language-server"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "chumsky",
  "dashmap",
