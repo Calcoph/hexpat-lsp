@@ -80,7 +80,7 @@ pub fn semantic_token_from_expr(
                     .position(|item| item == &SemanticTokenType::ENUM_MEMBER)
                     .unwrap(),
             });
-            // semantic_token_from_expr(value, semantic_tokens); // TODO: Make value an expr so it can be tokenized
+            semantic_token_from_expr(value, semantic_tokens);
         },
         Expr::Ternary { loperand, moperand, roperand } => {
             semantic_token_from_expr(loperand, semantic_tokens);

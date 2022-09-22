@@ -96,7 +96,6 @@ impl LanguageServer for Backend {
         &self,
         params: SemanticTokensParams,
     ) -> Result<Option<SemanticTokensResult>> {
-        dbg!("semantic_token_full");
         let uri = params.text_document.uri.to_string();
         self.client
             .log_message(MessageType::LOG, "semantic_token_full")
@@ -552,7 +551,6 @@ impl Backend {
         };
 
         self.configuration.insert("imhexBaseFolders".to_string(), paths);
-        dbg!("CONFIG_ENDED");
     }
 }
 

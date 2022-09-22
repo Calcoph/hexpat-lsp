@@ -70,10 +70,6 @@ fn recover_from_error<'a, 'b>(e: TokError<'a, 'b>) -> TokResult<'a, 'b, Spanned<
     match e {
         GenericErrorTree::Stack { base: _, contexts } => {
             let (input, context) = contexts[contexts.len()-1];
-            match context {
-                nom_supreme::error::StackContext::Context(error_msg) => dbg!(error_msg),
-                _ => unreachable!()
-            };
             let (rest, span) = match input.tokens.len() {
                 0 => {
                     (input, input.span())
