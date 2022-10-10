@@ -298,7 +298,10 @@ fn member_access<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Exp
                 )
             )),
             opt(delimited(
-                just(Token::Separator('[')),
+                then(
+                    just(Token::Separator('[')),
+                    not(just(Token::Separator('[')))
+                ),
                 mathematical_expression,
                 just(Token::Separator(']'))
             )),
