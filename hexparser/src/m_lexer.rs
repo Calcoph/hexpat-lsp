@@ -393,6 +393,7 @@ fn lexer<'a, 'b>(input: StrSpan<'a, 'b>) -> StrResult<StrSpan<'a, 'b>, Vec<TokSp
                 "str" => Token::V(ValueType::String),
                 "padding" => Token::V(ValueType::Padding),
                 "auto" => Token::V(ValueType::Auto),
+                "ref" => Token::K(Keyword::Reference),
                 s => Token::Ident(s),
             };
             let state = s.extra;
