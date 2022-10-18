@@ -1,7 +1,5 @@
 Language Server Provider for ImHex's pattern language.
 
-It is still buggy. For more stable syntax highlighting, see here: [(only for vscode)](https://github.com/Calcoph/vscode-hexpat)
-
 ## Installation
 1. Get the server's binary.
     * See [releases](https://github.com/Calcoph/hexpat-lsp/releases).
