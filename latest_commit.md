@@ -3,10 +3,10 @@ The parser in this repository is the same as in commit **7362827** of the offici
 
 Non implemented features: (comparing with **3d192fb**)
  * ~~sizeof(type) (example: sizeof(u8)) (praseFactor)~~
- * templates (example: Struct<T> mystruct {}) including whatever the fuck is line 765 onward. New parser parseTemplateList
+ * ~~templates (example: Struct<T> mystruct {}) including whatever the fuck is line 765 onward. New parser parseTemplateList~~
  * ~~returns (parseFunctionControlFlowStatement) (line 612)~~
  * ~~Reference (parseType)~~
- * parseUsingDeclaration modification
+ * ~~parseUsingDeclaration modification~~
  * ~~dont allow placement in parsemembervariable sometimes (line 888)~~ (i think this one was already done)
  * ~~dont allow placement in parsememberarrayvariable sometimes (line 915)~~ (i think this one was already done)
  * ~~Accept namespaced types in sizeof() (example: sizeof(types::MyType))~~
