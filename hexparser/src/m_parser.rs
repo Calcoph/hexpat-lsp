@@ -1092,17 +1092,23 @@ fn array_variable_placement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, 
         tuple((
             ident_local,
             array_declaration,
-            preceded(
-                just(Token::Op("@")),
-                mathematical_expression.context("Expected mathematical expression")
+            opt(
+                preceded(
+                    just(Token::Op("@")),
+                    mathematical_expression.context("Expected mathematical expression")
+                )
             )
         )),
-        |(name, array, (body, fake_span))| { // TODO: Take array into account
+        |((name, name_span), array, body)| { // TODO: Take array into account
             let array = Box::new(match array {
                 Some(s) => s,
-                None => (Expr::Value { val: Value::Null }, fake_span.clone())
+                None => (Expr::Value { val: Value::Null }, name_span.clone())
             });
-            (name, (body, fake_span))
+            let body = match body {
+                Some(b) => b,
+                None => (Expr::Value { val: Value::Null }, name_span.clone()),
+            };
+            ((name, name_span), body)
         }
     )(input)
 }
@@ -1190,6 +1196,13 @@ fn placement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> 
                             ),
                             map(just(Token::K(Keyword::In)), |_| None),
                             map(just(Token::K(Keyword::Out)), |_| None),
+                            map(
+                                preceded(
+                                    just(Token::Op("=")),
+                                    non_opt(mathematical_expression).context("Expected mathematical expression")
+                                ),
+                                |a| Some(a)
+                            )
                         )))
                     ),
                     |((name, fake_span), body)| {
