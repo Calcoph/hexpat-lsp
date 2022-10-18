@@ -261,7 +261,6 @@ fn string_literal<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Ex
     )(input)
 }
 
-// exaclty the same as above, but used when the rework has been done
 pub(crate) fn namespace_resolution<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
     let (input, first_name) = ident_local(input)?;
     fold_many0_once(

@@ -99,7 +99,10 @@ fn builtin_func<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr
                                     |_, span| (String::from("this"), span)
                                 )
                             ))),
-                            member_access
+                            choice((
+                                namespace_resolution,
+                                member_access
+                            ))
                         ),
                         map(
                             value_type_any,
