@@ -7,6 +7,9 @@ It is still buggy. For more stable syntax highlighting, see here: [(only for vsc
     * See [releases](https://github.com/Calcoph/hexpat-lsp/releases).
     * [Compile](#compilation) it.
 2. Move it somewhere in $PATH
+3. If using linux, you might need to give it execution permission `sudo chmod u+x <<path to executable>>/hexpat-language-server`
+4. To check that it is installed correctly, run the program from the terminal `hexpat-language-server`. If you don't see `hexpat-language-server vX.X.X`, it is not installed correctly.
+
 ### Compilation
 1. Get [rust](https://www.rust-lang.org/tools/install)
 2. Clone this repo `git clone https://github.com/Calcoph/hexpat-lsp.git`
@@ -15,6 +18,8 @@ It is still buggy. For more stable syntax highlighting, see here: [(only for vsc
 4. Compile  using `cargo build --release`
 5. Take the binary at `target/release` (will be called __hexpat-language-server__ or __hexpat-language-server.exe__)
 6. Move it somewhere in $PATH
+7. If using linux, you might need to give it execution permission `sudo chmod u+x <<path to executable>>/hexpat-language-server`
+8. To check that it is installed correctly, run the program from the terminal `hexpat-language-server`. If you don't see `hexpat-language-server vX.X.X`, it is not installed correctly.
 
 ## Extension guide
 Available editors:
