@@ -261,7 +261,6 @@ fn string_literal<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Ex
     )(input)
 }
 
-// exaclty the same as above, but used when the rework has been done
 pub(crate) fn namespace_resolution<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
     let (input, first_name) = ident_local(input)?;
     fold_many0_once(
@@ -298,7 +297,10 @@ fn member_access<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Exp
                 )
             )),
             opt(delimited(
-                just(Token::Separator('[')),
+                then(
+                    just(Token::Separator('[')),
+                    not(just(Token::Separator('[')))
+                ),
                 mathematical_expression,
                 just(Token::Separator(']'))
             )),
@@ -495,25 +497,42 @@ fn recursive_namespace_access_to_hextype(expr: Expr, v: &mut Vec<String>) {
 
 fn parse_type<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<HexTypeDef>> {
     map_with_span(
-        then(
+        tuple((
+            opt(just(Token::K(Keyword::Reference))), // TODO: References cannot be used always
             opt(choice((
                 to(just(Token::K(Keyword::LittleEndian)), Endianness::Little),
                 to(just(Token::K(Keyword::BigEndian)), Endianness::Big)
             ))),
             choice((
-                |input: Tokens<'a, 'b>| match namespace_resolution.parse(input) {
-                    Ok((input, (n_access, span))) => match n_access {
-                        Expr::Local { name: (name, _) } => Ok((input, (HexType::Custom(name), span))),
-                        Expr::NamespaceAccess { previous, name } => Ok((input, (namespace_access_to_hextype(Expr::NamespaceAccess { previous, name }), span))),
-                        Expr::Error => Ok((input, (HexType::Null, span))),
-                        _ => unreachable!()
-                    },
-                    Err(e) => Err(e),
-                },
-                value_type_any
+                map(
+                    then(
+                        |input: Tokens<'a, 'b>| match namespace_resolution.parse(input) {
+                            Ok((input, (n_access, span))) => match n_access {
+                                Expr::Local { name: (name, _) } => Ok((input, (HexType::Custom(name), span))),
+                                Expr::NamespaceAccess { previous, name } => Ok((input, (namespace_access_to_hextype(Expr::NamespaceAccess { previous, name }), span))),
+                                Expr::Error => Ok((input, (HexType::Null, span))),
+                                _ => unreachable!()
+                            },
+                            Err(e) => Err(e),
+                        },
+                        delimited(
+                            just(Token::Op("<")),
+                            separated_list1(
+                                just(Token::Separator(',')),
+                                choice((
+                                    ignore(parse_type), // TODO: don't ignore
+                                    ignore(mathematical_expression) // TODO: don't ignore
+                                ))
+                            ),
+                            just(Token::Op(">"))
+                        )
+                    ),
+                    |(a, b)| a // TODO: don't ignore B
+                ),
+                value_type_any // TODO: Some values cannot be used always
             ))
-        ),
-        |(endianness, name), span| {
+        )),
+        |(reference, endianness, name), span| {
             let endianness = match endianness {
                 Some((endianness, _)) => endianness,
                 None => Endianness::Unkown,
@@ -839,12 +858,33 @@ pub(crate) fn member<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned
     )))(input)
 }
 
+pub(crate) fn template_list<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
+    map_with_span(
+        delimited(
+            just(Token::Op("<")),
+            separated_list1(
+                just(Token::Separator(',')),
+                then(
+                    opt(just(Token::V(ValueType::Auto))),
+                    ident_local
+                )
+            ),
+            just(Token::Op(">"))
+        ),
+        |list, span| {
+            let list = list.into_iter().map(|(_, a)| a).collect(); // ignore "auto" for now // TODO: don't ignore it
+            (Expr::ExprList { list }, span)
+        }
+    )(input)
+}
+
 pub(crate) fn parse_struct<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
     expression_recovery(map_with_span(
         preceded(
             just(Token::K(Keyword::Struct)),
             tuple((
                 ident.context("Expected struct name"),
+                opt(template_list),
                 opt(preceded(
                     just(Token::Op(":")),
                     non_opt(separated_list1(
@@ -859,7 +899,7 @@ pub(crate) fn parse_struct<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, S
                 )
             ))
         ),
-        |(name, inheritance, (body, body_span)), span| ( // TODO: Take into account the inheritance
+        |(name, template, inheritance, (body, body_span)), span| ( // TODO: Take into account the inheritance. //TODO: Take into account template
             Expr::Struct {
                 name,
                 body: Box::new((Expr::ExprList { list: body }, body_span))
@@ -873,16 +913,17 @@ fn parse_union<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>
     expression_recovery(map_with_span(
         preceded(
             just(Token::K(Keyword::Union)),
-            then(
+            tuple((
                 ident.context("Expected identifier"),
+                opt(template_list),
                 delimited(
                     just(Token::Separator('{')).context("Missing {"),
                     spanned(many0(member)),
                     just(Token::Separator('}')).context("Expected } or valid union expression")
                 )
-            )
+            ))
         ),
-        |(name, (body, body_span)), span| (
+        |(name, template, (body, body_span)), span| ( // TODO: don't ignore template
             Expr::Union {
                 name,
                 body: Box::new((Expr::ExprList { list: body }, body_span))
@@ -1088,17 +1129,23 @@ fn array_variable_placement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, 
         tuple((
             ident_local,
             array_declaration,
-            preceded(
-                just(Token::Op("@")),
-                mathematical_expression.context("Expected mathematical expression")
+            opt(
+                preceded(
+                    just(Token::Op("@")),
+                    mathematical_expression.context("Expected mathematical expression")
+                )
             )
         )),
-        |(name, array, (body, fake_span))| { // TODO: Take array into account
+        |((name, name_span), array, body)| { // TODO: Take array into account
             let array = Box::new(match array {
                 Some(s) => s,
-                None => (Expr::Value { val: Value::Null }, fake_span.clone())
+                None => (Expr::Value { val: Value::Null }, name_span.clone())
             });
-            (name, (body, fake_span))
+            let body = match body {
+                Some(b) => b,
+                None => (Expr::Value { val: Value::Null }, name_span.clone()),
+            };
+            ((name, name_span), body)
         }
     )(input)
 }
@@ -1186,6 +1233,13 @@ fn placement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> 
                             ),
                             map(just(Token::K(Keyword::In)), |_| None),
                             map(just(Token::K(Keyword::Out)), |_| None),
+                            map(
+                                preceded(
+                                    just(Token::Op("=")),
+                                    non_opt(mathematical_expression).context("Expected mathematical expression")
+                                ),
+                                |a| Some(a)
+                            )
                         )))
                     ),
                     |((name, fake_span), body)| {
@@ -1245,15 +1299,16 @@ fn using<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
     expression_recovery(map_with_span(
         preceded(
             just(Token::K(Keyword::Using)),
-            then(
+            tuple((
                 ident.context("Expected identifier after \"using\""),
+                opt(template_list),
                 opt(preceded(
                     just(Token::Op("=")),
                     non_opt(using_declaration).context("Expected type")
                 ))
-            )
+            ))
         ),
-        |(new_name, old_name), span| {
+        |(new_name, template, old_name), span| { // TODO: Don't ignore template
             let old_name = match old_name {
                 Some(old_name) => old_name,
                 None => (HexTypeDef{ endianness: Endianness::Unkown, name: (HexType::Null, span.clone()) }, span.clone()),

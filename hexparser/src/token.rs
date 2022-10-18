@@ -60,6 +60,7 @@ impl<'a> fmt::Display for Token<'a> {
                 Keyword::This => write!(f, "this"),
                 Keyword::LittleEndian => write!(f, "le"),
                 Keyword::BigEndian => write!(f, "be"),
+                Keyword::Reference => write!(f, "ref"),
             },
             Token::B(b) => match b {
                 BuiltFunc::AddressOf => write!(f, "addressof"),
@@ -96,7 +97,8 @@ pub enum Keyword {
     In,
     Out,
     Break,
-    Continue
+    Continue,
+    Reference,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

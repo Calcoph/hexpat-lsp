@@ -303,6 +303,14 @@ pub fn parse(
                             .position(|item| item == &SemanticTokenType::KEYWORD)
                             .unwrap(),
                     }),
+                    Keyword::Reference => Some(ImCompleteSemanticToken {
+                        start: span.start,
+                        length: span.len(),
+                        token_type: LEGEND_TYPE
+                            .iter()
+                            .position(|item| item == &SemanticTokenType::KEYWORD)
+                            .unwrap(),
+                    }),
                 }
                 Token::V(_) => Some(ImCompleteSemanticToken {
                     start: span.start,
