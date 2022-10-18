@@ -1,7 +1,7 @@
-The parser in this repository is the same as in commit **7362827** of the official pattern language in *(August 5th, 2022 2:41 PM)*
+The parser in this repository was originally the same as in commit **7362827** of the official pattern language in *(August 5th, 2022 2:41 PM)* (currently **3d192fb**)
 
 
-Non implemented features: (comparing with **3d192fb**)
+Non implemented features: (comparing with **3d192fb**, *(October 10th, 2022 7:09 PM)*)
  * ~~sizeof(type) (example: sizeof(u8)) (praseFactor)~~
  * ~~templates (example: Struct<T> mystruct {}) including whatever the fuck is line 765 onward. New parser parseTemplateList~~
  * ~~returns (parseFunctionControlFlowStatement) (line 612)~~
