@@ -458,8 +458,8 @@ fn conditional<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>
 
 #[derive(Debug, Clone)]
 pub struct HexTypeDef {
-    pub(crate) endianness: Endianness,
-    pub(crate) name: Spanned<HexType>
+    pub endianness: Endianness,
+    pub name: Spanned<HexType>
 }
 
 #[derive(Debug, Clone)]
@@ -471,7 +471,7 @@ pub enum HexType {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Endianness {
+pub enum Endianness {
     Little,
     Big,
     Unkown
@@ -1490,7 +1490,7 @@ fn recover_err<'a, 'b>(e: &TokError<'a, 'b>) -> Tokens<'a, 'b> {
 #[derive(Debug)]
 pub enum NamedNode {
     Variable,
-    Function(Vec<String>),
+    Function(Vec<Spanned<String>>),
     Struct,
     Enum,
     NameSpace,

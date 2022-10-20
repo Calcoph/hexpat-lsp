@@ -2,12 +2,42 @@ use std::collections::HashMap;
 
 use im_rc::Vector;
 
-use hexparser::{m_parser::{Expr, NamedNode}, token::Spanned};
+use hexparser::{m_parser::{Expr, NamedNode, HexTypeDef, HexType}, token::Spanned};
 
-/// return (need_to_continue_search, founded reference)
 pub fn get_definition(ast: &(HashMap<String, Spanned<NamedNode>>, Spanned<Expr>), ident_offset: usize) -> Option<Spanned<String>> {
-    let mut vector = Vector::new();
-    for (name, (v, span)) in ast.0.iter() {
+    let (_, name) = get_definition_of_expr(&ast.1, ident_offset);
+    match name {
+        Some(name) => match ast.0.get(&name) {
+            Some((_, span)) => {
+                Some((name, span.clone()))
+            },
+            None => {
+                // If it is not a global name, it must be a function argument (or namespaces, but that's not done yet) // TODO: Do namespaces
+                let iter = ast.0.iter().filter(|(_, (node, _))| match node {
+                    NamedNode::Function(_) => true,
+                    _ => false
+                });
+                for (_, (node, span)) in iter {
+                    if ident_offset >= span.start {
+                        if let NamedNode::Function(args) = node {
+                            for arg in args {
+                                if arg.0 == name {
+                                    return Some(arg.clone())
+                                }
+                            }
+                        } else {
+                            unreachable!()
+                        }
+                    }
+                };
+
+                None
+            },
+        },
+        None => None,
+    }
+    //let mut vector = Vector::new();
+    /* for (name, (v, span)) in ast.0.iter() {
         if span.end < ident_offset {
             vector.push_back(name.clone());
         }
@@ -19,50 +49,49 @@ pub fn get_definition(ast: &(HashMap<String, Spanned<NamedNode>>, Spanned<Expr>)
         }
     }
     None
+    */
 }
 
+/// return (need_to_continue_search, found reference)
 pub fn get_definition_of_expr(
     expr: &Spanned<Expr>,
-    definition_ass_list: Vector<Spanned<String>>,
+    //definition_ass_list: Vector<Spanned<String>>,
     ident_offset: usize,
-) -> (bool, Option<Spanned<String>>) {
+) -> (bool, Option<String>) {
+    if ident_offset > expr.1.end {
+        return (false, None)
+    };
     match &expr.0 {
         Expr::Error => (true, None),
         Expr::Value { .. } => (true, None),
-        // Expr::List(exprs) => exprs
-        //     .iter()
-        //     .for_each(|expr| get_definition(expr, definition_ass_list)),
         Expr::Local { name } => {
             if ident_offset >= name.1.start && ident_offset < name.1.end {
-                let index = definition_ass_list
-                    .iter()
-                    .position(|decl| decl.0 == name.0);
                 (
                     false,
-                    index.map(|i| definition_ass_list.get(i).unwrap().clone()),
+                    Some(name.0.clone()),
                 )
             } else {
                 (true, None)
             }
         }
-        Expr::Binary { loperand, operator, roperand } => {
-            match get_definition_of_expr(loperand, definition_ass_list.clone(), ident_offset) {
+        Expr::Binary { loperand, operator: _, roperand } => {
+            match get_definition_of_expr(loperand, ident_offset) {
                 (true, None) => {
-                    get_definition_of_expr(roperand, definition_ass_list.clone(), ident_offset)
+                    get_definition_of_expr(roperand, ident_offset)
                 }
                 (false, None) => (false, None),
                 (true, Some(value)) | (false, Some(value)) => (false, Some(value)),
             }
         }
         Expr::Call { func_name, arguments } => {
-            match get_definition_of_expr(func_name, definition_ass_list.clone(), ident_offset) {
+            match get_definition_of_expr(func_name, ident_offset) {
                 (true, None) => {}
                 (true, Some(value)) => return (false, Some(value)),
                 (false, None) => return (false, None),
                 (false, Some(value)) => return (false, Some(value)),
             }
             for expr in &arguments.0 {
-                match get_definition_of_expr(&expr, definition_ass_list.clone(), ident_offset) {
+                match get_definition_of_expr(&expr, ident_offset) {
                     (true, None) => continue,
                     (true, Some(value)) => return (false, Some(value)),
                     (false, None) => return (false, None),
@@ -72,22 +101,42 @@ pub fn get_definition_of_expr(
             (true, None)
         }
         Expr::If { test, consequent } => {
-            match get_definition_of_expr(test, definition_ass_list.clone(), ident_offset) {
+            match get_definition_of_expr(test, ident_offset) {
                 (true, None) => {}
                 (true, Some(value)) => return (false, Some(value)),
                 (false, None) => return (false, None),
                 (false, Some(value)) => return (false, Some(value)),
             }
-            match get_definition_of_expr(consequent, definition_ass_list.clone(), ident_offset) {
+            match get_definition_of_expr(consequent, ident_offset) {
                 (true, None) => return (true, None),
                 (true, Some(value)) => return (false, Some(value)),
                 (false, None) => return (false, None),
                 (false, Some(value)) => return (false, Some(value)),
             }
         }
-        Expr::IfBlock { ifs, alternative } => (false, None), // TODO
+        Expr::IfBlock { ifs, alternative } => {
+            match get_definition_of_expr(ifs, ident_offset) {
+                (true, None) => {}
+                (true, Some(value)) => return (false, Some(value)),
+                (false, None) => return (false, None),
+                (false, Some(value)) => return (false, Some(value)),
+            }
+            get_definition_of_expr(alternative, ident_offset)
+        },
         Expr::Definition { value_type, name, body } => {
-            get_definition_of_expr(body, definition_ass_list.clone(), ident_offset)
+            match get_definition_of_type(value_type, ident_offset) {
+                (true, None) => (),
+                (true, Some(value)) => return (false, Some(value)),
+                (false, None) => return (false, None),
+                (false, Some(value)) => return (false, Some(value)),
+            }
+            match get_definition_of_expr(name, ident_offset) {
+                (true, None) => (),
+                (true, Some(value)) => return (false, Some(value)),
+                (false, None) => return (false, None),
+                (false, Some(value)) => return (false, Some(value)),
+            }
+            get_definition_of_expr(body, ident_offset)
         },
         Expr::ExprList { list } => (false, None), // TODO
         Expr::UnnamedParameter { type_ } => (false, None), // TODO
@@ -112,5 +161,25 @@ pub fn get_definition_of_expr(
         Expr::ForLoop { var_init, var_test, var_change, body } => (false, None), // TODO
         Expr::Cast { cast_operator, operand } => (false, None), // TODO
         Expr::Union { name, body } => (false, None),
+    }
+}
+
+fn get_definition_of_type(
+    type_: &Spanned<HexTypeDef>,
+    ident_offset: usize
+) -> (bool, Option<String>) {
+    let HexTypeDef {
+        endianness: _,
+        name,
+    } = &type_.0;
+    if ident_offset >= name.1.start && ident_offset < name.1.end {
+        match &name.0 {
+            HexType::Custom(c) => (false, Some(c.clone())),
+            HexType::Path(p) => (false, Some(p.last().unwrap().clone())), // TODO: Don't ignore the rest of the path
+            HexType::V(_) => (true, None),
+            HexType::Null => (true, None),
+        }
+    } else {
+        (true, None)
     }
 }
