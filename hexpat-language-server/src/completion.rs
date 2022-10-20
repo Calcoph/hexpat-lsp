@@ -12,7 +12,7 @@ pub enum ImCompleteCompletionItem {
 }
 /// return (need_to_continue_search, founded reference)
 pub fn completion(
-    ast: &(HashMap<String, Spanned<NamedNode>>, Spanned<Expr>),
+    ast: &Spanned<Expr>,
     ident_offset: usize,
 ) -> HashMap<String, ImCompleteCompletionItem> {
     let mut map = HashMap::new();

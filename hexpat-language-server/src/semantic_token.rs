@@ -5,10 +5,10 @@ use tower_lsp::lsp_types::SemanticTokenType;
 
 use hexparser::{ImCompleteSemanticToken, m_parser::{Expr, NamedNode}, token::Spanned};
 
-pub fn semantic_token_from_ast(ast: &(HashMap<String, Spanned<NamedNode>>, Spanned<Expr>)) -> Vec<ImCompleteSemanticToken> {
+pub fn semantic_token_from_ast(ast: &Spanned<Expr>) -> Vec<ImCompleteSemanticToken> {
     let mut semantic_tokens = vec![];
 
-    semantic_token_from_expr(&ast.1, &mut semantic_tokens);
+    semantic_token_from_expr(ast, &mut semantic_tokens);
 
     semantic_tokens
 }

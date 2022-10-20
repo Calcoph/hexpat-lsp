@@ -12,13 +12,13 @@ pub enum ReferenceSymbol {
 use ReferenceSymbol::*;
 
 pub fn get_reference(
-    ast: &(HashMap<String, Spanned<NamedNode>>, Spanned<Expr>),
+    ast: &Spanned<Expr>,
     ident_offset: usize,
     include_self: bool,
 ) -> Vec<Spanned<String>> {
     let mut reference_list = vec![];
     let mut reference_symbol = ReferenceSymbol::Finding(ident_offset);
-    get_reference_of_expr(&ast.1, &mut reference_symbol, &mut reference_list, include_self);
+    get_reference_of_expr(ast, &mut reference_symbol, &mut reference_list, include_self);
     reference_list
 }
 

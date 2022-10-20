@@ -1498,12 +1498,11 @@ pub enum NamedNode {
 }
 
 // Hashmap contains the names of named expressions and their clones
-pub(crate) fn token_parse(tokens: Vec<TokSpan>) -> (HashMap<String, Spanned<NamedNode>>, Spanned<Expr>) {
-    let hmap = HashMap::new();
+pub(crate) fn token_parse(tokens: Vec<TokSpan>) -> Spanned<Expr> {
     let ex = match tokens.len() {
         0 => (Expr::Value { val: Value::Null }, 0..0),
         _ => parser(Tokens::new(&tokens, tokens[0].extra.0)).expect("Unrecovered error happened in parser").1
     };
     //let ex = (Expr::Dollar, 0..1);
-    (hmap, ex)
+    ex
 }

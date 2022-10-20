@@ -77,7 +77,7 @@ pub fn parse(
     src: &str,
     includeable_folders: &Vec<String>
 ) -> (
-    (HashMap<String, Spanned<NamedNode>>, Spanned<Expr>),
+    Spanned<Expr>,
     Vec<RecoveredError>,
     Vec<ImCompleteSemanticToken>,
 ) {

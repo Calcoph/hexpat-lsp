@@ -4,9 +4,9 @@ use im_rc::Vector;
 
 use hexparser::{m_parser::{Expr, NamedNode, HexTypeDef, HexType}, token::Spanned};
 
-pub fn get_definition(ast: &(HashMap<String, Spanned<NamedNode>>, Spanned<Expr>), ident_offset: usize) -> Option<Spanned<String>> {
-    let (_, name) = get_definition_of_expr(&ast.1, ident_offset);
-    match name {
+pub fn get_definition(ast: &Spanned<Expr>, ident_offset: usize) -> Option<Spanned<String>> {
+    let (_, name) = get_definition_of_expr(&ast, ident_offset);
+    /* match name {
         Some(name) => match ast.0.get(&name) {
             Some((_, span)) => {
                 Some((name, span.clone()))
@@ -35,7 +35,7 @@ pub fn get_definition(ast: &(HashMap<String, Spanned<NamedNode>>, Spanned<Expr>)
             },
         },
         None => None,
-    }
+    } */
     //let mut vector = Vector::new();
     /* for (name, (v, span)) in ast.0.iter() {
         if span.end < ident_offset {
@@ -50,6 +50,7 @@ pub fn get_definition(ast: &(HashMap<String, Spanned<NamedNode>>, Spanned<Expr>)
     }
     None
     */
+    None
 }
 
 /// return (need_to_continue_search, found reference)

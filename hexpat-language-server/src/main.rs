@@ -26,7 +26,7 @@ enum ConfigurationEntry {
 #[derive(Debug)]
 struct Backend {
     client: Client,
-    ast_map: DashMap<String, (HashMap<String, Spanned<NamedNode>>, Spanned<Expr>)>,
+    ast_map: DashMap<String, Spanned<Expr>>,
     document_map: DashMap<String, Rope>,
     semantic_token_map: DashMap<String, Vec<ImCompleteSemanticToken>>,
     configuration: DashMap<String, ConfigurationEntry>
@@ -456,7 +456,7 @@ impl Backend {
     async fn inlay_hint(&self, params: InlayHintParams) -> Result<Vec<(usize, usize, String)>> {
         let mut hashmap = HashMap::new();
         if let Some(ast) = self.ast_map.get(&params.path) {
-            type_inference(&ast.1, &mut hashmap);
+            type_inference(&ast, &mut hashmap);
         }
 
         let inlay_hint_list = hashmap
