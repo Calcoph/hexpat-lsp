@@ -1,5 +1,14 @@
 Language Server Provider for ImHex's pattern language.
 
+## Features
+- [x] Semantic syntax highlighting
+- [X] Go to definition (experimental (only on latest commit). Don't expect it to work in the following scenarios)
+    * names defined in a namespace
+    * function arguments
+- [ ] Find references
+- [ ] Inlay hints
+- [ ] Completion
+
 ## Installation
 1. Get the server's binary.
     * See [releases](https://github.com/Calcoph/hexpat-lsp/releases).
