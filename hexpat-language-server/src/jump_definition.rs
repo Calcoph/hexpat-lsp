@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use im_rc::Vector;
-use hexparser::{m_parser::{Expr, HexTypeDef, HexType}, token::Spanned};
+use hexparser::{m_parser::{Expr, HexTypeDef, HexType, FuncArgument}, token::Spanned};
 
 pub fn get_definition(ast: &Spanned<Expr>, ident_offset: usize) -> Option<Spanned<String>> {
     let mut definition_ass_list = Vector::new();
@@ -153,8 +153,19 @@ fn get_definition_of_expr(
         Expr::Break => (true, None),
         Expr::Func { name, args, body } => {
             definition_ass_list.push_back(name.clone());
-             // TODO: add args to the definition list
-            get_definition_of_expr(body, &mut definition_ass_list.clone(), ident_offset, false)
+            let mut new_scope = definition_ass_list.clone();
+            for arg in &args.0 {
+                match arg.0 {
+                    FuncArgument::Parameter(ref arg) => match get_definition_of_expr(arg, &mut new_scope, ident_offset, true) {
+                        (true, None) => continue,
+                        (true, Some(value)) => return (false, Some(value)),
+                        (false, None) => return (false, None),
+                        (false, Some(value)) => return (false, Some(value)),
+                    },
+                    FuncArgument::ParameterPack(_) => (),
+                }
+            }
+            get_definition_of_expr(body, &mut new_scope, ident_offset, false)
         },
         Expr::Struct { name, body } => {
             definition_ass_list.push_back(name.clone());
