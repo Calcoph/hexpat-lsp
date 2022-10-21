@@ -13,7 +13,6 @@ use tower_lsp::lsp_types::SemanticTokenType;
 use parserlib::LEGEND_TYPE;
 
 use crate::m_lexer::lex_tokens;
-use crate::m_parser::NamedNode;
 use crate::recovery_err::{ToRange, ParseState};
 use crate::token::{Token, Keyword, BuiltFunc, TokSpan, FromStrSpan};
 use crate::{m_lexer::lex, recovery_err::RecoveredError, m_parser::token_parse, token::Spanned};

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use parserlib::LEGEND_TYPE;
 use tower_lsp::lsp_types::SemanticTokenType;
 
-use hexparser::{ImCompleteSemanticToken, m_parser::{Expr, NamedNode}, token::Spanned};
+use hexparser::{ImCompleteSemanticToken, m_parser::Expr, token::Spanned};
 
 pub fn semantic_token_from_ast(ast: &Spanned<Expr>) -> Vec<ImCompleteSemanticToken> {
     let mut semantic_tokens = vec![];

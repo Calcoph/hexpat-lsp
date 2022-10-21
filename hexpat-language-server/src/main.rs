@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use dashmap::DashMap;
-use hexparser::m_parser::{NamedNode};
 use hexparser::recovery_err::RecoveredError;
 use hexparser::token::Spanned;
 use hexparser::{parse, type_inference, ImCompleteSemanticToken, Value, Expr};

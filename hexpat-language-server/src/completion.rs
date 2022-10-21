@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use hexparser::{m_parser::{Expr, NamedNode}, token::Spanned};
+use hexparser::{m_parser::Expr, token::Spanned};
 
 pub enum ImCompleteCompletionItem {
     Variable(String),
@@ -16,81 +16,6 @@ pub fn completion(
     ident_offset: usize,
 ) -> HashMap<String, ImCompleteCompletionItem> {
     let mut map = HashMap::new();
-    /* for (name, (v, span)) in ast.0.iter() {
-        match v {
-            NamedNode::Function(args) => {
-                if span.end < ident_offset {
-                    map.insert(
-                        name.clone(),
-                        ImCompleteCompletionItem::Function(
-                            name.clone(),
-                            args.clone().into_iter().collect(),
-                        ),
-                    );
-                }
-            },
-            NamedNode::Struct => {
-                if span.end < ident_offset {
-                    map.insert(
-                        name.clone(),
-                        ImCompleteCompletionItem::Struct(
-                            name.clone(),
-                        ),
-                    );
-                }
-            },
-            NamedNode::Enum => {
-                if span.end < ident_offset {
-                    map.insert(
-                        name.clone(),
-                        ImCompleteCompletionItem::Enum(
-                            name.clone(),
-                        ),
-                    );
-                }
-            },
-            NamedNode::NameSpace => {
-                if span.end < ident_offset {
-                    map.insert(
-                        name.clone(),
-                        ImCompleteCompletionItem::NameSpace(
-                            name.clone(),
-                        ),
-                    );
-                }
-            },
-            NamedNode::BitField => {
-                if span.end < ident_offset {
-                    map.insert(
-                        name.clone(),
-                        ImCompleteCompletionItem::BitField(
-                            name.clone(),
-                        ),
-                    );
-                }
-            },
-            NamedNode::Variable => (), // TODO
-        }
-    }
-
-    // collect params variable
-    for (_, (v, span)) in ast.0.iter() {
-        match v {
-            NamedNode::Function(v) => {
-                if span.end > ident_offset && span.start < ident_offset {
-                    // log::debug!("this is completion from body {}", name);
-                    v.iter().for_each(|item| {
-                        map.insert(
-                            item.clone(),
-                            ImCompleteCompletionItem::Variable(item.clone()),
-                        );
-                    });
-                }
-            },
-            _ => (),
-        }
-    }
-     */ // TODO: Uncomment this
     map
 }
 

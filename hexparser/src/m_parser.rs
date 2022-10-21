@@ -1487,16 +1487,6 @@ fn recover_err<'a, 'b>(e: &TokError<'a, 'b>) -> Tokens<'a, 'b> {
     }
 }
 
-#[derive(Debug)]
-pub enum NamedNode {
-    Variable,
-    Function(Vec<Spanned<String>>),
-    Struct,
-    Enum,
-    NameSpace,
-    BitField
-}
-
 // Hashmap contains the names of named expressions and their clones
 pub(crate) fn token_parse(tokens: Vec<TokSpan>) -> Spanned<Expr> {
     let ex = match tokens.len() {

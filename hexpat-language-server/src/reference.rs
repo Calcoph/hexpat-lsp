@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use im_rc::Vector;
-use hexparser::{m_parser::{Expr, NamedNode}, token::Spanned};
+use hexparser::{m_parser::Expr, token::Spanned};
 
 #[derive(Debug, Clone)]
 pub enum ReferenceSymbol {
