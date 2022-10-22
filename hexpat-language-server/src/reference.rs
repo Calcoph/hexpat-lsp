@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use im_rc::Vector;
-use hexparser::{m_parser::Expr, token::Spanned};
+use hexparser::{m_parser::{Expr, HexTypeDef, HexType}, token::Spanned};
 
 #[derive(Debug, Clone)]
 pub enum ReferenceSymbol {
@@ -97,6 +97,12 @@ pub fn get_reference_of_expr(
             );
         },
         Expr::Definition { value_type, name, body } => {
+            get_reference_of_type_def(
+                value_type,
+                reference_symbol,
+                reference_list,
+                include_self,
+            );
             match &name.0 {
                 Expr::Local { name: (name, name_span) } => {
                     match reference_symbol {
@@ -183,7 +189,7 @@ pub fn get_reference_of_expr(
                 include_self,
             );
         },
-        Expr::Unary { operation, operand } => get_reference_of_expr(
+        Expr::Unary { operation: _, operand } => get_reference_of_expr(
             operand,
             reference_symbol,
             reference_list,
@@ -207,17 +213,220 @@ pub fn get_reference_of_expr(
             reference_list,
             include_self,
         ),
-        Expr::Func { name, args, body } => (), // TODO
-        Expr::Struct { name, body } => (), // TODO
-        Expr::Namespace { name, body } => (), // TODO
-        Expr::Enum { name, value_type, body } => (), // TODO
-        Expr::Bitfield { name, body } => (), // TODO
-        Expr::Access { item, member } => (), // TODO
-        Expr::Attribute { arguments } => (), // TODO
-        Expr::AttributeArgument { name, value } => (), // TODO
-        Expr::WhileLoop { condition, body } => (), // TODO
-        Expr::ForLoop { var_init, var_test, var_change, body } => (), // TODO
-        Expr::Cast { cast_operator, operand } => (), // TODO
-        Expr::Union { name, body } => (), // TODO
+        Expr::Func { name: (name, name_span), args, body } => {
+            match reference_symbol {
+                Finding(ident) if *ident >= name_span.start && *ident < name_span.end => {
+                    let spanned_name = (name.clone(), name_span.clone());
+                    if include_self {
+                        reference_list.push(spanned_name.clone());
+                    }
+                    *reference_symbol = ReferenceSymbol::Found(spanned_name)
+                }
+                _ => (),
+            }
+            // TODO: args
+            get_reference_of_expr(
+                body,
+                reference_symbol,
+                reference_list,
+                include_self,
+            );
+        },
+        Expr::Struct { name: (name, name_span), body } => {
+            match reference_symbol {
+                Finding(ident) if *ident >= name_span.start && *ident < name_span.end => {
+                    let spanned_name = (name.clone(), name_span.clone());
+                    if include_self {
+                        reference_list.push(spanned_name.clone());
+                    }
+                    dbg!(name);
+                    *reference_symbol = ReferenceSymbol::Found(spanned_name)
+                }
+                _ => {dbg!(name);},
+            }
+            get_reference_of_expr(
+                body,
+                reference_symbol,
+                reference_list,
+                include_self,
+            );
+        },
+        Expr::Namespace { name, body } => {
+            get_reference_of_expr(
+                name,
+                reference_symbol,
+                reference_list,
+                include_self,
+            );
+            get_reference_of_expr(
+                body,
+                reference_symbol,
+                reference_list,
+                include_self,
+            );
+        },
+        Expr::Enum { name: (name, name_span), value_type, body } => {
+            match reference_symbol {
+                Finding(ident) if *ident >= name_span.start && *ident < name_span.end => {
+                    let spanned_name = (name.clone(), name_span.clone());
+                    if include_self {
+                        reference_list.push(spanned_name.clone());
+                    }
+                    *reference_symbol = ReferenceSymbol::Found(spanned_name)
+                }
+                _ => (),
+            }
+            get_reference_of_expr(
+                body,
+                reference_symbol,
+                reference_list,
+                include_self,
+            );
+        }
+        Expr::Bitfield { name: (name, name_span), body } => {
+            match reference_symbol {
+                Finding(ident) if *ident >= name_span.start && *ident < name_span.end => {
+                    let spanned_name = (name.clone(), name_span.clone());
+                    if include_self {
+                        reference_list.push(spanned_name.clone());
+                    }
+                    *reference_symbol = ReferenceSymbol::Found(spanned_name)
+                }
+                _ => (),
+            }
+            get_reference_of_expr(
+                body,
+                reference_symbol,
+                reference_list,
+                include_self,
+            );
+        }
+        Expr::Access { item, member } => {
+            get_reference_of_expr(
+                item,
+                reference_symbol,
+                reference_list,
+                include_self,
+            );
+            get_reference_of_expr(
+                member,
+                reference_symbol,
+                reference_list,
+                include_self,
+            );
+        },
+        Expr::Attribute { arguments } => {
+            for arg in arguments.0.iter() {
+                get_reference_of_expr(
+                    arg,
+                    reference_symbol,
+                    reference_list,
+                    include_self,
+                );
+            }
+        },
+        Expr::AttributeArgument { name, value } => {
+            get_reference_of_expr(
+                value,
+                reference_symbol,
+                reference_list,
+                include_self,
+            );
+        },
+        Expr::WhileLoop { condition, body } => {
+            get_reference_of_expr(
+                condition,
+                reference_symbol,
+                reference_list,
+                include_self,
+            );
+            get_reference_of_expr(
+                body,
+                reference_symbol,
+                reference_list,
+                include_self,
+            );
+        },
+        Expr::ForLoop { var_init, var_test, var_change, body } => {
+            get_reference_of_expr(
+                var_init,
+                reference_symbol,
+                reference_list,
+                include_self,
+            );
+            get_reference_of_expr(
+                var_test,
+                reference_symbol,
+                reference_list,
+                include_self,
+            );
+            get_reference_of_expr(
+                var_change,
+                reference_symbol,
+                reference_list,
+                include_self,
+            );
+            get_reference_of_expr(
+                body,
+                reference_symbol,
+                reference_list,
+                include_self,
+            );  
+        },
+        Expr::Cast { cast_operator, operand } => {
+            get_reference_of_expr(
+                operand,
+                reference_symbol,
+                reference_list,
+                include_self,
+            );
+        },
+        Expr::Union { name, body } => {
+            get_reference_of_expr(
+                body,
+                reference_symbol,
+                reference_list,
+                include_self,
+            );
+        },
+    }
+}
+
+pub fn get_reference_of_type_def(
+    type_def: &Spanned<HexTypeDef>,
+    reference_symbol: &mut ReferenceSymbol,
+    reference_list: &mut Vec<Spanned<String>>,
+    include_self: bool,
+) {
+    let HexTypeDef {
+        endianness: _,
+        name,
+    } = &type_def.0;
+    get_reference_of_type(name, reference_symbol, reference_list, include_self)
+}
+
+pub fn get_reference_of_type(
+    type_: &Spanned<HexType>,
+    reference_symbol: &mut ReferenceSymbol,
+    reference_list: &mut Vec<Spanned<String>>,
+    include_self: bool,
+) {
+    if let Found((symbol_name, symbol_span)) = reference_symbol {
+        match &type_.0 {
+            HexType::Custom(name) => if symbol_name == name {
+                reference_list.push((name.clone(), type_.1.clone()));
+            } else {
+                dbg!(symbol_name);
+                dbg!(name);
+            },
+            HexType::Path(p) => {
+                let name = p.last().unwrap().clone(); // TODO: Don't ignore the rest of the path
+                if symbol_name == &name {
+                    reference_list.push((name.clone(), type_.1.clone()));
+                }   
+            },
+            HexType::V(_) => (),
+            HexType::Null => (),
+        }
     }
 }

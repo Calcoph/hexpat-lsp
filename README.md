@@ -4,7 +4,8 @@ Language Server Provider for ImHex's pattern language.
 - [x] Semantic syntax highlighting
 - [X] Go to definition (experimental (only on latest commit). Don't expect it to work in the following scenarios)
     * names defined in a namespace
-- [ ] Find references
+- [X] Find references (experimental (only on latest commit). Don't expect it to work in the following scenarios)
+    * names defined in a namespace
 - [ ] Inlay hints
 - [ ] Completion
 
