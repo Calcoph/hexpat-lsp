@@ -8,7 +8,7 @@ use nom::{
         oct_digit1,
         digit1,
         multispace1,
-        not_line_ending
+        not_line_ending, oct_digit0, hex_digit0, digit0
     },
     branch::alt as choice,
     bytes::complete::{
@@ -21,9 +21,9 @@ use nom::{
         recognize,
         eof,
         map,
-        map_opt
+        map_opt, opt
     },
-    sequence::{pair as then, delimited, preceded},
+    sequence::{pair as then, delimited, preceded, tuple},
     multi::{
         many_till as many_until,
         many0,
@@ -32,11 +32,11 @@ use nom::{
 };
 use nom_supreme::error::{GenericErrorTree, ErrorTree};
 
-use crate::{recovery_err::{StrResult, StrSpan, RecoveredError, ParseState, ToRange}, token::{TokSpan, FromStrSpan, Token, PreProc, Keyword, BuiltFunc, ValueType}};
+use crate::{recovery_err::{StrResult, StrSpan, RecoveredError, ParseState, ToRange}, token::{TokSpan, FromStrSpan, Token, PreProc, Keyword, BuiltFunc, ValueType}, combinators::ignore};
 
 fn hex_num<'a, 'b>(input: StrSpan<'a, 'b>) -> StrResult<StrSpan<'a, 'b>, TokSpan<'a, 'b>> {
     map(
-        then(
+        tuple((
             just_no_case("0x"),
             |input: StrSpan<'a, 'b>| match hex_digit1(input) {
                 Ok((p, s)) => {
@@ -62,15 +62,22 @@ fn hex_num<'a, 'b>(input: StrSpan<'a, 'b>) -> StrResult<StrSpan<'a, 'b>, TokSpan
                     Ok((input, (Token::Err, state, span)))
                 },
                 Err(e) => Err(e)
-            }
-        ),
-        |(head, t)| TokSpan::from_strspan(t.0, t.1, head.span().start..t.2.end)
+            },
+            ignore(opt( // TODO: don't ignore
+                tuple((
+                    just("."),
+                    hex_digit0,
+                    opt(is_a("dDfF"))
+                ))
+            ))
+        )),
+        |(head, t, _)| TokSpan::from_strspan(t.0, t.1, head.span().start..t.2.end)
     )(input)
 }
 
 fn oct_num<'a, 'b>(input: StrSpan<'a, 'b>) -> StrResult<StrSpan<'a, 'b>, TokSpan<'a, 'b>> {
     map(
-        then(
+        tuple((
             just_no_case("0o"),
             |input: StrSpan<'a, 'b>| match oct_digit1(input) {
                 Ok((p, s)) => {
@@ -96,15 +103,22 @@ fn oct_num<'a, 'b>(input: StrSpan<'a, 'b>) -> StrResult<StrSpan<'a, 'b>, TokSpan
                     Ok((input, (Token::Err, state, span)))
                 },
                 Err(e) => Err(e)
-            }
-        ),
-        |(head, t)| TokSpan::from_strspan(t.0, t.1, head.span().start..t.2.end)
+            },
+            ignore(opt( // TODO: don't ignore
+                tuple((
+                    just("."),
+                    oct_digit0,
+                    opt(is_a("dDfF"))
+                ))
+            ))
+        )),
+        |(head, t, _)| TokSpan::from_strspan(t.0, t.1, head.span().start..t.2.end)
     )(input)
 }
 
 fn bin_num<'a, 'b>(input: StrSpan<'a, 'b>) -> StrResult<StrSpan<'a, 'b>, TokSpan<'a, 'b>> {
     map(
-        then(
+        tuple((
             just_no_case("0b"),
             |input: StrSpan<'a, 'b>| match is_a("01")(input) {
                 Ok((p, s)) => {
@@ -130,20 +144,39 @@ fn bin_num<'a, 'b>(input: StrSpan<'a, 'b>) -> StrResult<StrSpan<'a, 'b>, TokSpan
                     Ok((input, (Token::Err, state, span)))
                 },
                 Err(e) => Err(e)
-            }
-        ),
-        |(head, t)| TokSpan::from_strspan(t.0, t.1, head.span().start..t.2.end)
+            },
+            ignore(opt( // TODO: don't ignore
+                tuple((
+                    just("."),
+                    is_a("01"),
+                    opt(is_a("dDfF"))
+                ))
+            ))
+        )),
+        |(head, t, _)| TokSpan::from_strspan(t.0, t.1, head.span().start..t.2.end)
     )(input)
 }
 
 fn dec_num<'a, 'b>(input: StrSpan<'a, 'b>) -> StrResult<StrSpan<'a, 'b>, TokSpan<'a, 'b>> {
-    match digit1(input) {
-        Ok((p, s)) => {
-            let state = s.extra;
-            Ok((p, TokSpan::from_strspan(Token::Num(s.fragment()), state, s.span())))
-        },
-        Err(e) => Err(e),
-    }
+    map(
+        then(
+            |input: StrSpan<'a, 'b>| match digit1(input) {
+                Ok((p, s)) => {
+                    let state = s.extra;
+                    Ok((p, TokSpan::from_strspan(Token::Num(s.fragment()), state, s.span())))
+                },
+                Err(e) => Err(e),
+            },
+            ignore(opt( // TODO: don't ignore
+                tuple((
+                    just("."),
+                    digit0,
+                    opt(is_a("dDfF"))
+                ))
+            ))
+        ),
+        |(a, _)| a
+    )(input)
 }
 
 // A parser for chars
