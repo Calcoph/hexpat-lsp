@@ -320,7 +320,7 @@ impl<'a, 'b> InputTake for Tokens<'a, 'b> {
         let suf_offset = match suffix.len() {
             0 => match prefix.len() {
                 0 => self.offset,
-                _ => prefix[0].span().end+1
+                _ => prefix[0].span().end
             },
             _ => suffix[0].span().start
         };
