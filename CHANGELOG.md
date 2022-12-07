@@ -1,13 +1,18 @@
-# v0.2.0-alpha2
+# v0.2.2
+* Go to definition
+* Find references
+* Should work with imhex v1.24.2
+
+# v0.2.2-alpha2
 * Fix the error when importing std/mem
 
-# v0.2.0-alpha1
+# v0.2.2-alpha1
 * Go to definition
 * Find references
 
 These features are experimental and don't work in all scenarios, specifically when namespaces are involved.
 
-# v0.2.0
+# v0.2.1
 Brings most of the new features imhex has released since Version 0.2.0
 
 * sizeof(u8) works, but addressof(u8) doesn't

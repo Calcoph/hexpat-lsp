@@ -952,7 +952,17 @@ fn parse_enum<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>>
                                 ident,
                                 preceded(
                                     just(Token::Op("=")),
-                                    mathematical_expression
+                                    terminated( // TODO: Don't ignore range
+                                        mathematical_expression,
+                                        opt(preceded(
+                                            tuple((
+                                                just(Token::Separator('.')),
+                                                just(Token::Separator('.')),
+                                                just(Token::Separator('.'))
+                                            )),
+                                            non_opt(mathematical_expression)
+                                        ))
+                                    )
                                 )
                             ),
                             map(ident, |(a, a_span)| ((a, a_span.clone()), (Expr::Value { val: Value::Null }, a_span)))

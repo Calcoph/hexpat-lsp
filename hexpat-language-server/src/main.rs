@@ -555,7 +555,7 @@ impl Backend {
 
 #[tokio::main]
 async fn main() {
-    eprintln!("hexpat-language-server v0.2.2-alpha2");
+    eprintln!("hexpat-language-server v0.2.2");
     env_logger::init();
 
     let stdin = tokio::io::stdin();
