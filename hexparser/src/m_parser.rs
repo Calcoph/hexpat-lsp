@@ -498,7 +498,7 @@ fn recursive_namespace_access_to_hextype(expr: Expr, v: &mut Vec<String>) {
 fn parse_type<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<HexTypeDef>> {
     map_with_span(
         tuple((
-            //opt(just(Token::K(Keyword::Reference))), // TODO: References cannot be used always
+            opt(just(Token::K(Keyword::Reference))),
             opt(choice((
                 to(just(Token::K(Keyword::LittleEndian)), Endianness::Little),
                 to(just(Token::K(Keyword::BigEndian)), Endianness::Big)
@@ -529,10 +529,10 @@ fn parse_type<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<HexTyp
                     ),
                     |(a, b)| a // TODO: don't ignore B
                 ),
-                value_type_any // TODO: Some values cannot be used always
+                value_type_any
             ))
         )),
-        |(endianness, name), span| {//|(reference, endianness, name), span| {
+        |(reference, endianness, name), span| {//|(reference, endianness, name), span| {
             let endianness = match endianness {
                 Some((endianness, _)) => endianness,
                 None => Endianness::Unkown,

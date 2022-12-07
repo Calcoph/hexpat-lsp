@@ -13,4 +13,17 @@ Non implemented features: (comparing with **3d192fb**, *(October 10th, 2022 7:09
  * enum ranges (line 1141) (Won't fix in this iteration, since the original parser is bugged)
  * ~~declare+assign in same line (line 1252)~~
  * ~~Global array (no @ required) (line 1294)~~
+
+Non implemented features: (**3d192fb** <-> **3c257ee**)
+ * line 176
+ * line 738
+ * parseMemberVariable (line 869) a bunch of changes
+ * parseMemberArrayVariable (line 902) a bunch of changes
+ * line 1023
+ * line 1028
+ * line 1031
+ * line 1257
+ * line 1310
+ * line 1329
+ * line 1363
  
