@@ -293,7 +293,7 @@ fn member_access<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Exp
                 ),
                 map_with_span(
                     just(Token::K(Keyword::This)),
-                    |_, span| (Expr::Local { name: (String::from("this1"), span.clone())} , span)
+                    |_, span| (Expr::Local { name: (String::from("this"), span.clone())} , span)
                 )
             )),
             opt(delimited(
@@ -1142,7 +1142,13 @@ fn array_variable_placement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, 
             opt(
                 preceded(
                     just(Token::Op("@")),
-                    mathematical_expression.context("Expected mathematical expression")
+                    then(
+                        non_opt(mathematical_expression).context("Expected mathematical expression"),
+                        opt(preceded(
+                            just(Token::K(Keyword::In)),
+                            non_opt(mathematical_expression).context("Expected mathematical expression")
+                        ))
+                    )
                 )
             )
         )),
@@ -1152,7 +1158,7 @@ fn array_variable_placement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, 
                 None => (Expr::Value { val: Value::Null }, name_span.clone())
             });
             let body = match body {
-                Some(b) => b,
+                Some((b, section)) => b,
                 None => (Expr::Value { val: Value::Null }, name_span.clone()),
             };
             ((name, name_span), body)
@@ -1183,9 +1189,13 @@ fn pointer_array_variable_placement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<
             just(Token::Op(":")),
             pointer_size_type,
             just(Token::Op("@")),
-            mathematical_expression
+            mathematical_expression,
+            opt(preceded(
+                just(Token::K(Keyword::In)),
+                non_opt(mathematical_expression).context("Expected mathematical expression")
+            ))
         )),
-        |(a, b, c, d, e, f)| f // TODO
+        |(a, b, c, d, e, f, section)| f // TODO
     )(input)
 }
 
@@ -1237,9 +1247,15 @@ fn placement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> 
                             map(
                                 preceded(
                                     just(Token::Op("@")),
-                                    non_opt(mathematical_expression).context("Expected mathematical expression")
+                                    then(
+                                        non_opt(mathematical_expression).context("Expected mathematical expression"),
+                                        opt(preceded(
+                                            just(Token::K(Keyword::In)),
+                                            non_opt(mathematical_expression).context("Expected mathematical expression")
+                                        ))
+                                    )
                                 ),
-                                |a| Some(a)
+                                |(a, section)| Some(a)
                             ),
                             map(just(Token::K(Keyword::In)), |_| None),
                             map(just(Token::K(Keyword::Out)), |_| None),
@@ -1273,11 +1289,17 @@ fn placement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> 
                             separated_pair(
                                 pointer_size_type,
                                 just(Token::Op("@")),
-                                mathematical_expression
+                                then(
+                                    mathematical_expression,
+                                    opt(preceded(
+                                        just(Token::K(Keyword::In)),
+                                        non_opt(mathematical_expression).context("Expected mathematical expression")
+                                    ))
+                                )
                             )
                         )
                     ),
-                    |(name, (pointer_type, body))| (name, body) // TODO take the type of the pointer into account
+                    |(name, (pointer_type, (body, section)))| (name, body) // TODO take the type of the pointer into account
                 ),
                 map(
                     preceded(

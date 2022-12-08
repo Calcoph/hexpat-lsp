@@ -1,3 +1,6 @@
+# v0.2.3
+* Sections
+
 # v0.2.2
 * Go to definition
 * Find references

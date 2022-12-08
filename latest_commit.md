@@ -1,5 +1,6 @@
-The parser in this repository was originally the same as in commit **7362827** of the official pattern language in *(August 5th, 2022 2:41 PM)* (currently **3d192fb**)
+# This document is absolutely not interesting, I just use it to take notes
 
+The parser in this repository was originally the same as in commit **7362827** of the official pattern language in *(August 5th, 2022 2:41 PM)* (currently **3d192fb**)
 
 Non implemented features: (comparing with **3d192fb**, *(October 10th, 2022 7:09 PM)*)
  * ~~sizeof(type) (example: sizeof(u8)) (praseFactor)~~
@@ -10,20 +11,13 @@ Non implemented features: (comparing with **3d192fb**, *(October 10th, 2022 7:09
  * ~~dont allow placement in parsemembervariable sometimes (line 888)~~ (i think this one was already done)
  * ~~dont allow placement in parsememberarrayvariable sometimes (line 915)~~ (i think this one was already done)
  * ~~Accept namespaced types in sizeof() (example: sizeof(types::MyType))~~
- * enum ranges (line 1141) (Won't fix in this iteration, since the original parser is bugged)
+ * ~~enum ranges (line 1141)~~
  * ~~declare+assign in same line (line 1252)~~
  * ~~Global array (no @ required) (line 1294)~~
 
-Non implemented features: (**3d192fb** <-> **3c257ee**)
- * line 176
- * line 738
- * parseMemberVariable (line 869) a bunch of changes
- * parseMemberArrayVariable (line 902) a bunch of changes
- * line 1023
- * line 1028
- * line 1031
- * line 1257
- * line 1310
- * line 1329
- * line 1363
+Non implemented features: (**3d192fb** <-> **951944d**, *(November 6th, 2022 6:30 PM)*)
+ * ~~line 1250~~
+ * ~~line 1303~~
+ * ~~line 1321~~
+ * ~~line 1355~~
  
