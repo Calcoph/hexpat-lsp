@@ -235,12 +235,12 @@ pub(crate) fn function_for_loop<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 
                 delimited(
                     just(Token::Separator('(')).context("Missing ("),
                     separated_pair(
-                        function_statement.context("Expected variable declaration"),
+                        function_statement_semicolonless.context("Expected variable declaration"),
                         just(Token::Separator(',')).context("Missing ,"),
                         separated_pair(
                             mathematical_expression.context("Expected boolean expression"),
                             just(Token::Separator(',')).context("Missing ,"),
-                            function_statement.context("Expected expression")
+                            function_statement_semicolonless.context("Expected expression")
                         )
                     ),
                     just(Token::Separator(')')).context("Missing )"),
@@ -300,7 +300,7 @@ pub(crate) fn func_arg<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spann
     )(input)
 }
 
-pub(crate) fn function_statement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
+pub(crate) fn function_statements<'a, 'b: 'a>() -> (impl FnMut(Tokens<'a,'b>) -> TokResult<'a, 'b, Spanned<Expr>>, impl FnMut(Tokens<'a,'b>) -> TokResult<'a, 'b, Spanned<Expr>>) {
     let semicolon_expr = choice((
         assignment_expr,
         function_controlflow_statement,
@@ -313,11 +313,26 @@ pub(crate) fn function_statement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a,
         function_while_loop,
         function_for_loop,
     ));
+
+    (semicolon_expr, no_semicolon_expr)
+}
+
+pub(crate) fn function_statement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
+    let (semicolon_expr, no_semicolon_expr) = function_statements();
+
     expression_recovery(choice((
         terminated(
             semicolon_expr,
             many1(just(Token::Separator(';'))).context("Missing ;")
         ),
+        no_semicolon_expr,
+    )))(input)
+}
+
+pub(crate) fn function_statement_semicolonless<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
+    let (semicolon_expr, no_semicolon_expr) = function_statements();
+    expression_recovery(choice((
+        semicolon_expr,
         no_semicolon_expr,
     )))(input)
 }
