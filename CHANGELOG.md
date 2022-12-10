@@ -1,5 +1,6 @@
-# v0.2.3
+# v0.2.3 (unreleased)
 * Sections
+* Fix `for` loops
 
 # v0.2.2
 * Go to definition
