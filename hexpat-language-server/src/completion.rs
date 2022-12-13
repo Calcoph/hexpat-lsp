@@ -83,12 +83,12 @@ pub fn get_completion_of(
         Expr::BitFieldEntry { name, length } => false, // TODO
         Expr::EnumEntry { name, value } => false, // TODO
         Expr::NamespaceAccess { previous, name } => false, // TODO
-        Expr::Using { new_name, old_name } => false, // TODO
+        Expr::Using { new_name, template_parameters, old_name } => false, // TODO
         Expr::Return { value } => false, // TODO
         Expr::Continue => false, // TODO
         Expr::Break => false, // TODO
         Expr::Func { name, args, body } => false, // TODO
-        Expr::Struct { name, body } => false, // TODO
+        Expr::Struct { name, body, template_parameters } => false, // TODO
         Expr::Namespace { name, body } => false, // TODO
         Expr::Enum { name, value_type, body } => false, // TODO
         Expr::Bitfield { name, body } => false, // TODO
@@ -98,6 +98,8 @@ pub fn get_completion_of(
         Expr::WhileLoop { condition, body } => false, // TODO
         Expr::ForLoop { var_init, var_test, var_change, body } => false, // TODO
         Expr::Cast { cast_operator, operand } => false, // TODO
-        Expr::Union { name, body } => false, // TODO
+        Expr::Union { name, body, template_parameters } => false, // TODO
+        Expr::ArrayAccess { array: item, index: member } => false, // TODO
+        Expr::ArrayDefinition { value_type, array_name, size, body } => false, // TODO
     }
 }

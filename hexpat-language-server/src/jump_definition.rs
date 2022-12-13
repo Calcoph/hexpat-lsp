@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use im_rc::Vector;
 use hexparser::{m_parser::{Expr, HexTypeDef, HexType, FuncArgument}, token::Spanned};
 
@@ -144,7 +142,7 @@ fn get_definition_of_expr(
                 get_definition_of_expr(previous, definition_ass_list, ident_offset, false)
             }
         },
-        Expr::Using { new_name, old_name } => {
+        Expr::Using { new_name, template_parameters, old_name } => { // TODO: template_parameters
             definition_ass_list.push_back(new_name.clone());
             get_definition_of_type_def(old_name, definition_ass_list, ident_offset)
         },
@@ -167,7 +165,7 @@ fn get_definition_of_expr(
             }
             get_definition_of_expr(body, &mut new_scope, ident_offset, false)
         },
-        Expr::Struct { name, body } => {
+        Expr::Struct { name, body, template_parameters } => { // TODO: template_parameters
             definition_ass_list.push_back(name.clone());
             get_definition_of_expr(body, &mut definition_ass_list.clone(), ident_offset, false)
         },
@@ -248,10 +246,12 @@ fn get_definition_of_expr(
             get_definition_of_expr(body, &mut new_scope, ident_offset, false)
         },
         Expr::Cast { cast_operator: _, operand } => get_definition_of_expr(operand, definition_ass_list, ident_offset, false),
-        Expr::Union { name, body } => {
+        Expr::Union { name, body, template_parameters } => { // TODO: template_parameters
             definition_ass_list.push_back(name.clone());
             get_definition_of_expr(body, definition_ass_list, ident_offset, false)
         },
+        Expr::ArrayAccess { array, index } => (true, None), // TODO
+        Expr::ArrayDefinition { value_type, array_name, size, body } => (true, None), // TODO
     }
 }
 

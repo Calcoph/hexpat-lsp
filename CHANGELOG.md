@@ -1,5 +1,9 @@
 # v0.2.3
 * Sections
+* better support inside:
+    * Template parameters
+    * Array indices
+    * Array sizes
 
 # v0.2.2
 * Go to definition

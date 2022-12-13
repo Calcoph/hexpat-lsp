@@ -4,7 +4,7 @@ use std::{cell::RefCell, collections::HashMap, env::args};
 
 use nom::multi::separated_list1;
 use nom::bytes::complete::tag as just;
-use crate::{m_lexer, m_parser::{self, token_parse, parse_namespace, ident, parse_struct, BinaryOp, HexTypeDef, Endianness, HexType, FuncArgument}, simple_debug::SimpleDebug, token::{Token, Tokens, ValueType}, expand_preprocessor_tokens, Expr, Value, parse};
+use crate::{m_lexer, m_parser::{self, token_parse, parse_namespace, ident, parse_struct, BinaryOp, HexTypeDef, Endianness, HexType, FuncArgument, UnaryOp}, simple_debug::SimpleDebug, token::{Token, Tokens, ValueType}, expand_preprocessor_tokens, Expr, Value, parse};
 
 macro_rules! get_tokens {
     ( $test_str:expr, $var:ident ) => {
@@ -112,7 +112,7 @@ fn expr_comparer(expr1: &Expr, expr2: &Expr) -> Result<(), CompErr>{
         ) => match expr_comparer(&op1.0, &op2.0) {
             Ok(_) => match oper1 == oper2 {
                 true => Ok(()),
-                false => {println!("Different operation");Err(CompErr)}
+                false => {println!("Different operation |{oper1:?}, {oper2:?}");Err(CompErr)}
             },
             Err(e) => Err(e),
         },
@@ -223,10 +223,10 @@ fn expr_comparer(expr1: &Expr, expr2: &Expr) -> Result<(), CompErr>{
             false => {println!("Different namespace names");Err(CompErr)},
         },
         (
-            Expr::Using { new_name: (n1, _), old_name: (
+            Expr::Using { new_name: (n1, _), template_parameters: None, old_name: (
                 HexTypeDef { endianness: e1, name: (hn1, _) }, _
             ) },
-            Expr::Using { new_name: (n2, _), old_name: (
+            Expr::Using { new_name: (n2, _), template_parameters: None, old_name: (
                 HexTypeDef { endianness: e2, name: (hn2, _) }, _
             ) }
         ) => match n1 == n2 {
@@ -276,8 +276,8 @@ fn expr_comparer(expr1: &Expr, expr2: &Expr) -> Result<(), CompErr>{
             },
             false => {println!("Different names |{n1:?}, {n2:?}|");Err(CompErr)},
         },
-        (Expr::Struct { name: (n1, _), body: b1 },
-            Expr::Struct { name: (n2, _), body: b2 }
+        (Expr::Struct { name: (n1, _), body: b1, template_parameters: None },
+            Expr::Struct { name: (n2, _), body: b2, template_parameters: None }
         ) => match n1 == n2 {
             true => match expr_comparer(&b1.0, &b2.0) {
                 Ok(_) => Ok(()),
@@ -396,8 +396,8 @@ fn expr_comparer(expr1: &Expr, expr2: &Expr) -> Result<(), CompErr>{
             },
             false => {println!("Different endianness |{e1:?}, {e2:?}|");Err(CompErr)},
         },
-        (Expr::Union { name: (n1, _), body: b1 },
-            Expr::Union { name: (n2, _), body: b2 }
+        (Expr::Union { name: (n1, _), body: b1, template_parameters: None },
+            Expr::Union { name: (n2, _), body: b2, template_parameters: None }
         ) => match n1 == n2 {
             true => match expr_comparer(&b1.0, &b2.0) {
                 Ok(_) => Ok(()),
@@ -405,7 +405,29 @@ fn expr_comparer(expr1: &Expr, expr2: &Expr) -> Result<(), CompErr>{
             },
             false => {println!("Different names |{n1:?}, {n2:?}|");Err(CompErr)},
         },
-        (e1, e2) => {println!("Expected {e1:?}. Got {e2:?}");Err(CompErr)}
+        (Expr::ArrayDefinition {
+            value_type: (HexTypeDef { endianness: e1, name: (hn1, _) }, _),
+            array_name: n1, size: s1, body: b1 },
+        Expr::ArrayDefinition {
+            value_type: (HexTypeDef { endianness: e2, name: (hn2, _) }, _),
+            array_name: n2, size: s2, body: b2 }
+        ) => match e1 == e2 {
+            true => match eq_hextype(hn1, hn2) {
+                true => match expr_comparer(&n1.0, &n2.0) {
+                    Ok(_) => match expr_comparer(&s1.0, &s2.0) {
+                        Ok(_) => match expr_comparer(&b1.0, &b2.0) {
+                            Ok(_) => Ok(()),
+                            Err(e) => Err(e),
+                        },
+                        Err(e) => Err(e),
+                    },
+                    Err(e) => Err(e),
+                },
+                false => {println!("Different types |{hn1:?}, {hn2:?}|");Err(CompErr)},
+            },
+            false => {println!("Different endianness |{e1:?}, {e2:?}|");Err(CompErr)},
+        },
+        (e1, e2) => {println!("Expected {e1:?}.\nGot {e2:?}");Err(CompErr)}
     }
 }
 
@@ -444,28 +466,40 @@ fn test_pattern_arrays() {
                 name: (String::from("Signature"), 0..0),
                 body: Box::new((Expr::ExprList {
                     list: vec![
-                        (Expr::Definition {
+                        (Expr::ArrayDefinition {
                             value_type: (HexTypeDef {
                                 endianness: Endianness::Unkown,
                                 name: (HexType::V(ValueType::U8), 0..0)
                             }, 0..0),
-                            name: Box::new((Expr::Local {
+                            array_name: Box::new((Expr::Local {
                                 name: (String::from("first"), 0..0)
                             }, 0..0)),
+                            size: Box::new((Expr::Value { val: Value::Num(0.0) }, 0..0)),
                             body: Box::new((Expr::Value { val: Value::Null }, 0..0))
                         }, 0..0),
-                        (Expr::Definition {
+                        (Expr::ArrayDefinition {
                             value_type: (HexTypeDef {
                                 endianness: Endianness::Unkown,
                                 name: (HexType::V(ValueType::U8), 0..0)
                             }, 0..0),
-                            name: Box::new((Expr::Local {
+                            array_name: Box::new((Expr::Local {
                                 name: (String::from("second"), 0..0)
+                            }, 0..0)),
+                            size: Box::new((Expr::WhileLoop {
+                                condition: Box::new((Expr::Unary {
+                                    operation: UnaryOp::LNot,
+                                    operand: Box::new((Expr::Call {
+                                        func_name: Box::new((Expr::Local { name: (String::from("end_of_signature"), 0..0) }, 0..0)),
+                                        arguments: (vec![], 0..0)
+                                    }, 0..0))
+                                }, 0..0)),
+                                body: Box::new((Expr::Value { val: Value::Null }, 0..0))
                             }, 0..0)),
                             body: Box::new((Expr::Value { val: Value::Null }, 0..0))
                         }, 0..0)
                     ]
-                }, 0..0))
+                }, 0..0)),
+                template_parameters: None
             }, 0..0),
             (Expr::Definition {
                 value_type: (HexTypeDef {
@@ -546,7 +580,8 @@ fn test_pattern_attributes() {
                     ] }, 0..0)),
                     body: Box::new((Expr::Value { val: Value::Null }, 0..0))
                 }, 0..0)
-            ] }, 0..0))
+            ] }, 0..0)),
+            template_parameters: None
         }, 0..0),
         (Expr::Struct {
             name: (String::from("SealedTest"), 0..0),
@@ -559,7 +594,8 @@ fn test_pattern_attributes() {
                     name: Box::new((Expr::Local { name: (String::from("f"), 0..0) }, 0..0)),
                     body: Box::new((Expr::Value { val: Value::Null }, 0..0))
                 }, 0..0)
-            ] }, 0..0))
+            ] }, 0..0)),
+            template_parameters: None
         }, 0..0),
         (Expr::Struct {
             name: (String::from("HiddenTest"), 0..0),
@@ -572,20 +608,23 @@ fn test_pattern_attributes() {
                     name: Box::new((Expr::Local { name: (String::from("f"), 0..0) }, 0..0)),
                     body: Box::new((Expr::Value { val: Value::Null }, 0..0))
                 }, 0..0)
-            ] }, 0..0))
+            ] }, 0..0)),
+            template_parameters: None
         }, 0..0),
         (Expr::Struct {
             name: (String::from("ColorTest"), 0..0),
             body: Box::new((Expr::ExprList { list: vec![
-                (Expr::Definition {
+                (Expr::ArrayDefinition {
                     value_type: (HexTypeDef {
                         endianness: Endianness::Unkown,
                         name: (HexType::V(ValueType::Character), 0..0)
                     }, 0..0),
-                    name: Box::new((Expr::Local { name: (String::from("s"), 0..0) }, 0..0)),
+                    array_name: Box::new((Expr::Local { name: (String::from("s"), 0..0) }, 0..0)),
+                    size: Box::new((Expr::Value { val: Value::Num(0.0) }, 0..0)),
                     body: Box::new((Expr::Value { val: Value::Null }, 0..0))
                 }, 0..0)
-            ] }, 0..0))
+            ] }, 0..0)),
+            template_parameters: None
         }, 0..0),
         (Expr::Struct {
             name: (String::from("NoUniqueAddressTest"), 0..0),
@@ -606,7 +645,8 @@ fn test_pattern_attributes() {
                     name: Box::new((Expr::Local { name: (String::from("y"), 0..0) }, 0..0)),
                     body: Box::new((Expr::Value { val: Value::Null }, 0..0))
                 }, 0..0)
-            ] }, 0..0))
+            ] }, 0..0)),
+            template_parameters: None
         }, 0..0),
         (Expr::Func {
             name: (String::from("format_test"), 0..0),
@@ -881,7 +921,8 @@ fn test_pattern_extra_semicolon() {
                     }, 0..0)),
                     body: Box::new((Expr::Value { val: Value::Null }, 0..0))
                 }, 0..0)
-            ] }, 0..0))
+            ] }, 0..0)),
+            template_parameters: None
         }, 0..0),
         (Expr::Struct {
             name: (String::from("Test2"), 0..0),
@@ -906,7 +947,8 @@ fn test_pattern_extra_semicolon() {
                     }, 0..0)),
                     body: Box::new((Expr::Value { val: Value::Null }, 0..0))
                 }, 0..0)
-            ] }, 0..0))
+            ] }, 0..0)),
+            template_parameters: None
         }, 0..0),
         (Expr::Definition {
             value_type: (HexTypeDef {
@@ -972,7 +1014,9 @@ fn test_pattern_namespaces() {
                         name: Box::new((Expr::Local { name: (String::from("x"), 0..0) }, 0..0)),
                         body: Box::new((Expr::Value { val: Value::Null }, 0..0))
                     }, 0..0)
-                ] }, 0..0)) }, 0..0)
+                ] }, 0..0)),
+                template_parameters: None
+                }, 0..0)
             ] }, 0..0))
         }, 0..0),
         (Expr::Namespace {
@@ -987,11 +1031,14 @@ fn test_pattern_namespaces() {
                         name: Box::new((Expr::Local { name: (String::from("x"), 0..0) }, 0..0)),
                         body: Box::new((Expr::Value { val: Value::Null }, 0..0))
                     }, 0..0)
-                ] }, 0..0)) }, 0..0)
+                ] }, 0..0)),
+                template_parameters: None
+                }, 0..0)
             ] }, 0..0))
         }, 0..0),
         (Expr::Using {
             new_name: (String::from("ATest"), 0..0),
+            template_parameters: None,
             old_name: (HexTypeDef {
                 endianness: Endianness::Unkown,
                 name: (HexType::Path(vec![
@@ -1141,20 +1188,34 @@ fn test_pattern_nested_structs() {
                     name: Box::new((Expr::Local { name: (String::from("len"), 0..0) }, 0..0)),
                     body: Box::new((Expr::Value { val: Value::Null }, 0..0))
                 }, 0..0)
-            ] }, 0..0))
+            ] }, 0..0)),
+            template_parameters: None
         }, 0..0),
         (Expr::Struct {
             name: (String::from("Body"), 0..0),
             body: Box::new((Expr::ExprList { list: vec![
-                (Expr::Definition {
+                (Expr::ArrayDefinition {
                     value_type: (HexTypeDef {
                         endianness: Endianness::Unkown,
                         name: (HexType::V(ValueType::U8), 0..0)
                     }, 0..0),
-                    name: Box::new((Expr::Local { name: (String::from("arr"), 0..0) }, 0..0)),
+                    array_name: Box::new((Expr::Local { name: (String::from("arr"), 0..0) }, 0..0)),
+                    size: Box::new((Expr::WhileLoop {
+                        condition: Box::new((Expr::Unary {
+                            operation: UnaryOp::LNot,
+                            operand: Box::new((Expr::Call {
+                                func_name: Box::new((Expr::Local {
+                                    name: (String::from("end_of_body"), 0..0)
+                                }, 0..0)),
+                                arguments: (vec![], 0..0)
+                            }, 0..0))
+                        }, 0..0)),
+                        body: Box::new((Expr::Value { val: Value::Null }, 0..0))
+                    }, 0..0)),
                     body: Box::new((Expr::Value { val: Value::Null }, 0..0))
                 }, 0..0)
-            ] }, 0..0))
+            ] }, 0..0)),
+            template_parameters: None
         }, 0..0),
         (Expr::Struct {
             name: (String::from("Data"), 0..0),
@@ -1175,7 +1236,8 @@ fn test_pattern_nested_structs() {
                     name: Box::new((Expr::Local { name: (String::from("body"), 0..0) }, 0..0)),
                     body: Box::new((Expr::Value { val: Value::Null }, 0..0))
                 }, 0..0)
-            ] }, 0..0))
+            ] }, 0..0)),
+            template_parameters: None
         }, 0..0),
         (Expr::Definition {
             value_type: (HexTypeDef {
@@ -1226,18 +1288,20 @@ fn test_pattern_padding() {
                         body: Box::new((Expr::Value { val: Value::Null }, 0..0))
                     }, 0..0),
                     (Expr::Value { val: Value::Num(0.0) }, 0..0), // padding // TODO: Expr for padding instead of value
-                    (Expr::Definition {
+                    (Expr::ArrayDefinition {
                         value_type: (HexTypeDef {
                             endianness: Endianness::Unkown,
                             name: (HexType::V(ValueType::U8), 0..0)
                         }, 0..0),
-                        name: Box::new((Expr::Local {
+                        array_name: Box::new((Expr::Local {
                             name: (String::from("array"), 0..0)
                         }, 0..0)),
+                        size: Box::new((Expr::Value {val: Value::Num(0.0) }, 0..0)),
                         body: Box::new((Expr::Value { val: Value::Null }, 0..0))
                     }, 0..0)
                 ]
-            }, 0..0))
+            }, 0..0)),
+            template_parameters: None
         }, 0..0),
         (Expr::Definition {
             value_type: (HexTypeDef {
@@ -1280,14 +1344,15 @@ fn test_pattern_placement() {
             }, 0..0)),
             body: Box::new((Expr::Value { val: Value::Num(0.0) }, 0..0))
         }, 0..0),
-        (Expr::Definition {
+        (Expr::ArrayDefinition {
             value_type: (HexTypeDef {
                 endianness: Endianness::Unkown,
                 name: (HexType::V(ValueType::U8), 0..0)
             }, 0..0),
-            name: Box::new((Expr::Local {
+            array_name: Box::new((Expr::Local {
                 name: (String::from("placementArray"), 0..0)
             }, 0..0)),
+            size: Box::new((Expr::Value { val: Value::Num(0.0) }, 0..0)),
             body: Box::new((Expr::Value { val: Value::Num(0.0) }, 0..0))
         }, 0..0)
     ] };
@@ -1400,15 +1465,29 @@ fn test_pattern_rvalues() {
                     name: Box::new((Expr::Local { name: (String::from("y"), 0..0) }, 0..0)),
                     body: Box::new((Expr::Value { val: Value::Null }, 0..0))
                 }, 0..0),
-                (Expr::Definition {
+                (Expr::ArrayDefinition {
                     value_type: (HexTypeDef {
                         endianness: Endianness::Unkown,
                         name: (HexType::V(ValueType::U8), 0..0)
                     }, 0..0),
-                    name: Box::new((Expr::Local { name: (String::from("array"), 0..0) }, 0..0)),
+                    array_name: Box::new((Expr::Local { name: (String::from("array"), 0..0) }, 0..0)),
+                    size: Box::new((Expr::Access {
+                        item: Box::new((Expr::Local {
+                            name: (String::from("parent"), 0..0)
+                            }, 0..0)),
+                        member: Box::new((Expr::Access {
+                            item: Box::new((Expr::Local {
+                                name: (String::from("parent"), 0..0)
+                            }, 0..0)),
+                            member: Box::new((Expr::Local {
+                                name: (String::from("x"), 0..0)
+                            }, 0..0))
+                        }, 0..0)),
+                    }, 0..0)),
                     body: Box::new((Expr::Value { val: Value::Null }, 0..0))
                 }, 0..0)
-            ] }, 0..0))
+            ] }, 0..0)),
+            template_parameters: None
         }, 0..0),
         (Expr::Struct {
             name: (String::from("B"), 0..0),
@@ -1425,7 +1504,8 @@ fn test_pattern_rvalues() {
                         body: Box::new((Expr::Value { val: Value::Null }, 0..0))
                     }, 0..0)
                 ]
-            }, 0..0))
+            }, 0..0)),
+            template_parameters: None
         }, 0..0),
         (Expr::Struct {
             name: (String::from("A"), 0..0),
@@ -1452,7 +1532,8 @@ fn test_pattern_rvalues() {
                         body: Box::new((Expr::Value { val: Value::Null }, 0..0))
                     }, 0..0)
                 ]
-            }, 0..0))
+            }, 0..0)),
+            template_parameters: None
         }, 0..0),
         (Expr::Definition {
             value_type: (HexTypeDef {
@@ -1503,18 +1584,20 @@ fn test_pattern_structs() {
                         }, 0..0)),
                         body: Box::new((Expr::Value { val: Value::Null }, 0..0))
                     }, 0..0),
-                    (Expr::Definition {
+                    (Expr::ArrayDefinition {
                         value_type: (HexTypeDef {
                             endianness: Endianness::Unkown,
                             name: (HexType::V(ValueType::U8), 0..0)
                         }, 0..0),
-                        name: Box::new((Expr::Local {
+                        array_name: Box::new((Expr::Local {
                             name: (String::from("array"), 0..0)
                         }, 0..0)),
+                        size: Box::new((Expr::Value { val: Value::Num(0.0) }, 0..0)),
                         body: Box::new((Expr::Value { val: Value::Null }, 0..0))
                     }, 0..0)
                 ]
-            }, 0..0))
+            }, 0..0)),
+            template_parameters: None
         }, 0..0),
         (Expr::Definition {
             value_type: (HexTypeDef {
@@ -1554,12 +1637,13 @@ fn test_pattern_unions() {
         (Expr::Union {
             name: (String::from("TestUnion"), 0..0),
             body: Box::new((Expr::ExprList { list: vec![
-                (Expr::Definition {
+                (Expr::ArrayDefinition {
                     value_type: (HexTypeDef {
                         endianness: Endianness::Unkown,
                         name: (HexType::V(ValueType::S32), 0..0)
                     }, 0..0),
-                    name: Box::new((Expr::Local { name: (String::from("array"), 0..0) }, 0..0)),
+                    array_name: Box::new((Expr::Local { name: (String::from("array"), 0..0) }, 0..0)),
+                    size: Box::new((Expr::Value { val: Value::Num(0.0) }, 0..0)),
                     body: Box::new((Expr::Value { val: Value::Null }, 0..0))
                 }, 0..0),
                 (Expr::Definition {
@@ -1570,7 +1654,8 @@ fn test_pattern_unions() {
                     name: Box::new((Expr::Local { name: (String::from("variable"), 0..0) }, 0..0)),
                     body: Box::new((Expr::Value { val: Value::Null }, 0..0))
                 }, 0..0)
-            ] }, 0..0))
+            ] }, 0..0)),
+            template_parameters: None
         }, 0..0),
         (Expr::Definition {
             value_type: (HexTypeDef {
