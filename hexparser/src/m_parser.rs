@@ -252,6 +252,7 @@ fn string_literal<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Ex
         |(consumed, span): (Tokens, Range<usize>)|{
             match consumed.tokens[0].fragment() {
                 Token::Str(s) => Ok((Expr::Value { val: Value::Str(String::from(*s)) }, span)),
+                Token::Char(c) => Ok((Expr::Value { val: Value::Char(*c) }, span)),
                 _ => Err(ErrorTree::Base {
                     location: consumed,
                     kind: BaseErrorKind::External(Box::new(tokio::io::Error::new(ErrorKind::Other, "Expected string literal")))
