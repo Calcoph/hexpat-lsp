@@ -101,7 +101,7 @@ pub fn semantic_token_from_expr(
         Expr::Unary { operation: _, operand } => {
             semantic_token_from_expr(operand, semantic_tokens)
         },
-        Expr::Using { new_name: (_, name_span), old_name: (_, old_name_span) } => {
+        Expr::Using { new_name: (_, name_span), template_parameters, old_name: (_, old_name_span) } => { // TODO: template_parameters
             semantic_tokens.push(ImCompleteSemanticToken {
                 start: name_span.start,
                 length: name_span.len(),
@@ -165,7 +165,7 @@ pub fn semantic_token_from_expr(
             }
             semantic_token_from_expr(body, semantic_tokens)
         },
-        Expr::Struct { name: (_, name_span), body } => {
+        Expr::Struct { name: (_, name_span), body, template_parameters } => { // TODO: template_parameters
             semantic_tokens.push(ImCompleteSemanticToken {
                 start: name_span.start,
                 length: name_span.len(),
@@ -272,7 +272,7 @@ pub fn semantic_token_from_expr(
             });
             semantic_token_from_expr(operand, semantic_tokens);  
         },
-        Expr::Union { name: (_, name_span), body } => {
+        Expr::Union { name: (_, name_span), body, template_parameters } => { // TODO: template_parameters
             semantic_tokens.push(ImCompleteSemanticToken {
                 start: name_span.start,
                 length: name_span.len(),
@@ -283,5 +283,7 @@ pub fn semantic_token_from_expr(
             });
             semantic_token_from_expr(body, semantic_tokens);
         },
+        Expr::ArrayAccess { array, index } => {}, // TODO
+        Expr::ArrayDefinition { value_type, array_name, size, body } => {}, // TODO
     }
 }

@@ -1,5 +1,9 @@
 # v0.2.3 (unreleased)
 * Sections
+* better support inside:
+    * Template parameters
+    * Array indices
+    * Array sizes
 * Fix `for` loops
 
 # v0.2.2

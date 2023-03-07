@@ -507,6 +507,8 @@ impl SimpleDebug for Expr {
             Expr::ForLoop { .. } => print!("E::ForLoop"),
             Expr::Cast { .. } => print!("E::Cast"),
             Expr::Union { .. } => print!("E::Union"),
+            Expr::ArrayAccess { .. } => print!("E::ArrayAccess"),
+            Expr::ArrayDefinition { .. } => print!("E::ArrayDefinition"),
         }
     }
 
@@ -556,6 +558,8 @@ impl SimpleDebug for Expr {
             Expr::ForLoop { .. } => println!("E::ForLoop"),
             Expr::Cast { .. } => println!("E::Cast"),
             Expr::Union { .. } => println!("E::Union"),
+            Expr::ArrayAccess { .. } => println!("E::ArrayAccess"),
+            Expr::ArrayDefinition { .. } => println!("E::ArrayDefinition"),
         }
     }
 }

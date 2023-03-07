@@ -1,4 +1,4 @@
-use std::{collections::HashMap, ops::Range, io::ErrorKind};
+use std::{ops::Range, io::ErrorKind};
 
 use nom::{
     branch::alt as choice,
@@ -24,13 +24,23 @@ use nom::{
 use nom_supreme::{error::{ErrorTree, BaseErrorKind, GenericErrorTree}, ParserExt};
 use serde::{Deserialize, Serialize};
 
-use crate::{token::{Spanned, TokSpan, Tokens, Token, Keyword, ValueType}, combinators::{spanned, ignore, to, map_with_span, fold_many0_once}, m_parser::{function::{function_statement, function_definition}, operations::mathematical_expression}, recovery_err::{TokResult, ToRange, RecoveredError, TokError, expression_recovery, non_opt}, simple_debug::SimpleDebug};
+use crate::{token::{Spanned, TokSpan, Tokens, Token, Keyword, ValueType}, combinators::{spanned, ignore, to, map_with_span, fold_many0_once}, m_parser::{function::{function_statement, function_definition}, operations::mathematical_expression}, recovery_err::{TokResult, ToRange, RecoveredError, TokError, expression_recovery, non_opt}};
 
 pub use operations::UnaryOp;
 
 mod function;
 mod factor;
 pub(crate) mod operations;
+
+pub trait Boxable<T> {
+    fn boxed(self) -> Option<Box<T>>;
+}
+
+impl<T> Boxable<T> for Option<T> {
+    fn boxed(self) -> Option<Box<T>> {
+        self.map(|t| Box::new(t))
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Value {
@@ -94,6 +104,12 @@ pub enum Expr {
         name: Box<Spanned<Self>>,
         body: Box<Spanned<Self>>
     },
+    ArrayDefinition {
+        value_type: Spanned<HexTypeDef>,
+        array_name: Box<Spanned<Self>>,
+        size: Box<Spanned<Self>>,
+        body: Box<Spanned<Self>>
+    },
     BitFieldEntry {
         name: Spanned<String>,
         length: Box<Spanned<Self>>
@@ -108,6 +124,7 @@ pub enum Expr {
     },
     Using {
         new_name: Spanned<String>,
+        template_parameters: Option<Box<Spanned<Self>>>,
         old_name: Spanned<HexTypeDef>
     },
     Return { value: Box<Spanned<Self>> },
@@ -120,7 +137,8 @@ pub enum Expr {
     },
     Struct {
         name: Spanned<String>,
-        body: Box<Spanned<Self>>
+        body: Box<Spanned<Self>>,
+        template_parameters: Option<Box<Spanned<Self>>>
     },
     Namespace {
         name: Box<Spanned<Self>>,
@@ -138,6 +156,10 @@ pub enum Expr {
     Access {
         item: Box<Spanned<Self>>,
         member: Box<Spanned<Self>>
+    },
+    ArrayAccess {
+        array: Box<Spanned<Self>>,
+        index: Box<Spanned<Self>>
     },
     Attribute {
         arguments: Spanned<Vec<Spanned<Self>>>
@@ -162,7 +184,8 @@ pub enum Expr {
     },
     Union {
         name: Spanned<String>,
-        body: Box<Spanned<Self>>
+        body: Box<Spanned<Self>>,
+        template_parameters: Option<Box<Spanned<Self>>>
     },
 }
 
@@ -316,16 +339,37 @@ fn member_access<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Exp
                 )
             ))
         )),
-        |(item, array, member), span| {
-            match member {
-                Some(member) => (
-                    Expr::Access {
-                        item: Box::new(item),
-                        member: Box::new(member)
-                    },
-                    span
-                ),
-                None => item
+        |(item, array_index, member), span| {
+            match array_index {
+                Some(array_index) => {
+                    let array_span = item.1.start..array_index.1.end;
+                    let item = (Expr::ArrayAccess {
+                        array: Box::new(item),
+                        index: Box::new(array_index)
+                    }, array_span);
+                    match member {
+                        Some(member) => (
+                            Expr::Access {
+                                item: Box::new(item),
+                                member: Box::new(member)
+                            },
+                            span
+                        ),
+                        None => item
+                    }
+                },
+                None => {
+                    match member {
+                        Some(member) => (
+                            Expr::Access {
+                                item: Box::new(item),
+                                member: Box::new(member)
+                            },
+                            span
+                        ),
+                        None => item
+                    }
+                }
             }
         }
     )(input)
@@ -528,7 +572,7 @@ fn parse_type<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<HexTyp
                             just(Token::Op(">"))
                         ))
                     ),
-                    |(a, b)| a // TODO: don't ignore B
+                    |(r#type, type_parameters)| r#type // TODO: don't ignore type_parameters
                 ),
                 value_type_any
             ))
@@ -666,20 +710,31 @@ fn member_variable<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<E
                     non_opt(mathematical_expression).context("Expected mathematical expression")
                 ))
             )),
-            |(value_type, name, array, body), span| {
+            |(value_type, name, array_size, body), span| {
                 let body = Box::new(match body {
                     Some(body) => body,
                     None => (Expr::Value { val: Value::Null }, span.clone()),
                 });
 
-                (
-                    Expr::Definition {
-                        value_type,
-                        name: Box::new(name),
-                        body
-                    },
-                    span
-                )
+                match array_size {
+                    Some(array_size) => (
+                        Expr::ArrayDefinition {
+                            value_type,
+                            array_name: Box::new(name),
+                            size: Box::new(array_size),
+                            body
+                        },
+                        span
+                    ),
+                    None => (
+                        Expr::Definition {
+                            value_type,
+                            name: Box::new(name),
+                            body
+                        },
+                        span
+                    ),
+                }
             }
         ),
         map_with_span(
@@ -786,7 +841,7 @@ fn member_variable<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<E
                 ))
             ),
             |(value_type,
-                (name, array,
+                (name, array_size,
                     (pointer_type, body)
                 )
             ), span| {
@@ -795,14 +850,25 @@ fn member_variable<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<E
                     None => (Expr::Value { val: Value::Null }, span.clone()),
                 });
 
-                (
-                    Expr::Definition {
-                        value_type,
-                        name: Box::new(name),
-                        body
-                    },
-                    span
-                )
+                match array_size {
+                    Some(array_size) => (
+                        Expr::ArrayDefinition {
+                            value_type,
+                            array_name: Box::new(name),
+                            size: Box::new(array_size),
+                            body
+                        },
+                        span
+                    ),
+                    None => (
+                        Expr::Definition {
+                            value_type,
+                            name: Box::new(name),
+                            body
+                        },
+                        span
+                    )
+                }
             }
         )
     ))(input)
@@ -900,13 +966,16 @@ pub(crate) fn parse_struct<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, S
                 )
             ))
         ),
-        |(name, template, inheritance, (body, body_span)), span| ( // TODO: Take into account the inheritance. //TODO: Take into account template
-            Expr::Struct {
-                name,
-                body: Box::new((Expr::ExprList { list: body }, body_span))
-            },
-            span
-        )
+        |(name, template_parameters, inheritance, (body, body_span)), span| { // TODO: Take into account the inheritance.
+            (
+                Expr::Struct {
+                    name,
+                    body: Box::new((Expr::ExprList { list: body }, body_span)),
+                    template_parameters: template_parameters.boxed()
+                },
+                span
+            )
+        }
     ))(input)
 }
 
@@ -924,13 +993,16 @@ fn parse_union<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>
                 )
             ))
         ),
-        |(name, template, (body, body_span)), span| ( // TODO: don't ignore template
-            Expr::Union {
-                name,
-                body: Box::new((Expr::ExprList { list: body }, body_span))
-            },
-            span
-        )
+        |(name, template_parameters, (body, body_span)), span| {
+            (
+                Expr::Union {
+                    name,
+                    body: Box::new((Expr::ExprList { list: body }, body_span)),
+                    template_parameters: template_parameters.boxed(),
+                },
+                span
+            )
+        }
     ))(input)
 }
 
@@ -1135,7 +1207,7 @@ fn parse_bitfield<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Ex
     ))(input)
 }
 
-fn array_variable_placement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, (Spanned<Expr>, Spanned<Expr>)> {
+fn array_variable_placement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, (Spanned<Expr>, Option<Option<Spanned<Expr>>>, Spanned<Expr>)> {
     map(
         tuple((
             ident_local,
@@ -1153,16 +1225,12 @@ fn array_variable_placement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, 
                 )
             )
         )),
-        |((name, name_span), array, body)| { // TODO: Take array into account
-            let array = Box::new(match array {
-                Some(s) => s,
-                None => (Expr::Value { val: Value::Null }, name_span.clone())
-            });
+        |((name, name_span), array_size, body)| { // TODO: Take section into account
             let body = match body {
                 Some((b, section)) => b,
                 None => (Expr::Value { val: Value::Null }, name_span.clone()),
             };
-            ((name, name_span), body)
+            ((name, name_span), Some(array_size), body)
         }
     )(input)
 }
@@ -1278,7 +1346,7 @@ fn placement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> 
                             None => (Expr::Value { val: Value::Null }, fake_span.clone()),
                         };
         
-                        ((name, fake_span), body)
+                        ((name, fake_span), None, body)
                     }
                 ),
                 map(
@@ -1300,7 +1368,7 @@ fn placement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> 
                             )
                         )
                     ),
-                    |(name, (pointer_type, (body, section)))| (name, body) // TODO take the type of the pointer into account
+                    |(name, (pointer_type, (body, section)))| (name, None, body) // TODO take the type of the pointer into account
                 ),
                 map(
                     preceded(
@@ -1313,18 +1381,43 @@ fn placement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> 
                             )
                         )
                     ),
-                    |(name, body)| (name, body)
+                    |(name, body)| (name, None, body)
                 )
             ))
         ),
-        |(value_type, (name, body)), span| (
-            Expr::Definition {
-                value_type,
-                name: Box::new(name),
-                body: Box::new(body)
-            },
-            span
-        )
+        |(value_type, (name, array_size, body)), span| {
+            match array_size {
+                Some(Some(array_size)) => (
+                    Expr::ArrayDefinition {
+                        value_type,
+                        array_name: Box::new(name),
+                        body: Box::new(body),
+                        size: Box::new(array_size),
+                    },
+                    span
+                ),
+                Some(None) => {
+                    let (array_name, name_span) = name;
+                    (
+                        Expr::ArrayDefinition {
+                            value_type,
+                            array_name: Box::new((array_name, name_span.clone())),
+                            body: Box::new(body),
+                            size: Box::new((Expr::Value { val: Value::Null }, name_span)),
+                        },
+                        span
+                    )
+                },
+                None => (
+                    Expr::Definition {
+                        value_type,
+                        name: Box::new(name),
+                        body: Box::new(body)
+                    },
+                    span
+                )
+            }
+        }
     )(input)
 }
 
@@ -1341,7 +1434,7 @@ fn using<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
                 ))
             ))
         ),
-        |(new_name, template, old_name), span| { // TODO: Don't ignore template
+        |(new_name, template_parameters, old_name), span| { // TODO: Don't ignore template_parameters
             let old_name = match old_name {
                 Some(old_name) => old_name,
                 None => (HexTypeDef{ endianness: Endianness::Unkown, name: (HexType::Null, span.clone()) }, span.clone()),
@@ -1349,6 +1442,7 @@ fn using<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
             (
                 Expr::Using {
                     new_name,
+                    template_parameters: template_parameters.boxed(),
                     old_name
                 },
                 span

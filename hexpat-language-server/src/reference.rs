@@ -195,7 +195,7 @@ pub fn get_reference_of_expr(
             reference_list,
             include_self,
         ),
-        Expr::Using { new_name, old_name } => (), // TODO
+        Expr::Using { new_name, template_parameters, old_name } => (), // TODO
         Expr::Continue => (),
         Expr::Break => (),
         Expr::ExprList { list } => for exp in list {
@@ -232,7 +232,7 @@ pub fn get_reference_of_expr(
                 include_self,
             );
         },
-        Expr::Struct { name: (name, name_span), body } => {
+        Expr::Struct { name: (name, name_span), body, template_parameters } => { // TODO: template_parameters
             match reference_symbol {
                 Finding(ident) if *ident >= name_span.start && *ident < name_span.end => {
                     let spanned_name = (name.clone(), name_span.clone());
@@ -381,7 +381,7 @@ pub fn get_reference_of_expr(
                 include_self,
             );
         },
-        Expr::Union { name, body } => {
+        Expr::Union { name, body, template_parameters } => { // TODO: template_parameters
             get_reference_of_expr(
                 body,
                 reference_symbol,
@@ -389,6 +389,8 @@ pub fn get_reference_of_expr(
                 include_self,
             );
         },
+        Expr::ArrayAccess { array: item, index: member } => {}, // TODO
+        Expr::ArrayDefinition { value_type, array_name, size: index, body } => {}, // TODO
     }
 }
 
