@@ -509,6 +509,7 @@ impl SimpleDebug for Expr {
             Expr::Union { .. } => print!("E::Union"),
             Expr::ArrayAccess { .. } => print!("E::ArrayAccess"),
             Expr::ArrayDefinition { .. } => print!("E::ArrayDefinition"),
+            Expr::Type { .. } => print!("E::Type"),
         }
     }
 
@@ -560,6 +561,7 @@ impl SimpleDebug for Expr {
             Expr::Union { .. } => println!("E::Union"),
             Expr::ArrayAccess { .. } => println!("E::ArrayAccess"),
             Expr::ArrayDefinition { .. } => println!("E::ArrayDefinition"),
+            Expr::Type { .. } => println!("E::Type"),
         }
     }
 }

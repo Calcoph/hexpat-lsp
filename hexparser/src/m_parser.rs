@@ -187,6 +187,9 @@ pub enum Expr {
         body: Box<Spanned<Self>>,
         template_parameters: Option<Box<Spanned<Self>>>
     },
+    Type {
+        val: HexTypeDef
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -512,6 +515,7 @@ pub enum HexType {
     Custom(String),
     Path(Vec<String>),
     V(ValueType),
+    Parameted(Box<HexType>, Vec<Spanned<Expr>>),
     Null
 }
 
@@ -565,8 +569,8 @@ fn parse_type<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<HexTyp
                             separated_list1(
                                 just(Token::Separator(',')),
                                 choice((
-                                    ignore(parse_type), // TODO: don't ignore
-                                    ignore(mathematical_expression) // TODO: don't ignore
+                                    map(parse_type, |(r#type, span)| (Expr::Type { val: r#type }, span)),
+                                    mathematical_expression
                                 ))
                             ),
                             just(Token::Op(">"))

@@ -70,7 +70,8 @@ pub fn type_inference(expr: &Spanned<Expr>, symbol_type_table: &mut HashMap<Rang
         Expr::Cast { .. } => (), // TODO
         Expr::Union { .. } => (), // TODO
         Expr::ArrayAccess { .. } => (), // TODO
-        Expr::ArrayDefinition { .. } => (), // TODO
+        Expr::ArrayDefinition { .. } => (),
+        Expr::Type { .. } => (), // TODO
     }
 }
 
