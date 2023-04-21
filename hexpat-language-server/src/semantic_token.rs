@@ -26,7 +26,7 @@ pub fn semantic_token_from_expr(
                 length: name_span.len(),
                 token_type: LEGEND_TYPE
                 .iter()
-                .position(|item| item == &SemanticTokenType::VARIABLE)
+                .position(|item| item.as_str() == SemanticTokenType::VARIABLE.as_str())
                 .unwrap(),
             });
         }
@@ -55,7 +55,7 @@ pub fn semantic_token_from_expr(
                 length: type_span.len(),
                 token_type: LEGEND_TYPE
                     .iter()
-                    .position(|item| item == &SemanticTokenType::TYPE)
+                    .position(|item| item.as_str() == SemanticTokenType::TYPE.as_str())
                     .unwrap(),
             });
             semantic_token_from_expr(body, semantic_tokens)
@@ -66,7 +66,7 @@ pub fn semantic_token_from_expr(
                 length: name_span.len(),
                 token_type: LEGEND_TYPE
                     .iter()
-                    .position(|item| item == &SemanticTokenType::VARIABLE)
+                    .position(|item| item.as_str() == SemanticTokenType::VARIABLE.as_str())
                     .unwrap(),
             });
             semantic_token_from_expr(length, semantic_tokens);
@@ -77,7 +77,7 @@ pub fn semantic_token_from_expr(
                 length: name_span.len(),
                 token_type: LEGEND_TYPE
                     .iter()
-                    .position(|item| item == &SemanticTokenType::ENUM_MEMBER)
+                    .position(|item| item.as_str() == SemanticTokenType::ENUM_MEMBER.as_str())
                     .unwrap(),
             });
             semantic_token_from_expr(value, semantic_tokens);
@@ -93,7 +93,7 @@ pub fn semantic_token_from_expr(
                 length: name_span.len(),
                 token_type: LEGEND_TYPE
                     .iter()
-                    .position(|item| item == &SemanticTokenType::VARIABLE)
+                    .position(|item| item.as_str() == SemanticTokenType::VARIABLE.as_str())
                     .unwrap(),
             });
             semantic_token_from_expr(previous, semantic_tokens)
@@ -107,7 +107,7 @@ pub fn semantic_token_from_expr(
                 length: name_span.len(),
                 token_type: LEGEND_TYPE
                     .iter()
-                    .position(|item| item == &SemanticTokenType::TYPE)
+                    .position(|item| item.as_str() == SemanticTokenType::TYPE.as_str())
                     .unwrap(),
             });
 
@@ -116,7 +116,7 @@ pub fn semantic_token_from_expr(
                 length: old_name_span.len(),
                 token_type: LEGEND_TYPE
                     .iter()
-                    .position(|item| item == &SemanticTokenType::TYPE)
+                    .position(|item| item.as_str() == SemanticTokenType::TYPE.as_str())
                     .unwrap(),
             });
         },
@@ -125,7 +125,7 @@ pub fn semantic_token_from_expr(
             length: expr.1.len(),
             token_type: LEGEND_TYPE
                 .iter()
-                .position(|item| item == &SemanticTokenType::KEYWORD)
+                .position(|item| item.as_str() == SemanticTokenType::KEYWORD.as_str())
                 .unwrap(),
         }),
         Expr::Break => semantic_tokens.push(ImCompleteSemanticToken {
@@ -133,7 +133,7 @@ pub fn semantic_token_from_expr(
             length: expr.1.len(),
             token_type: LEGEND_TYPE
                 .iter()
-                .position(|item| item == &SemanticTokenType::KEYWORD)
+                .position(|item| item.as_str() == SemanticTokenType::KEYWORD.as_str())
                 .unwrap(),
         }),
         Expr::ExprList { list } => {
@@ -147,7 +147,7 @@ pub fn semantic_token_from_expr(
                 length: name_span.len(),
                 token_type: LEGEND_TYPE
                     .iter()
-                    .position(|item| item == &SemanticTokenType::FUNCTION)
+                    .position(|item| item.as_str() == SemanticTokenType::FUNCTION.as_str())
                     .unwrap(),
             });
             for arg in &args.0 {
@@ -158,7 +158,7 @@ pub fn semantic_token_from_expr(
                         length: type_span.len(),
                         token_type: LEGEND_TYPE
                             .iter()
-                            .position(|item| item == &SemanticTokenType::TYPE)
+                            .position(|item| item.as_str() == SemanticTokenType::TYPE.as_str())
                             .unwrap(),
                     }),
                 }
@@ -171,7 +171,7 @@ pub fn semantic_token_from_expr(
                 length: name_span.len(),
                 token_type: LEGEND_TYPE
                     .iter()
-                    .position(|item| item == &SemanticTokenType::STRUCT)
+                    .position(|item| item.as_str() == SemanticTokenType::STRUCT.as_str())
                     .unwrap(),
             });
             semantic_token_from_expr(body, semantic_tokens)
@@ -182,7 +182,7 @@ pub fn semantic_token_from_expr(
                 length: name.1.len(),
                 token_type: LEGEND_TYPE
                     .iter()
-                    .position(|item| item == &SemanticTokenType::NAMESPACE)
+                    .position(|item| item.as_str() == SemanticTokenType::NAMESPACE.as_str())
                     .unwrap(),
             });
             semantic_token_from_expr(body, semantic_tokens)
@@ -193,7 +193,7 @@ pub fn semantic_token_from_expr(
                 length: name_span.len(),
                 token_type: LEGEND_TYPE
                     .iter()
-                    .position(|item| item == &SemanticTokenType::ENUM)
+                    .position(|item| item.as_str() == SemanticTokenType::ENUM.as_str())
                     .unwrap(),
             });
             semantic_tokens.push(ImCompleteSemanticToken {
@@ -201,7 +201,7 @@ pub fn semantic_token_from_expr(
                 length: type_span.len(),
                 token_type: LEGEND_TYPE
                     .iter()
-                    .position(|item| item == &SemanticTokenType::TYPE)
+                    .position(|item| item.as_str() == SemanticTokenType::TYPE.as_str())
                     .unwrap(),
             });
             semantic_token_from_expr(body, semantic_tokens)
@@ -212,7 +212,7 @@ pub fn semantic_token_from_expr(
                 length: name_span.len(),
                 token_type: LEGEND_TYPE
                     .iter()
-                    .position(|item| item == &SemanticTokenType::new("bitfield"))
+                    .position(|item| item.as_str() == SemanticTokenType::new("bitfield").as_str())
                     .unwrap(),
             });
             semantic_token_from_expr(body, semantic_tokens)
@@ -222,7 +222,7 @@ pub fn semantic_token_from_expr(
             length: span.len(),
             token_type: LEGEND_TYPE
                 .iter()
-                .position(|item| item == &SemanticTokenType::TYPE)
+                .position(|item| item.as_str() == SemanticTokenType::TYPE.as_str())
                 .unwrap(),
         }),
         Expr::Return { value } => semantic_tokens.push(ImCompleteSemanticToken {
@@ -230,7 +230,7 @@ pub fn semantic_token_from_expr(
             length: value.1.len(),
             token_type: LEGEND_TYPE
                 .iter()
-                .position(|item| item == &SemanticTokenType::KEYWORD)
+                .position(|item| item.as_str() == SemanticTokenType::KEYWORD.as_str())
                 .unwrap(),
         }),
         Expr::Access { item, member } => {
@@ -246,7 +246,7 @@ pub fn semantic_token_from_expr(
                 length: name_span.len(),
                 token_type: LEGEND_TYPE
                     .iter()
-                    .position(|item| item == &SemanticTokenType::PROPERTY)
+                    .position(|item| item.as_str() == SemanticTokenType::PROPERTY.as_str())
                     .unwrap(),
             });
             semantic_token_from_expr(value, semantic_tokens);
@@ -267,7 +267,7 @@ pub fn semantic_token_from_expr(
                 length: type_span.len(),
                 token_type: LEGEND_TYPE
                     .iter()
-                    .position(|item| item == &SemanticTokenType::TYPE)
+                    .position(|item| item.as_str() == SemanticTokenType::TYPE.as_str())
                     .unwrap(),
             });
             semantic_token_from_expr(operand, semantic_tokens);  
@@ -278,7 +278,7 @@ pub fn semantic_token_from_expr(
                 length: name_span.len(),
                 token_type: LEGEND_TYPE
                     .iter()
-                    .position(|item| item == &SemanticTokenType::new("union"))
+                    .position(|item| item.as_str() == SemanticTokenType::new("union").as_str())
                     .unwrap(),
             });
             semantic_token_from_expr(body, semantic_tokens);

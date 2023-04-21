@@ -103,7 +103,7 @@ pub fn parse(
                     length: span.len(),
                     token_type: LEGEND_TYPE
                         .iter()
-                        .position(|item| item == &SemanticTokenType::NUMBER)
+                        .position(|item| item.as_str() == SemanticTokenType::NUMBER.as_str())
                         .unwrap(),
                 }),
                 Token::Str(_) => Some(ImCompleteSemanticToken {
@@ -111,7 +111,7 @@ pub fn parse(
                     length: span.len(),
                     token_type: LEGEND_TYPE
                         .iter()
-                        .position(|item| item == &SemanticTokenType::STRING)
+                        .position(|item| item.as_str() == SemanticTokenType::STRING.as_str())
                         .unwrap(),
                 }),
                 Token::Char(_) => Some(ImCompleteSemanticToken {
@@ -119,7 +119,7 @@ pub fn parse(
                     length: span.len(),
                     token_type: LEGEND_TYPE
                         .iter()
-                        .position(|item| item == &SemanticTokenType::STRING)
+                        .position(|item| item.as_str() == SemanticTokenType::STRING.as_str())
                         .unwrap(),
                 }),
                 Token::Op(op) => match *op {
@@ -128,7 +128,7 @@ pub fn parse(
                         length: span.len(),
                         token_type: LEGEND_TYPE
                             .iter()
-                            .position(|item| item == &SemanticTokenType::new("dollar"))
+                            .position(|item| item.as_str() == SemanticTokenType::new("dollar").as_str())
                             .unwrap(),
                     }),
                     "::" => None,
@@ -137,7 +137,7 @@ pub fn parse(
                         length: span.len(),
                         token_type: LEGEND_TYPE
                             .iter()
-                            .position(|item| item == &SemanticTokenType::OPERATOR)
+                            .position(|item| item.as_str() == SemanticTokenType::OPERATOR.as_str())
                             .unwrap(),
                     })
                 },
@@ -149,7 +149,7 @@ pub fn parse(
                         length: span.len(),
                         token_type: LEGEND_TYPE
                             .iter()
-                            .position(|item| item == &SemanticTokenType::KEYWORD)
+                            .position(|item| item.as_str() == SemanticTokenType::KEYWORD.as_str())
                             .unwrap(),
                     }),
                     Keyword::Bitfield => Some(ImCompleteSemanticToken {
@@ -157,7 +157,7 @@ pub fn parse(
                         length: span.len(),
                         token_type: LEGEND_TYPE
                             .iter()
-                            .position(|item| item == &SemanticTokenType::KEYWORD)
+                            .position(|item| item.as_str() == SemanticTokenType::KEYWORD.as_str())
                             .unwrap(),
                     }),
                     Keyword::Union => Some(ImCompleteSemanticToken {
@@ -165,7 +165,7 @@ pub fn parse(
                         length: span.len(),
                         token_type: LEGEND_TYPE
                             .iter()
-                            .position(|item| item == &SemanticTokenType::KEYWORD)
+                            .position(|item| item.as_str() == SemanticTokenType::KEYWORD.as_str())
                             .unwrap(),
                     }),
                     Keyword::Enum => Some(ImCompleteSemanticToken {
@@ -173,7 +173,7 @@ pub fn parse(
                         length: span.len(),
                         token_type: LEGEND_TYPE
                             .iter()
-                            .position(|item| item == &SemanticTokenType::KEYWORD)
+                            .position(|item| item.as_str() == SemanticTokenType::KEYWORD.as_str())
                             .unwrap(),
                     }),
                     Keyword::Namespace => Some(ImCompleteSemanticToken {
@@ -181,7 +181,7 @@ pub fn parse(
                         length: span.len(),
                         token_type: LEGEND_TYPE
                             .iter()
-                            .position(|item| item == &SemanticTokenType::KEYWORD)
+                            .position(|item| item.as_str() == SemanticTokenType::KEYWORD.as_str())
                             .unwrap(),
                     }),
                     Keyword::Fn => Some(ImCompleteSemanticToken {
@@ -189,7 +189,7 @@ pub fn parse(
                         length: span.len(),
                         token_type: LEGEND_TYPE
                             .iter()
-                            .position(|item| item == &SemanticTokenType::KEYWORD)
+                            .position(|item| item.as_str() == SemanticTokenType::KEYWORD.as_str())
                             .unwrap(),
                     }),
                     Keyword::If => Some(ImCompleteSemanticToken {
@@ -197,7 +197,7 @@ pub fn parse(
                         length: span.len(),
                         token_type: LEGEND_TYPE
                             .iter()
-                            .position(|item| item == &SemanticTokenType::KEYWORD)
+                            .position(|item| item.as_str() == SemanticTokenType::KEYWORD.as_str())
                             .unwrap(),
                     }),
                     Keyword::Else => Some(ImCompleteSemanticToken {
@@ -205,7 +205,7 @@ pub fn parse(
                         length: span.len(),
                         token_type: LEGEND_TYPE
                             .iter()
-                            .position(|item| item == &SemanticTokenType::KEYWORD)
+                            .position(|item| item.as_str() == SemanticTokenType::KEYWORD.as_str())
                             .unwrap(),
                     }),
                     Keyword::While => Some(ImCompleteSemanticToken {
@@ -213,7 +213,7 @@ pub fn parse(
                         length: span.len(),
                         token_type: LEGEND_TYPE
                             .iter()
-                            .position(|item| item == &SemanticTokenType::KEYWORD)
+                            .position(|item| item.as_str() == SemanticTokenType::KEYWORD.as_str())
                             .unwrap(),
                     }),
                     Keyword::For => Some(ImCompleteSemanticToken {
@@ -221,7 +221,7 @@ pub fn parse(
                         length: span.len(),
                         token_type: LEGEND_TYPE
                             .iter()
-                            .position(|item| item == &SemanticTokenType::KEYWORD)
+                            .position(|item| item.as_str() == SemanticTokenType::KEYWORD.as_str())
                             .unwrap(),
                     }),
                     Keyword::Break => Some(ImCompleteSemanticToken {
@@ -229,7 +229,7 @@ pub fn parse(
                         length: span.len(),
                         token_type: LEGEND_TYPE
                             .iter()
-                            .position(|item| item == &SemanticTokenType::KEYWORD)
+                            .position(|item| item.as_str() == SemanticTokenType::KEYWORD.as_str())
                             .unwrap(),
                     }),
                     Keyword::Continue => Some(ImCompleteSemanticToken {
@@ -237,7 +237,7 @@ pub fn parse(
                         length: span.len(),
                         token_type: LEGEND_TYPE
                             .iter()
-                            .position(|item| item == &SemanticTokenType::KEYWORD)
+                            .position(|item| item.as_str() == SemanticTokenType::KEYWORD.as_str())
                             .unwrap(),
                     }),
                     Keyword::In => Some(ImCompleteSemanticToken {
@@ -245,7 +245,7 @@ pub fn parse(
                         length: span.len(),
                         token_type: LEGEND_TYPE
                             .iter()
-                            .position(|item| item == &SemanticTokenType::KEYWORD)
+                            .position(|item| item.as_str() == SemanticTokenType::KEYWORD.as_str())
                             .unwrap(),
                     }),
                     Keyword::Out => Some(ImCompleteSemanticToken {
@@ -253,7 +253,7 @@ pub fn parse(
                         length: span.len(),
                         token_type: LEGEND_TYPE
                             .iter()
-                            .position(|item| item == &SemanticTokenType::KEYWORD)
+                            .position(|item| item.as_str() == SemanticTokenType::KEYWORD.as_str())
                             .unwrap(),
                     }),
                     Keyword::Return => Some(ImCompleteSemanticToken {
@@ -261,7 +261,7 @@ pub fn parse(
                         length: span.len(),
                         token_type: LEGEND_TYPE
                             .iter()
-                            .position(|item| item == &SemanticTokenType::KEYWORD)
+                            .position(|item| item.as_str() == SemanticTokenType::KEYWORD.as_str())
                             .unwrap(),
                     }),
                     Keyword::Using => Some(ImCompleteSemanticToken {
@@ -269,7 +269,7 @@ pub fn parse(
                         length: span.len(),
                         token_type: LEGEND_TYPE
                             .iter()
-                            .position(|item| item == &SemanticTokenType::KEYWORD)
+                            .position(|item| item.as_str() == SemanticTokenType::KEYWORD.as_str())
                             .unwrap(),
                     }),
                     Keyword::Parent => Some(ImCompleteSemanticToken {
@@ -277,7 +277,7 @@ pub fn parse(
                         length: span.len(),
                         token_type: LEGEND_TYPE
                             .iter()
-                            .position(|item| item == &SemanticTokenType::KEYWORD)
+                            .position(|item| item.as_str() == SemanticTokenType::KEYWORD.as_str())
                             .unwrap(),
                     }),
                     Keyword::This => Some(ImCompleteSemanticToken {
@@ -285,7 +285,7 @@ pub fn parse(
                         length: span.len(),
                         token_type: LEGEND_TYPE
                             .iter()
-                            .position(|item| item == &SemanticTokenType::KEYWORD)
+                            .position(|item| item.as_str() == SemanticTokenType::KEYWORD.as_str())
                             .unwrap(),
                     }),
                     Keyword::LittleEndian => Some(ImCompleteSemanticToken {
@@ -293,7 +293,7 @@ pub fn parse(
                         length: span.len(),
                         token_type: LEGEND_TYPE
                             .iter()
-                            .position(|item| item == &SemanticTokenType::KEYWORD)
+                            .position(|item| item.as_str() == SemanticTokenType::KEYWORD.as_str())
                             .unwrap(),
                     }),
                     Keyword::BigEndian => Some(ImCompleteSemanticToken {
@@ -301,7 +301,7 @@ pub fn parse(
                         length: span.len(),
                         token_type: LEGEND_TYPE
                             .iter()
-                            .position(|item| item == &SemanticTokenType::KEYWORD)
+                            .position(|item| item.as_str() == SemanticTokenType::KEYWORD.as_str())
                             .unwrap(),
                     }),
                     Keyword::Reference => Some(ImCompleteSemanticToken {
@@ -309,7 +309,7 @@ pub fn parse(
                         length: span.len(),
                         token_type: LEGEND_TYPE
                             .iter()
-                            .position(|item| item == &SemanticTokenType::KEYWORD)
+                            .position(|item| item.as_str() == SemanticTokenType::KEYWORD.as_str())
                             .unwrap(),
                     }),
                 }
@@ -318,7 +318,7 @@ pub fn parse(
                     length: span.len(),
                     token_type: LEGEND_TYPE
                         .iter()
-                        .position(|item| item == &SemanticTokenType::TYPE)
+                        .position(|item| item.as_str() == SemanticTokenType::TYPE.as_str())
                         .unwrap(),
                 }),
                 Token::B(b) => match b {
@@ -327,7 +327,7 @@ pub fn parse(
                         length: span.len(),
                         token_type: LEGEND_TYPE
                             .iter()
-                            .position(|item| item == &SemanticTokenType::KEYWORD)
+                            .position(|item| item.as_str() == SemanticTokenType::KEYWORD.as_str())
                             .unwrap(),
                     }),
                     BuiltFunc::SizeOf => Some(ImCompleteSemanticToken {
@@ -335,7 +335,7 @@ pub fn parse(
                         length: span.len(),
                         token_type: LEGEND_TYPE
                             .iter()
-                            .position(|item| item == &SemanticTokenType::KEYWORD)
+                            .position(|item| item.as_str() == SemanticTokenType::KEYWORD.as_str())
                             .unwrap(),
                     }),
                 },
