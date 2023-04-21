@@ -179,6 +179,22 @@ fn dec_num<'a, 'b>(input: StrSpan<'a, 'b>) -> StrResult<StrSpan<'a, 'b>, TokSpan
     )(input)
 }
 
+fn escape_char(c: char) -> char {
+    match c {
+        'a' => '\x07',
+        'b' => '\x08',
+        'f' => '\x0C',
+        'n' => '\n',
+        'r' => '\r',
+        't' => '\t',
+        'v' => '\x0B',
+        '\\' => '\\',
+        '\'' => '\'',
+        '\"' => '"',
+        c => c
+    }
+}
+
 // A parser for chars
 fn char_<'a, 'b>(input: StrSpan<'a, 'b>) -> StrResult<StrSpan<'a, 'b>, TokSpan<'a, 'b>> { // TODO: Better handling of whitespaces (for example require (whitespace|operator|separator) between tokens)
     match then(
@@ -192,7 +208,62 @@ fn char_<'a, 'b>(input: StrSpan<'a, 'b>) -> StrResult<StrSpan<'a, 'b>, TokSpan<'
                 c.extra.report_error(RecoveredError(span.clone(), "Characters cannot be empty".to_string()));
                 Ok((p, TokSpan::from_strspan(Token::Err, state, span)))
             },
-            _ => match just("\'")(p) {
+            "\\" => match take(1 as u8)(p) {
+                Ok((p, c)) => {
+                    match *c.fragment() {
+                        "'" => {
+                            let span = head.span().start..c.span().end;
+                            let state = c.extra;
+                            c.extra.report_error(RecoveredError(span.clone(), "Characters cannot be empty".to_string()));
+                            Ok((p, TokSpan::from_strspan(Token::Err, state, span)))
+                        },
+                        ch => match just("'")(p) {
+                            Ok((p, tail)) => {
+                                let state = tail.extra;
+                                let c = escape_char(ch.chars().next().unwrap());
+                                Ok((p, TokSpan::from_strspan(
+                                    Token::Char(c),
+                                    state,
+                                    head.span().start..tail.span().end
+                                )))
+                            },
+                            Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => {
+                                let (input, span) = match e {
+                                    GenericErrorTree::Base {location, kind} => match kind {
+                                        nom_supreme::error::BaseErrorKind::Kind(k) => match k {
+                                            nom::error::ErrorKind::Tag => {
+                                                let span = head.span().start..c.span().end;
+                                                location.extra.report_error(RecoveredError(span.clone(), "Missing closing `'`".to_string()));
+                                                (location, span)
+                                            }, _ => unreachable!()
+                                        }, _ => unreachable!()
+                                    }, _ => unreachable!()
+                                };
+                                let state = input.extra;
+                                Ok((input, TokSpan::from_strspan(Token::Err, state, span)))
+                            },
+                            Err(e) => Err(e),
+                        }
+                    }
+                },
+                Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => {
+                    let (input, span) = match e {
+                        GenericErrorTree::Base {location, kind} => match kind {
+                            nom_supreme::error::BaseErrorKind::Kind(k) => match k {
+                                nom::error::ErrorKind::Eof => {
+                                    let span = head.span().start..c.span().end;
+                                    location.extra.report_error(RecoveredError(span.clone(), "Missing closing `'`".to_string()));
+                                    (location, span)
+                                }, _ => unreachable!()
+                            }, _ => unreachable!()
+                        }, _ => unreachable!()
+                    };
+                    let state = input.extra;
+                    Ok((input, TokSpan::from_strspan(Token::Err, state, span)))
+                },
+                Err(e) => Err(e)
+            }
+            _ => match just("'")(p) {
                 Ok((p, tail)) => {
                     let state = tail.extra;
                     Ok((p, TokSpan::from_strspan(
@@ -254,7 +325,7 @@ fn str_<'a, 'b>(input: StrSpan<'a, 'b>) -> StrResult<StrSpan<'a, 'b>, TokSpan<'a
 
                 let first_ptr = s.get(0).unwrap().as_ptr();
                 let len = end - start;
-                
+
                 let s = unsafe {slice::from_raw_parts(first_ptr, len)};
                 let s = std::str::from_utf8(s).unwrap();
 

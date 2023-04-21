@@ -285,5 +285,6 @@ pub fn semantic_token_from_expr(
         },
         Expr::ArrayAccess { array, index } => {}, // TODO
         Expr::ArrayDefinition { value_type, array_name, size, body } => {}, // TODO
+        Expr::Type { val } => (), // TODO
     }
 }

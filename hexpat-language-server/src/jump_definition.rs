@@ -7,10 +7,23 @@ pub fn get_definition(ast: &Spanned<Expr>, ident_offset: usize) -> Option<Spanne
     name
 }
 
+#[derive(Clone, Debug)]
+enum NameDefinition {
+    Var(Spanned<String>),
+    Struct {
+        name: Spanned<String>,
+        items: Vector<NameDefinition>
+    },
+    Namespace {
+        name: Spanned<String>,
+        items: Vector<NameDefinition>
+    }
+}
+
 /// return (need_to_continue_search, found reference)
 fn get_definition_of_expr(
     expr: &Spanned<Expr>,
-    definition_ass_list: &mut Vector<Spanned<String>>,
+    definition_ass_list: &mut Vector<NameDefinition>,
     ident_offset: usize,
     is_defining: bool
 ) -> (bool, Option<Spanned<String>>) {
@@ -22,16 +35,10 @@ fn get_definition_of_expr(
         Expr::Value { .. } => (true, None),
         Expr::Local { name } => {
             if is_defining {
-                definition_ass_list.push_back(name.clone())
+                definition_ass_list.push_back(NameDefinition::Var(name.clone()))
             }
             if ident_offset >= name.1.start && ident_offset <= name.1.end {
-                let index = definition_ass_list
-                    .iter()
-                    .position(|decl| decl.0 == name.0);
-                (
-                    false,
-                    index.map(|i| definition_ass_list.get(i).unwrap().clone()),
-                )
+                find_decl(definition_ass_list, &name.0)
             } else {
                 (true, None)
             }
@@ -127,30 +134,24 @@ fn get_definition_of_expr(
         Expr::EnumEntry { name, value } => get_definition_of_expr(value, definition_ass_list, ident_offset, false), // TODO: Add name to the definition list
         Expr::NamespaceAccess { previous, name } => {
             if is_defining {
-                definition_ass_list.push_back(name.clone()) // TODO: Don't ignore previous
+                definition_ass_list.push_back(NameDefinition::Var(name.clone())) // TODO: Don't ignore previous
             }
 
             if ident_offset >= name.1.start && ident_offset <= name.1.end {
-                let index = definition_ass_list
-                    .iter()
-                    .position(|decl| decl.0 == name.0);
-                (
-                    false,
-                    index.map(|i| definition_ass_list.get(i).unwrap().clone()),
-                )
+                find_decl(definition_ass_list, &name.0)
             } else {
                 get_definition_of_expr(previous, definition_ass_list, ident_offset, false)
             }
         },
         Expr::Using { new_name, template_parameters, old_name } => { // TODO: template_parameters
-            definition_ass_list.push_back(new_name.clone());
+            definition_ass_list.push_back(NameDefinition::Var(new_name.clone()));
             get_definition_of_type_def(old_name, definition_ass_list, ident_offset)
         },
         Expr::Return { value } => get_definition_of_expr(value, definition_ass_list, ident_offset, false),
         Expr::Continue => (true, None),
         Expr::Break => (true, None),
         Expr::Func { name, args, body } => {
-            definition_ass_list.push_back(name.clone());
+            definition_ass_list.push_back(NameDefinition::Var(name.clone()));
             let mut new_scope = definition_ass_list.clone();
             for arg in &args.0 {
                 match arg.0 {
@@ -166,8 +167,14 @@ fn get_definition_of_expr(
             get_definition_of_expr(body, &mut new_scope, ident_offset, false)
         },
         Expr::Struct { name, body, template_parameters } => { // TODO: template_parameters
-            definition_ass_list.push_back(name.clone());
-            get_definition_of_expr(body, &mut definition_ass_list.clone(), ident_offset, false)
+            let mut new_scope = definition_ass_list.clone();
+            let ret = get_definition_of_expr(body, &mut new_scope, ident_offset, false);
+            definition_ass_list.push_back(NameDefinition::Struct {
+                name: name.clone(),
+                items: new_scope
+            });
+
+            ret
         },
         Expr::Namespace { name, body } => {
             match get_definition_of_expr(name, definition_ass_list, ident_offset, true) {
@@ -180,7 +187,7 @@ fn get_definition_of_expr(
             get_definition_of_expr(body, &mut definition_ass_list.clone(), ident_offset, false)
         },
         Expr::Enum { name, value_type, body } => {
-            definition_ass_list.push_back(name.clone());
+            definition_ass_list.push_back(NameDefinition::Var(name.clone()));
             match get_definition_of_type_def(value_type, definition_ass_list, ident_offset) {
                 (true, None) => (),
                 (true, Some(value)) => return (false, Some(value)),
@@ -190,7 +197,7 @@ fn get_definition_of_expr(
             get_definition_of_expr(body, definition_ass_list, ident_offset, false)
         },
         Expr::Bitfield { name, body } => {
-            definition_ass_list.push_back(name.clone());
+            definition_ass_list.push_back(NameDefinition::Var(name.clone()));
             get_definition_of_expr(body, definition_ass_list, ident_offset, false)
         },
         Expr::Access { item, member } => {
@@ -247,17 +254,18 @@ fn get_definition_of_expr(
         },
         Expr::Cast { cast_operator: _, operand } => get_definition_of_expr(operand, definition_ass_list, ident_offset, false),
         Expr::Union { name, body, template_parameters } => { // TODO: template_parameters
-            definition_ass_list.push_back(name.clone());
+            definition_ass_list.push_back(NameDefinition::Var(name.clone()));
             get_definition_of_expr(body, definition_ass_list, ident_offset, false)
         },
         Expr::ArrayAccess { array, index } => (true, None), // TODO
-        Expr::ArrayDefinition { value_type, array_name, size, body } => (true, None), // TODO
+        Expr::ArrayDefinition { value_type, array_name, size, body } => (true, None),
+        Expr::Type { val } => (true, None), // TODO
     }
 }
 
 fn get_definition_of_type_def(
     type_: &Spanned<HexTypeDef>,
-    definition_ass_list: &Vector<Spanned<String>>,
+    definition_ass_list: &Vector<NameDefinition>,
     ident_offset: usize
 ) -> (bool, Option<Spanned<String>>) {
     let HexTypeDef {
@@ -269,34 +277,41 @@ fn get_definition_of_type_def(
 
 fn get_definition_of_type(
     type_: &Spanned<HexType>,
-    definition_ass_list: &Vector<Spanned<String>>,
+    definition_ass_list: &Vector<NameDefinition>,
     ident_offset: usize
 ) -> (bool, Option<Spanned<String>>) {
     if ident_offset >= type_.1.start && ident_offset <= type_.1.end {
         match &type_.0 {
             HexType::Custom(name) => {
-                let index = definition_ass_list
-                    .iter()
-                    .position(|decl| decl.0 == name.clone());
-                (
-                    false,
-                    index.map(|i| definition_ass_list.get(i).unwrap().clone()),
-                )
+                find_decl(definition_ass_list, name)
             },
             HexType::Path(p) => {
-                let name = p.last().unwrap().clone(); // TODO: Don't ignore the rest of the path
-                let index = definition_ass_list
-                    .iter()
-                    .position(|decl| decl.0 == name);
-                (
-                    false,
-                    index.map(|i| definition_ass_list.get(i).unwrap().clone()),
-                )
+                let name = p.last().unwrap(); // TODO: Don't ignore the rest of the path
+                find_decl(definition_ass_list, name)
             },
             HexType::V(_) => (true, None),
             HexType::Null => (true, None),
+            HexType::Parameted(r#type, _) => get_definition_of_type(&(r#type.as_ref().clone(), type_.1.clone()), definition_ass_list, ident_offset),
         }
     } else {
         (true, None)
     }
+}
+
+fn find_decl(definition_ass_list: &Vector<NameDefinition>, find_name: &str) -> (bool, Option<Spanned<String>>) {
+    let item = definition_ass_list
+        .iter()
+        .find(|decl| match decl {
+            NameDefinition::Var(name) => name.0 == find_name,
+            NameDefinition::Struct { name, .. } => name.0 == find_name,
+            NameDefinition::Namespace { name, .. } => name.0 == find_name,
+        }).map(|decl| match decl {
+            NameDefinition::Var(name) => name.clone(),
+            NameDefinition::Struct { name, .. } => name.clone(),
+            NameDefinition::Namespace { name, .. } => name.clone(),
+        });
+    (
+        false,
+        item
+    )
 }

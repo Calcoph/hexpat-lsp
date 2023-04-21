@@ -390,7 +390,8 @@ pub fn get_reference_of_expr(
             );
         },
         Expr::ArrayAccess { array: item, index: member } => {}, // TODO
-        Expr::ArrayDefinition { value_type, array_name, size: index, body } => {}, // TODO
+        Expr::ArrayDefinition { value_type, array_name, size: index, body } => {},
+        Expr::Type { val } => (), // TODO
     }
 }
 
@@ -429,6 +430,7 @@ pub fn get_reference_of_type(
             },
             HexType::V(_) => (),
             HexType::Null => (),
+            HexType::Parameted(r#type, _) => get_reference_of_type(&(r#type.as_ref().clone(), type_.1.clone()), reference_symbol, reference_list, include_self),
         }
     }
 }

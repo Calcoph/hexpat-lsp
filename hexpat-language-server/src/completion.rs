@@ -100,6 +100,7 @@ pub fn get_completion_of(
         Expr::Cast { cast_operator, operand } => false, // TODO
         Expr::Union { name, body, template_parameters } => false, // TODO
         Expr::ArrayAccess { array: item, index: member } => false, // TODO
-        Expr::ArrayDefinition { value_type, array_name, size, body } => false, // TODO
+        Expr::ArrayDefinition { value_type, array_name, size, body } => false,
+        Expr::Type { val } => false, // TODO
     }
 }
