@@ -8,14 +8,18 @@ use hexpat_language_server::completion::completion;
 use hexpat_language_server::jump_definition::get_definition;
 use hexpat_language_server::reference::get_reference;
 use hexpat_language_server::semantic_token::semantic_token_from_ast;
+use json::JsonValue;
 use parserlib::LEGEND_TYPE;
 use ropey::Rope;
+use serde::__private::doc;
 use serde::{Deserialize, Serialize};
-use serde_json::Value as jValue;
-use tower_lsp::jsonrpc::Result;
+use serde_json::{Value as jValue, json};
+use tower_lsp::jsonrpc::{Result, Error as LSPError, ErrorCode};
 use tower_lsp::lsp_types::notification::Notification;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
+
+const COMMAND_RUN_ON_IMHEX: &str = "hexpat-language-server.runOnImHex";
 
 #[derive(Debug)]
 enum ConfigurationEntry {
@@ -45,12 +49,14 @@ impl LanguageServer for Backend {
                     trigger_characters: Some(vec![".".to_string()]),
                     work_done_progress_options: Default::default(),
                     all_commit_characters: None,
+                    completion_item: None, // TODO
                 }),
                 execute_command_provider: Some(ExecuteCommandOptions {
-                    commands: vec!["dummy.do_something".to_string()],
+                    commands: vec![
+                        COMMAND_RUN_ON_IMHEX.to_string()
+                    ],
                     work_done_progress_options: Default::default(),
                 }),
-
                 workspace: Some(WorkspaceServerCapabilities {
                     workspace_folders: Some(WorkspaceFoldersServerCapabilities {
                         supported: Some(true),
@@ -187,11 +193,13 @@ impl LanguageServer for Backend {
     }
 
     async fn initialized(&self, _: InitializedParams) {
-        self.client.register_capability(vec![Registration {
-            id: "configurationcapability".to_string(),
-            method: "workspace/didChangeConfiguration".to_string(),
-            register_options: None
-        }]).await.unwrap();
+        self.client.register_capability(vec![
+            Registration {
+                id: "configurationcapability".to_string(),
+                method: "workspace/didChangeConfiguration".to_string(),
+                register_options: None
+            }
+        ]).await.unwrap();
         self.update_configuration().await;
         self.client
             .log_message(MessageType::INFO, "initialized!")
@@ -252,6 +260,7 @@ impl LanguageServer for Backend {
         }();
         Ok(definition)
     }
+
     async fn did_change_workspace_folders(&self, _: DidChangeWorkspaceFoldersParams) {
         self.update_configuration().await;
         self.client
@@ -272,18 +281,19 @@ impl LanguageServer for Backend {
             .await;
     }
 
-    async fn execute_command(&self, _: ExecuteCommandParams) -> Result<Option<jValue>> {
+    async fn execute_command(&self, command: ExecuteCommandParams) -> Result<Option<jValue>> {
         self.client
             .log_message(MessageType::INFO, "command executed!")
             .await;
 
-        match self.client.apply_edit(WorkspaceEdit::default()).await {
-            Ok(res) if res.applied => self.client.log_message(MessageType::INFO, "applied").await,
-            Ok(_) => self.client.log_message(MessageType::INFO, "rejected").await,
-            Err(err) => self.client.log_message(MessageType::ERROR, err).await,
+        match command.command.as_str() {
+            COMMAND_RUN_ON_IMHEX => self.execute_run_on_imhex(command),
+            command => Err(LSPError {
+                code: ErrorCode::MethodNotFound,
+                message: format!("Command {command} does not exist"),
+                data: None
+            })
         }
-
-        Ok(None)
     }
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
@@ -299,6 +309,10 @@ impl LanguageServer for Backend {
     }
 
     async fn did_change(&self, mut params: DidChangeTextDocumentParams) {
+        let uri = params.text_document.uri.clone();
+        self.client
+            .log_message(MessageType::INFO, format!("Changed {uri}!"))
+            .await;
         self.on_change(TextDocumentItem {
             uri: params.text_document.uri,
             text: std::mem::take(&mut params.content_changes[0].text),
@@ -436,6 +450,7 @@ impl LanguageServer for Backend {
         Ok(completions.map(CompletionResponse::Array))
     }
 }
+
 #[derive(Debug, Deserialize, Serialize)]
 struct InlayHintParams {
     path: String,
@@ -550,6 +565,77 @@ impl Backend {
         };
 
         self.configuration.insert("imhexBaseFolders".to_string(), paths);
+    }
+
+    fn execute_run_on_imhex(&self, command: ExecuteCommandParams) -> Result<Option<jValue>> {
+        let current_file = command.arguments.get(0).ok_or(tower_lsp::jsonrpc::Error{
+            code: ErrorCode::InvalidParams,
+            message: "Command needs current file path as argument".to_string(),
+            data: None
+        })?;
+        let current_file = current_file.as_array()
+            .ok_or(tower_lsp::jsonrpc::Error{
+                code: ErrorCode::InvalidParams,
+                message: "Argument must ba an array".to_string(),
+                data: None
+            })?
+            .get(1)
+            .ok_or(tower_lsp::jsonrpc::Error{
+                code: ErrorCode::InvalidParams,
+                message: "Must have at least 2 arguments".to_string(),
+                data: None
+            })?
+            .as_str()
+            .ok_or(tower_lsp::jsonrpc::Error{
+                code: ErrorCode::InvalidParams,
+                message: "Second argument must be a string".to_string(),
+                data: None
+            })?;
+
+        let mut current_document = None;
+        for item in self.document_map.iter() {
+            let (uri, document) = item.pair();
+            let document = document.to_string();
+
+            let mut decoded_uri = match urlencoding::decode(&uri) {
+                Ok(decoded_url) => decoded_url.to_string(),
+                _ => continue
+            };
+
+            let mut current_uri = Url::from_file_path(current_file)
+                .map_err(|()| tower_lsp::jsonrpc::Error{
+                    code: ErrorCode::ServerError(-8001),
+                    message: "Unable to find current file".to_string(),
+                    data: None
+                })?
+                .to_string();
+            if decoded_uri == current_uri {
+                current_document = Some(document);
+                break;
+            } else {
+                #[cfg(target_os="windows")]
+                {
+                    // Check if changing the drive letter to lowercase they are the same
+                    decoded_uri.replace_range(8..9, &decoded_uri[8..9].to_lowercase());
+                    current_uri.replace_range(8..9, &current_uri[8..9].to_lowercase());
+                    if current_uri == decoded_uri {
+                        current_document = Some(document);
+                        break;
+                    }
+                }
+            }
+        }
+        match current_document {
+            Some(current_document) => {
+                hexpat_language_server::imhex_connection::send_file(&current_document);
+                Ok(None)
+            },
+            None => Err(tower_lsp::jsonrpc::Error {
+                code: ErrorCode::ServerError(-8000),
+                message: "Unable to find current file".to_string(),
+                data: None
+            })
+        }
     }
 }
 

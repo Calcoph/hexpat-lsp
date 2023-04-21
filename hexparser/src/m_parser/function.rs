@@ -422,7 +422,14 @@ pub(crate) fn function_conditional<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'
                 None => (Expr::Value { val: Value::Null }, span.clone()),
             });
             (
-                Expr::IfBlock { ifs: Box::new((Expr::If { test: Box::new(test_), consequent: Box::new(consequent) }, span.clone())), // TODO: Fix this mess (specially the span)
+                Expr::IfBlock {
+                    ifs: Box::new((
+                        Expr::If {
+                            test: Box::new(test_),
+                            consequent: Box::new(consequent)
+                        },
+                        span.clone()
+                    )), // TODO: Fix this mess (specially the span)
                     alternative
                 },
                 span
