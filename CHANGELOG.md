@@ -5,6 +5,7 @@
     * Array indices
     * Array sizes
 * Fix `for` loops
+* Fix errors when using char literals
 
 # v0.2.2
 * Go to definition
