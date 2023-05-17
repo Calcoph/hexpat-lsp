@@ -627,8 +627,7 @@ impl Backend {
         }
         match current_document {
             Some(current_document) => {
-                hexpat_language_server::imhex_connection::send_file(&current_document);
-                Ok(None)
+                hexpat_language_server::imhex_connection::send_file(&current_document).map(|_| None)
             },
             None => Err(tower_lsp::jsonrpc::Error {
                 code: ErrorCode::ServerError(-8000),
