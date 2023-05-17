@@ -7,6 +7,7 @@
 * Fix `for` loops
 * Fix char literals throwing errors
 * Debugging a script makes it run on imhex (only on latest imhex builds)
+* Settings change take effect without reloading server
 
 # v0.2.2
 * Go to definition
