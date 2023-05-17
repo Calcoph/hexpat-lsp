@@ -368,14 +368,19 @@ impl LanguageServer for Backend {
     }
 
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
+        self.client
+            .log_message(MessageType::INFO, format!("COMPLETION"))
+            .await;
         let uri = params.text_document_position.text_document.uri;
         let position = params.text_document_position.position;
+        let mut comps = Vec::new();
         let completions = || -> Option<Vec<CompletionItem>> {
             let rope = self.document_map.get(&uri.to_string())?;
             let ast = self.ast_map.get(&uri.to_string())?;
             let char = rope.try_line_to_char(position.line as usize).ok()?;
             let offset = char + position.character as usize;
             let completions = completion(&ast, offset);
+            comps = completions.keys().map(|a| a.clone()).collect();
             let mut ret = Vec::with_capacity(completions.len());
             use hexpat_language_server::completion::ImCompleteCompletionItem as ImComp;
             for (_, item) in completions {
@@ -442,11 +447,24 @@ impl LanguageServer for Backend {
                             detail: Some(name),
                             ..Default::default()
                         });
+                    },
+                    ImComp::EnumMember(member) => {
+                        ret.push(CompletionItem {
+                            label: member.clone(),
+                            insert_text: Some(member.clone()),
+                            kind: Some(CompletionItemKind::ENUM_MEMBER),
+                            detail: Some(member),
+                            ..Default::default()
+                        });
                     }
                 }
             }
             Some(ret)
         }();
+
+        self.client
+            .log_message(MessageType::INFO, format!("{:?}", comps))
+            .await;
         Ok(completions.map(CompletionResponse::Array))
     }
 }
