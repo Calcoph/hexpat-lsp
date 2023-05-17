@@ -6,6 +6,7 @@
     * Array sizes
 * Fix `for` loops
 * Fix char literals throwing errors
+* Debugging a script makes it run on imhex (only on latest imhex builds)
 
 # v0.2.2
 * Go to definition
