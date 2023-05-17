@@ -8,12 +8,10 @@ use hexpat_language_server::completion::completion;
 use hexpat_language_server::jump_definition::get_definition;
 use hexpat_language_server::reference::get_reference;
 use hexpat_language_server::semantic_token::semantic_token_from_ast;
-use json::JsonValue;
 use parserlib::LEGEND_TYPE;
 use ropey::Rope;
-use serde::__private::doc;
 use serde::{Deserialize, Serialize};
-use serde_json::{Value as jValue, json};
+use serde_json::{Value as jValue};
 use tower_lsp::jsonrpc::{Result, Error as LSPError, ErrorCode};
 use tower_lsp::lsp_types::notification::Notification;
 use tower_lsp::lsp_types::*;
@@ -21,6 +19,7 @@ use tower_lsp::{Client, LanguageServer, LspService, Server};
 
 const LSP_NAME: &str = "hexpat-language-server";
 const COMMAND_RUN_ON_IMHEX: &str = "hexpat-language-server.runOnImHex";
+const DEFAULT_IMHEX_PORT: u16 = 31337;
 
 const CONFIG_IMHEX_BASE_FOLDERS: &str = "imhexBaseFolders";
 const CONFIG_IMHEX_PORT: &str = "imhexPort";
@@ -669,7 +668,7 @@ impl Backend {
                 let port = port.map(|port| match port.value() {
                     ConfigurationEntry::Port(port) => *port,
                     _ => unreachable!()
-                }).unwrap_or(31337);
+                }).unwrap_or(DEFAULT_IMHEX_PORT);
                 hexpat_language_server::imhex_connection::send_file(&current_document, port).map(|_| None)
             },
             None => Err(tower_lsp::jsonrpc::Error {
