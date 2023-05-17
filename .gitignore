@@ -1,3 +1,5 @@
 /target
 hexparser/src/cpp_parser.rs
 ignore/
+/target-win
+/target-lin

@@ -682,7 +682,7 @@ impl Backend {
 
 #[tokio::main]
 async fn main() {
-    eprintln!("{LSP_NAME} v0.2.3");
+    eprintln!("{LSP_NAME} v0.2.4");
     env_logger::init();
 
     let stdin = tokio::io::stdin();

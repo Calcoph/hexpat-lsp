@@ -1,4 +1,6 @@
-# v0.2.3 (unreleased)
+# v0.2.4 (unreleased)
+
+# v0.2.3
 * Sections
 * better support inside:
     * Template parameters
