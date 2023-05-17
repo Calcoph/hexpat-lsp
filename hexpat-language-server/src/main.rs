@@ -19,11 +19,16 @@ use tower_lsp::lsp_types::notification::Notification;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
 
+const LSP_NAME: &str = "hexpat-language-server";
 const COMMAND_RUN_ON_IMHEX: &str = "hexpat-language-server.runOnImHex";
+
+const CONFIG_IMHEX_BASE_FOLDERS: &str = "imhexBaseFolders";
+const CONFIG_IMHEX_PORT: &str = "imhexPort";
 
 #[derive(Debug)]
 enum ConfigurationEntry {
-    ImHexPaths(Vec<String>)
+    ImHexPaths(Vec<String>),
+    Port(u16),
 }
 
 #[derive(Debug)]
@@ -269,9 +274,9 @@ impl LanguageServer for Backend {
     }
 
     async fn did_change_configuration(&self, params: DidChangeConfigurationParams) {
-        let params = params.settings;
+        self.update_configuration().await;
         self.client
-            .log_message(MessageType::INFO, format!("configuration changed! {}", params))
+            .log_message(MessageType::INFO, format!("configuration changed!"))
             .await;
     }
 
@@ -516,12 +521,13 @@ impl Backend {
         self.document_map
             .insert(params.uri.to_string(), rope.clone());
         let mut paths_v = vec![];
-        let paths = self.configuration.get("imhexBaseFolders");
+        let paths = self.configuration.get(CONFIG_IMHEX_BASE_FOLDERS);
         match paths {
             Some(p) => match p.value() {
                 ConfigurationEntry::ImHexPaths(p) => for path in p {
                     paths_v.push(path.clone())
                 },
+                _ => unreachable!(),
             },
             None => (),
         };
@@ -565,11 +571,24 @@ impl Backend {
         let mut config = self.client.configuration(vec![
             ConfigurationItem {
                 scope_uri: None,
-                section: Some("hexpat-language-server.imhexBaseFolders".to_string())
+                section: Some(format!("{LSP_NAME}.{CONFIG_IMHEX_BASE_FOLDERS}"))
+            },
+            ConfigurationItem {
+                scope_uri: None,
+                section: Some(format!("{LSP_NAME}.{CONFIG_IMHEX_PORT}"))
             }
         ]).await.unwrap();
 
-        let paths = match config.swap_remove(0) {
+        let port = match config.pop().unwrap() {
+            jValue::Number(port) => {
+                let port = port.as_u64().unwrap() as u16;
+
+                ConfigurationEntry::Port(port)
+            },
+            _ => unreachable!()
+        };
+
+        let paths = match config.pop().unwrap() {
             jValue::Array(v) => {
                 let paths = v.into_iter()
                     .map(|path| match path {
@@ -582,7 +601,8 @@ impl Backend {
             _ => unreachable!(),
         };
 
-        self.configuration.insert("imhexBaseFolders".to_string(), paths);
+        self.configuration.insert(CONFIG_IMHEX_BASE_FOLDERS.to_string(), paths);
+        self.configuration.insert(CONFIG_IMHEX_PORT.to_string(), port);
     }
 
     fn execute_run_on_imhex(&self, command: ExecuteCommandParams) -> Result<Option<jValue>> {
@@ -645,7 +665,12 @@ impl Backend {
         }
         match current_document {
             Some(current_document) => {
-                hexpat_language_server::imhex_connection::send_file(&current_document).map(|_| None)
+                let port = self.configuration.get(CONFIG_IMHEX_PORT);
+                let port = port.map(|port| match port.value() {
+                    ConfigurationEntry::Port(port) => *port,
+                    _ => unreachable!()
+                }).unwrap_or(31337);
+                hexpat_language_server::imhex_connection::send_file(&current_document, port).map(|_| None)
             },
             None => Err(tower_lsp::jsonrpc::Error {
                 code: ErrorCode::ServerError(-8000),
@@ -658,7 +683,7 @@ impl Backend {
 
 #[tokio::main]
 async fn main() {
-    eprintln!("hexpat-language-server v0.2.3");
+    eprintln!("{LSP_NAME} v0.2.3");
     env_logger::init();
 
     let stdin = tokio::io::stdin();
