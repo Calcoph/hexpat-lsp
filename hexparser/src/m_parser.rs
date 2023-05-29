@@ -1292,8 +1292,19 @@ pub(crate) fn parse_namespace<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b
             let name = Box::new(name.into_iter()
                 .fold((Expr::Value { val: Value::Null }, 0..1), |(accum, acc_span), (next, next_span)| {
                     match accum {
-                        Expr::Value { .. } => (Expr::Local { name: (next, next_span.clone()) }, next_span), // first case
-                        _ => (Expr::NamespaceAccess { previous: Box::new((accum, acc_span.clone())), name: (next, next_span.clone()) }, acc_span.start..next_span.end)
+                        Expr::Value { .. } => ( // first case
+                            Expr::Local {
+                                name: (next, next_span.clone())
+                            },
+                            next_span
+                        ),
+                        _ => ( // general case
+                            Expr::NamespaceAccess {
+                                previous: Box::new((accum, acc_span.clone())),
+                                name: (next, next_span.clone())
+                            },
+                            acc_span.start..next_span.end
+                        )
                     }
                 }));
             (
