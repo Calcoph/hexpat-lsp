@@ -4,7 +4,7 @@ use dashmap::DashMap;
 use hexparser::recovery_err::RecoveredError;
 use hexparser::token::Spanned;
 use hexparser::{parse, type_inference, ImCompleteSemanticToken, Value, Expr};
-use hexpat_language_server::completion::completion;
+use hexpat_language_server::completion::{completion, ImCompleteCompletionItem, add_completion};
 use hexpat_language_server::jump_definition::get_definition;
 use hexpat_language_server::reference::get_reference;
 use hexpat_language_server::semantic_token::semantic_token_from_ast;
@@ -386,82 +386,8 @@ impl LanguageServer for Backend {
             let completions = completion(&ast, offset);
             comps = completions.keys().map(|a| a.clone()).collect();
             let mut ret = Vec::with_capacity(completions.len());
-            use hexpat_language_server::completion::ImCompleteCompletionItem as ImComp;
             for (_, item) in completions {
-                match item {
-                    ImComp::Variable(var) => {
-                        ret.push(CompletionItem {
-                            label: var.clone(),
-                            insert_text: Some(var.clone()),
-                            kind: Some(CompletionItemKind::VARIABLE),
-                            detail: Some(var),
-                            ..Default::default()
-                        });
-                    },
-                    ImComp::Function(name,args) => {
-                        ret.push(CompletionItem {
-                            label: name.clone(),
-                            kind: Some(CompletionItemKind::FUNCTION),
-                            detail: Some(name.clone()),
-                            insert_text: Some(format!(
-                                "{}({})",
-                                name,
-                                args.iter()
-                                    .enumerate()
-                                    .map(|(index, item)| { format!("${{{}:{}}}", index + 1, item) })
-                                    .collect::<Vec<_>>()
-                                    .join(",")
-                            )),
-                            insert_text_format: Some(InsertTextFormat::SNIPPET),
-                            ..Default::default()
-                        });
-                    },
-                    ImComp::Struct(name) => {
-                        ret.push(CompletionItem {
-                            label: name.clone(),
-                            insert_text: Some(name.clone()),
-                            kind: Some(CompletionItemKind::CLASS),
-                            detail: Some(name),
-                            ..Default::default()
-                        });
-                    },
-                    ImComp::BitField(name) => {
-                        ret.push(CompletionItem {
-                            label: name.clone(),
-                            insert_text: Some(name.clone()),
-                            kind: Some(CompletionItemKind::STRUCT),
-                            detail: Some(name),
-                            ..Default::default()
-                        });
-                    },
-                    ImComp::NameSpace(name) => {
-                        ret.push(CompletionItem {
-                            label: name.clone(),
-                            insert_text: Some(name.clone()),
-                            kind: Some(CompletionItemKind::MODULE),
-                            detail: Some(name),
-                            ..Default::default()
-                        });
-                    },
-                    ImComp::Enum(name) => {
-                        ret.push(CompletionItem {
-                            label: name.clone(),
-                            insert_text: Some(name.clone()),
-                            kind: Some(CompletionItemKind::ENUM),
-                            detail: Some(name),
-                            ..Default::default()
-                        });
-                    },
-                    ImComp::EnumMember(member) => {
-                        ret.push(CompletionItem {
-                            label: member.clone(),
-                            insert_text: Some(member.clone()),
-                            kind: Some(CompletionItemKind::ENUM_MEMBER),
-                            detail: Some(member),
-                            ..Default::default()
-                        });
-                    }
-                }
+                add_completion(item, &mut ret, None);
             }
             Some(ret)
         }();

@@ -27,7 +27,8 @@ mod simple_debug;
 
 #[cfg(test)]
 mod tests;
-
+#[cfg(test)]
+mod test_debug;
 
 #[derive(Debug)]
 pub struct ImCompleteSemanticToken {

@@ -1,6 +1,6 @@
 use std::{cell::RefCell, ops::Range, error::Error};
 
-use nom::{Parser, InputTake, combinator::peek, bytes::complete::tag as just};
+use nom::{Parser, InputTake, combinator::peek, bytes::complete::tag as just, branch::alt as choice};
 use nom_locate::LocatedSpan;
 //use nom::error::{ParseError, ErrorKind, FromExternalError};
 use nom_supreme::error::{ErrorTree, GenericErrorTree};
@@ -75,20 +75,42 @@ fn recover_from_error<'a, 'b>(e: TokError<'a, 'b>) -> TokResult<'a, 'b, Spanned<
                     (input, input.span())
                 },
                 _ => {
-                    let (mut rest, input) = input.take_split(1);
-                    let mut next_token = input;
+                    // Consumes tokens until finding a ';' or '}'
+                    let (mut rest, n_token) = input.take_split(1);
+                    let mut next_token = n_token;
                     let mut continue_loop = |input| -> TokResult<'a, 'b, Tokens> {
-                        peek(just(Token::Separator(';')))(input) // TODO: Also end loop on Token::Separator('}')
-                    }(rest).is_err() && rest.tokens.len() > 0;
+                        peek(choice((
+                            just(Token::Separator(';')),
+                            just(Token::Separator('}'))
+                        )))(input)
+                    }(next_token).is_err() && rest.tokens.len() > 0;
+                    let mut bracket_count = 0;
+                    continue_loop = false; // TODO: delete this (or not)
                     while continue_loop { // TODO: First see where to split and then do it, instead of splitting by 1 at a time
-                        let (r, n_token) = next_token.take_split(1);
+                        let (r, n_token) = rest.take_split(1);
                         rest = r;
                         next_token = n_token;
-                        continue_loop = |input| -> TokResult<'a, 'b, Tokens> {
-                            peek(just(Token::Separator(';')))(input) // TODO: Also end loop on Token::Separator('}'), but count how many { are opened while searching for }
-                        }(rest).is_err() && rest.tokens.len() > 0;
+
+                        let is_open_bracket = |input| -> TokResult<'a, 'b, Tokens> {peek(just(Token::Separator('{')))(input)};
+                        let is_semicolon = |input| -> TokResult<'a, 'b, Tokens> {peek(just(Token::Separator(';')))(input)};
+                        let is_close_bracket = |input| -> TokResult<'a, 'b, Tokens> {peek(just(Token::Separator('{')))(input)};
+
+                        if is_open_bracket(next_token).is_ok() {
+                            bracket_count += 1;
+                        } else if is_semicolon(next_token).is_ok() {
+                            if bracket_count <= 0 {
+                                continue_loop = false
+                            }
+                        } else if is_close_bracket(next_token).is_ok() {
+                            if bracket_count <= 0 {
+                                continue_loop = false
+                            }
+                            bracket_count -= 1;
+                        }
+
+                        continue_loop = continue_loop && rest.tokens.len() > 0; 
                     }
-                    (rest, input.span())
+                    (rest, n_token.span())
                 }
             };
 

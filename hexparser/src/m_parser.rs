@@ -1524,7 +1524,28 @@ fn statements<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>>
                         just(Token::Separator(']')).context("Missing ]")
                     ))
                 )),
-                many1(just(Token::Separator(';'))).context("Missing ;")
+                |input: Tokens<'a, 'b>| {
+                    match many1(just(Token::Separator(';'))).context("Missing ;").parse(input) {
+                        Ok((i, _)) => Ok((i, (Expr::Error, 0..1))), // It doesn't matter if it's not really an error, it will be ignored by terminated()
+                        Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => {
+                            match e {
+                                GenericErrorTree::Stack { base: _, contexts } => {
+                                    let (input, context) = contexts[contexts.len()-1];
+
+                                    let span = input.span().start..input.span().start+1;
+                                    match context {
+                                        nom_supreme::error::StackContext::Context(error_msg) => input.state.report_error(RecoveredError(span.clone(), error_msg.to_string())),
+                                        _ => unreachable!()
+                                    };
+
+                                    Ok((input, (Expr::Error, span)))
+                                },
+                                _ => unreachable!()
+                            }
+                        },
+                        Err(e) => Err(e)
+                    }
+                }
             )
         ),
         terminated(

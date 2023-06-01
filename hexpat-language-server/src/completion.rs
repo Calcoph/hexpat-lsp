@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
 use hexparser::{m_parser::Expr, token::Spanned};
+use tower_lsp::lsp_types::{CompletionItem, CompletionItemKind, InsertTextFormat};
+
+use crate::namespace_handling::namespace_to_string;
 
 pub enum ImCompleteCompletionItem {
     Variable(String),
@@ -9,6 +12,7 @@ pub enum ImCompleteCompletionItem {
     Enum(String),
     EnumMember(String),
     NameSpace(String),
+    NamespacedItem{namespace: String, item: Box<Self>},
     BitField(String)
 }
 /// return (need_to_continue_search, founded reference)
@@ -166,7 +170,18 @@ pub fn get_completion_of(
                 return false;
             }
 
-            get_completion_of(body, definition_map, ident_offset)
+            let mut namespace_hm = HashMap::new();
+
+            let ret = get_completion_of(body, &mut namespace_hm, ident_offset);
+
+            definition_map.extend(
+                namespace_hm.into_iter().map(|(v, item)| (v, ImCompleteCompletionItem::NamespacedItem {
+                        namespace: namespace_to_string(name),
+                        item: Box::new(item)
+                    })
+                )
+            );
+            ret
         }, // TODO
         Expr::Enum { name, value_type, body } => {
             definition_map.insert(
@@ -187,14 +202,21 @@ pub fn get_completion_of(
         Expr::Access { item, member } => true, // TODO
         Expr::Attribute { arguments } => true, // TODO
         Expr::AttributeArgument { name, value } => true, // TODO
-        Expr::WhileLoop { condition, body } => true, // TODO
+        Expr::WhileLoop { condition, body } => {
+            if ident_offset < expr.1.end {
+                // Inside the while loop body
+                get_completion_of(&body, definition_map, ident_offset)
+            } else {
+                true
+            }
+        },
         Expr::ForLoop { var_init, var_test, var_change, body } => {
             if !get_completion_of(var_init, definition_map, ident_offset) {
                 return false;
             }
 
             get_completion_of(body, definition_map, ident_offset)
-        }, // TODO
+        },
         Expr::Cast { cast_operator, operand } => true, // TODO
         Expr::Union { name, body, template_parameters } => {
             definition_map.insert(
@@ -207,5 +229,126 @@ pub fn get_completion_of(
         Expr::ArrayAccess { array: item, index: member } => true, // TODO
         Expr::ArrayDefinition { value_type, array_name, size, body } => true,
         Expr::Type { val } => true, // TODO
+    }
+}
+
+pub fn add_completion(item: ImCompleteCompletionItem, ret: &mut Vec<CompletionItem>, namespace: Option<String>) {
+    use ImCompleteCompletionItem as ImComp;
+    match item {
+        ImComp::Variable(var) => {
+            let label = match namespace {
+                Some(namespace) => format!("{namespace}::{}",var.clone()),
+                None => var.clone(),
+            };
+
+            ret.push(CompletionItem {
+                label: label.clone(),
+                insert_text: Some(label.clone()),
+                kind: Some(CompletionItemKind::VARIABLE),
+                detail: Some(label),
+                ..Default::default()
+            });
+        },
+        ImComp::Function(name,args) => {
+            let label = match namespace {
+                Some(namespace) => format!("{namespace}::{}",name.clone()),
+                None => name.clone(),
+            };
+
+            ret.push(CompletionItem {
+                label: label.clone(),
+                kind: Some(CompletionItemKind::FUNCTION),
+                detail: Some(label.clone()),
+                insert_text: Some(format!(
+                    "{}({})",
+                    label,
+                    args.iter()
+                        .enumerate()
+                        .map(|(index, item)| { format!("${{{}:{}}}", index + 1, item) })
+                        .collect::<Vec<_>>()
+                        .join(",")
+                )),
+                insert_text_format: Some(InsertTextFormat::SNIPPET),
+                ..Default::default()
+            });
+        },
+        ImComp::Struct(name) => {
+            let label = match namespace {
+                Some(namespace) => format!("{namespace}::{}",name.clone()),
+                None => name.clone(),
+            };
+
+            ret.push(CompletionItem {
+                label: label.clone(),
+                insert_text: Some(label.clone()),
+                kind: Some(CompletionItemKind::CLASS),
+                detail: Some(label),
+                ..Default::default()
+            });
+        },
+        ImComp::BitField(name) => {
+            let label = match namespace {
+                Some(namespace) => format!("{namespace}::{}",name.clone()),
+                None => name.clone(),
+            };
+
+            ret.push(CompletionItem {
+                label: label.clone(),
+                insert_text: Some(label.clone()),
+                kind: Some(CompletionItemKind::STRUCT),
+                detail: Some(label),
+                ..Default::default()
+            });
+        },
+        ImComp::NameSpace(name) => {
+            let label = match namespace {
+                Some(namespace) => format!("{namespace}::{}",name.clone()),
+                None => name.clone(),
+            };
+
+            ret.push(CompletionItem {
+                label: label.clone(),
+                insert_text: Some(label.clone()),
+                kind: Some(CompletionItemKind::MODULE),
+                detail: Some(label),
+                ..Default::default()
+            });
+        },
+        ImComp::Enum(name) => {
+            let label = match namespace {
+                Some(namespace) => format!("{namespace}::{}",name.clone()),
+                None => name.clone(),
+            };
+
+            ret.push(CompletionItem {
+                label: label.clone(),
+                insert_text: Some(label.clone()),
+                kind: Some(CompletionItemKind::ENUM),
+                detail: Some(label),
+                ..Default::default()
+            });
+        },
+        ImComp::EnumMember(member) => {
+            let label = match namespace {
+                Some(namespace) => format!("{namespace}::{}",member.clone()),
+                None => member.clone(),
+            };
+
+            ret.push(CompletionItem {
+                label: label.clone(),
+                insert_text: Some(label.clone()),
+                kind: Some(CompletionItemKind::ENUM_MEMBER),
+                detail: Some(label),
+                ..Default::default()
+            });
+        }
+        ImComp::NamespacedItem { namespace: nmspc, item } => {
+            let new_namespace = match namespace {
+                Some(namespace) => format!("{}::{}", namespace, nmspc),
+                None => nmspc,
+            };
+
+            add_completion(*item, ret, Some(new_namespace))
+        },
     }
 }

@@ -497,7 +497,11 @@ impl SimpleDebug for Expr {
             Expr::Break => print!("E::Break"),
             Expr::Func { .. } => print!("E::Func"),
             Expr::Struct { .. } => print!("E::Struct"),
-            Expr::Namespace { .. } => print!("E::Namespace"),
+            Expr::Namespace { body, .. } => {
+                print!("E::Namespace(");
+                body.0.dbg(0);
+                print!(")")
+            },
             Expr::Enum { .. } => print!("E::Enum"),
             Expr::Bitfield { .. } => print!("E::BitField"),
             Expr::Access { .. } => print!("E::Access"),
