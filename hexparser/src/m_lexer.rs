@@ -1,4 +1,4 @@
-use std::{cell::RefCell, slice};
+use std::{cell::RefCell, slice, ops::{Range, RangeFrom, RangeTo}};
 
 use nom::{
     character::complete::{
@@ -28,11 +28,79 @@ use nom::{
         many_till as many_until,
         many0,
     },
-    InputTake
+    InputTake, Slice, InputLength, InputIter, Compare, AsChar, error::{ParseError, ErrorKind}, IResult, CompareResult, AsBytes
 };
 use nom_supreme::error::{GenericErrorTree, ErrorTree};
 
 use crate::{recovery_err::{StrResult, StrSpan, RecoveredError, ParseState, ToRange}, token::{TokSpan, FromStrSpan, Token, PreProc, Keyword, BuiltFunc, ValueType}, combinators::ignore};
+
+pub fn anything_until_multicomment_end<T, E: ParseError<T>>(input: T) -> IResult<T, T, E>
+where
+  T: Slice<Range<usize>> + Slice<RangeFrom<usize>> + Slice<RangeTo<usize>>,
+  T: InputIter + InputLength,
+  T: Compare<&'static str>,
+  <T as InputIter>::Item: AsChar,
+  <T as InputIter>::Item: AsChar,
+{
+    use std::io::Write;
+  /* match input.position(|item| {
+    let c = item.as_char();
+    c == '\r' || c == '\n'
+  }) {
+    None => Ok((input.slice(input.input_len()..), input)),
+    Some(index) => {
+      let mut it = input.slice(index..).iter_elements();
+      let nth = it.next().unwrap().as_char();
+      if nth == '\r' {
+        let sliced = input.slice(index..);
+        let comp = sliced.compare("\r\n");
+        match comp {
+          //FIXME: calculate the right index
+          CompareResult::Ok => Ok((input.slice(index..), input.slice(..index))),
+          _ => {
+            let e: ErrorKind = ErrorKind::Tag;
+            Err(Err::Error(E::from_error_kind(input, e)))
+          }
+        }
+      } else {
+        Ok((input.slice(index..), input.slice(..index)))
+      }
+    }
+  } */
+  let mut slice_start = 0;
+  loop {
+    match input.slice(slice_start..).position(|item| {
+        let c = item.as_char();
+        c == '*'
+    }) {
+        None => return Ok((input.slice(input.input_len()..), input)),
+        Some(index) => {
+            let compensated_index = slice_start+index;
+            let mut it = input.slice(compensated_index..).iter_elements();
+            let _asterisk = it.next().unwrap();
+            if let Some(nth) = it.next() {
+                let nth = nth.as_char();
+                if nth == '/' {
+                    let sliced = input.slice(compensated_index..);
+                    let comp = sliced.compare("*/");
+                    match comp {
+                        //FIXME: calculate the right index
+                        CompareResult::Ok => return Ok((input.slice(compensated_index..), input.slice(..compensated_index))),
+                        _ => {
+                            let e: ErrorKind = ErrorKind::Tag;
+                            return Err(nom::Err::Error(E::from_error_kind(input, e)))
+                        }
+                    }
+                } else {
+                    slice_start = compensated_index+1
+                }
+            } else {
+                return Ok((input.slice(input.input_len()..), input))
+            }
+        }
+    }
+  }
+}
 
 fn hex_num<'a, 'b>(input: StrSpan<'a, 'b>) -> StrResult<StrSpan<'a, 'b>, TokSpan<'a, 'b>> {
     map(
@@ -516,7 +584,10 @@ fn lexer<'a, 'b>(input: StrSpan<'a, 'b>) -> StrResult<StrSpan<'a, 'b>, Vec<TokSp
         preproc,
     ));
 
-    let comment = preceded(just("//"), not_line_ending);
+    let comment = choice((
+        preceded(just("//"), not_line_ending),
+        delimited(just("/*"), anything_until_multicomment_end, just("*/"))
+    ));
 
     let padding = map(
         choice((

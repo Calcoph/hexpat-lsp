@@ -1,4 +1,7 @@
 # v0.2.4 (unreleased)
+* Improved namespace completion
+* Improved error recovery
+* Multiline comments stop throwing errors
 
 # v0.2.3
 * Sections
