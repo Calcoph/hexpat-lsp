@@ -21,3 +21,8 @@ Non implemented features: (**3d192fb** <-> **951944d**, *(November 6th, 2022 6:3
  * ~~line 1321~~
  * ~~line 1355~~
  
+Non implemented features:
+ * try-catch
+ * match statements
+ * constants
+ 

@@ -61,10 +61,19 @@ impl<'a> fmt::Display for Token<'a> {
                 Keyword::LittleEndian => write!(f, "le"),
                 Keyword::BigEndian => write!(f, "be"),
                 Keyword::Reference => write!(f, "ref"),
+                Keyword::Unsigned => write!(f, "unsigned"),
+                Keyword::Signed => write!(f, "signed"),
+                Keyword::Match => write!(f, "match"),
+                Keyword::Null => write!(f, "null"),
+                Keyword::Const => write!(f, "const"),
+                Keyword::Underscore => write!(f, "_"),
+                Keyword::Try => write!(f, "try"),
+                Keyword::Catch => write!(f, "catch"),
             },
             Token::B(b) => match b {
                 BuiltFunc::AddressOf => write!(f, "addressof"),
                 BuiltFunc::SizeOf => write!(f, "sizeof"),
+                BuiltFunc::TypeNameOf => write!(f, "typenameof"),
             }
             Token::V(_) => write!(f, "V"), // TODO
             Token::Pre(_) => write!(f, "PreProc"),
@@ -83,10 +92,13 @@ pub enum Keyword {
     Using,
     Enum,
     Bitfield,
+    Unsigned,
+    Signed,
     LittleEndian,
     BigEndian,
     Fn,
     If,
+    Match,
     Else,
     Parent,
     This,
@@ -99,6 +111,11 @@ pub enum Keyword {
     Break,
     Continue,
     Reference,
+    Null,
+    Const,
+    Underscore,
+    Try,
+    Catch,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -134,6 +151,7 @@ pub enum ValueType {
 pub enum BuiltFunc {
     AddressOf,
     SizeOf,
+    TypeNameOf
 }
 
 impl ToString for BuiltFunc {
@@ -141,6 +159,7 @@ impl ToString for BuiltFunc {
         match self {
             BuiltFunc::AddressOf => "addressof".to_string(),
             BuiltFunc::SizeOf => "sizeof".to_string(),
+            BuiltFunc::TypeNameOf => "typenameof".to_string(),
         }
     }
 }

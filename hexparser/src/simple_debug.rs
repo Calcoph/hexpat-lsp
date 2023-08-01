@@ -514,6 +514,8 @@ impl SimpleDebug for Expr {
             Expr::ArrayAccess { .. } => print!("E::ArrayAccess"),
             Expr::ArrayDefinition { .. } => print!("E::ArrayDefinition"),
             Expr::Type { .. } => print!("E::Type"),
+            Expr::Match => print!("E::Match"),
+            Expr::TryCatch => print!("E::TryCatch"),
         }
     }
 
@@ -566,6 +568,8 @@ impl SimpleDebug for Expr {
             Expr::ArrayAccess { .. } => println!("E::ArrayAccess"),
             Expr::ArrayDefinition { .. } => println!("E::ArrayDefinition"),
             Expr::Type { .. } => println!("E::Type"),
+            Expr::Match => println!("E::Match"),
+            Expr::TryCatch => println!("E::TryCatch"),
         }
     }
 }

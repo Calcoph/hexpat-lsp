@@ -258,8 +258,10 @@ fn get_definition_of_expr(
             get_definition_of_expr(body, definition_ass_list, ident_offset, false)
         },
         Expr::ArrayAccess { array, index } => (true, None), // TODO
-        Expr::ArrayDefinition { value_type, array_name, size, body } => (true, None),
+        Expr::ArrayDefinition { value_type, array_name, size, body } => (true, None), // TODO
         Expr::Type { val } => (true, None), // TODO
+        Expr::Match => (true, None), // TODO
+        Expr::TryCatch => (true, None), // TODO
     }
 }
 

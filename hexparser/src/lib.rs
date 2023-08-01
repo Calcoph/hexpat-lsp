@@ -71,8 +71,10 @@ pub fn type_inference(expr: &Spanned<Expr>, symbol_type_table: &mut HashMap<Rang
         Expr::Cast { .. } => (), // TODO
         Expr::Union { .. } => (), // TODO
         Expr::ArrayAccess { .. } => (), // TODO
-        Expr::ArrayDefinition { .. } => (),
+        Expr::ArrayDefinition { .. } => (), // TODO
         Expr::Type { .. } => (), // TODO
+        Expr::Match => (), // TODO
+        Expr::TryCatch => (), // TODO
     }
 }
 
@@ -314,6 +316,70 @@ pub fn parse(
                             .position(|item| item.as_str() == SemanticTokenType::KEYWORD.as_str())
                             .unwrap(),
                     }),
+                    Keyword::Unsigned => Some(ImCompleteSemanticToken {
+                        start: span.start,
+                        length: span.len(),
+                        token_type: LEGEND_TYPE
+                            .iter()
+                            .position(|item| item.as_str() == SemanticTokenType::KEYWORD.as_str())
+                            .unwrap(),
+                    }),
+                    Keyword::Signed => Some(ImCompleteSemanticToken {
+                        start: span.start,
+                        length: span.len(),
+                        token_type: LEGEND_TYPE
+                            .iter()
+                            .position(|item| item.as_str() == SemanticTokenType::KEYWORD.as_str())
+                            .unwrap(),
+                    }),
+                    Keyword::Match => Some(ImCompleteSemanticToken {
+                        start: span.start,
+                        length: span.len(),
+                        token_type: LEGEND_TYPE
+                            .iter()
+                            .position(|item| item.as_str() == SemanticTokenType::KEYWORD.as_str())
+                            .unwrap(),
+                    }),
+                    Keyword::Null => Some(ImCompleteSemanticToken {
+                        start: span.start,
+                        length: span.len(),
+                        token_type: LEGEND_TYPE
+                            .iter()
+                            .position(|item| item.as_str() == SemanticTokenType::KEYWORD.as_str())
+                            .unwrap(),
+                    }),
+                    Keyword::Const => Some(ImCompleteSemanticToken {
+                        start: span.start,
+                        length: span.len(),
+                        token_type: LEGEND_TYPE
+                            .iter()
+                            .position(|item| item.as_str() == SemanticTokenType::KEYWORD.as_str())
+                            .unwrap(),
+                    }),
+                    Keyword::Underscore => Some(ImCompleteSemanticToken {
+                        start: span.start,
+                        length: span.len(),
+                        token_type: LEGEND_TYPE
+                            .iter()
+                            .position(|item| item.as_str() == SemanticTokenType::KEYWORD.as_str())
+                            .unwrap(),
+                    }),
+                    Keyword::Try => Some(ImCompleteSemanticToken {
+                        start: span.start,
+                        length: span.len(),
+                        token_type: LEGEND_TYPE
+                            .iter()
+                            .position(|item| item.as_str() == SemanticTokenType::KEYWORD.as_str())
+                            .unwrap(),
+                    }),
+                    Keyword::Catch => Some(ImCompleteSemanticToken {
+                        start: span.start,
+                        length: span.len(),
+                        token_type: LEGEND_TYPE
+                            .iter()
+                            .position(|item| item.as_str() == SemanticTokenType::KEYWORD.as_str())
+                            .unwrap(),
+                    }),
                 }
                 Token::V(_) => Some(ImCompleteSemanticToken {
                     start: span.start,
@@ -333,6 +399,14 @@ pub fn parse(
                             .unwrap(),
                     }),
                     BuiltFunc::SizeOf => Some(ImCompleteSemanticToken {
+                        start: span.start,
+                        length: span.len(),
+                        token_type: LEGEND_TYPE
+                            .iter()
+                            .position(|item| item.as_str() == SemanticTokenType::KEYWORD.as_str())
+                            .unwrap(),
+                    }),
+                    BuiltFunc::TypeNameOf => Some(ImCompleteSemanticToken {
                         start: span.start,
                         length: span.len(),
                         token_type: LEGEND_TYPE

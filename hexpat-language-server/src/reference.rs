@@ -327,11 +327,20 @@ pub fn get_reference_of_expr(
         },
         Expr::AttributeArgument { name, value } => {
             get_reference_of_expr(
-                value,
+                name,
                 reference_symbol,
                 reference_list,
                 include_self,
             );
+
+            for arg in value {
+                get_reference_of_expr(
+                    arg,
+                    reference_symbol,
+                    reference_list,
+                    include_self,
+                );
+            }
         },
         Expr::WhileLoop { condition, body } => {
             get_reference_of_expr(
@@ -390,8 +399,10 @@ pub fn get_reference_of_expr(
             );
         },
         Expr::ArrayAccess { array: item, index: member } => {}, // TODO
-        Expr::ArrayDefinition { value_type, array_name, size: index, body } => {},
+        Expr::ArrayDefinition { value_type, array_name, size: index, body } => {}, // TODO
         Expr::Type { val } => (), // TODO
+        Expr::Match => (), // TODO
+        Expr::TryCatch => (), // TODO
     }
 }
 

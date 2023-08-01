@@ -229,6 +229,8 @@ pub fn get_completion_of(
         Expr::ArrayAccess { array: item, index: member } => true, // TODO
         Expr::ArrayDefinition { value_type, array_name, size, body } => true,
         Expr::Type { val } => true, // TODO
+        Expr::Match => true, // TODO
+        Expr::TryCatch => true, // TODO
     }
 }
 

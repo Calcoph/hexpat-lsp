@@ -225,7 +225,7 @@ pub fn semantic_token_from_expr(
                 .position(|item| item.as_str() == SemanticTokenType::TYPE.as_str())
                 .unwrap(),
         }),
-        Expr::Return { value } => semantic_tokens.push(ImCompleteSemanticToken {
+        Expr::Return { value } => semantic_tokens.push(ImCompleteSemanticToken { // TODO: color the value, not the return
             start: value.1.start,
             length: value.1.len(),
             token_type: LEGEND_TYPE
@@ -240,16 +240,18 @@ pub fn semantic_token_from_expr(
         Expr::Attribute { arguments } => for arg in &arguments.0 {
             semantic_token_from_expr(arg, semantic_tokens);
         },
-        Expr::AttributeArgument { name: (_, name_span), value } => {
+        Expr::AttributeArgument { name, value } => {
             semantic_tokens.push(ImCompleteSemanticToken {
-                start: name_span.start,
-                length: name_span.len(),
+                start: name.1.start,
+                length: name.1.len(),
                 token_type: LEGEND_TYPE
                     .iter()
                     .position(|item| item.as_str() == SemanticTokenType::PROPERTY.as_str())
                     .unwrap(),
             });
-            semantic_token_from_expr(value, semantic_tokens);
+            for arg in value {
+                semantic_token_from_expr(arg, semantic_tokens)
+            }
         },
         Expr::WhileLoop { condition, body } => {
             semantic_token_from_expr(condition, semantic_tokens);
@@ -286,5 +288,7 @@ pub fn semantic_token_from_expr(
         Expr::ArrayAccess { array, index } => {}, // TODO
         Expr::ArrayDefinition { value_type, array_name, size, body } => {}, // TODO
         Expr::Type { val } => (), // TODO
+        Expr::Match => (), // TODO
+        Expr::TryCatch => (), // TODO
     }
 }

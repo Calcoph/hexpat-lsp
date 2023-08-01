@@ -379,14 +379,24 @@ fn expr_comparer(expr1: &Expr, expr2: &Expr) -> Result<(), CompErr>{
                 Err(CompErr)
             }
         },
-        (Expr::AttributeArgument { name: (n1, _), value: v1 },
-            Expr::AttributeArgument { name: (n2, _), value: v2 }
-        ) => match n1 == n2 {
-            true => match expr_comparer(&v1.0, &v2.0) {
-                Ok(_) => Ok(()),
-                Err(e) => Err(e),
+        (Expr::AttributeArgument { name: n1, value: v1 },
+            Expr::AttributeArgument { name: n2, value: v2 }
+        ) => match expr_comparer(&n1.0, &n2.0) {
+            Ok(_) => {
+                for ((arg1, _), (arg2, _)) in v1.iter().zip(v2.iter()) {
+                    match expr_comparer(arg1, arg2) {
+                        Ok(_) => (),
+                        Err(e) => return Err(e),
+                    }
+                };
+                if v1.len() == v2.len() {
+                    Ok(())
+                } else {
+                    println!("Diferent length attribute arguments");
+                    Err(CompErr)
+                }
             },
-            false => {println!("Different names |{n1:?}, {n2:?}|");Err(CompErr)},
+            Err(e) => {println!("Different names |{n1:?}, {n2:?}|");Err(CompErr)},
         },
         (Expr::WhileLoop { condition: c1, body: b1 },
             Expr::WhileLoop { condition: c2, body: b2 }

@@ -7,11 +7,13 @@ use nom::{
         map,
         peek
     },
-    sequence::{pair as then, delimited, preceded}
+    sequence::{pair as then, delimited, preceded}, Parser
 };
 use nom_supreme::ParserExt;
 
-use crate::{token::{Spanned, Tokens, Token, Keyword, BuiltFunc}, combinators::{ignore, map_with_span, to}, m_parser::{numeric, operations::mathematical_expression, namespace_resolution, ident, value_type_any, member_access, function_call}, Expr, recovery_err::TokResult};
+use crate::{token::{Spanned, Tokens, Token, Keyword, BuiltFunc}, combinators::{ignore, map_with_span, to}, m_parser::{numeric, operations::mathematical_expression, namespace_resolution, ident, value_type_any, member_access, function_call, parse_type}, Expr, recovery_err::{TokResult, TokError}};
+
+use super::custom_type;
 
 pub(crate) fn factor<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
     choice((
@@ -31,10 +33,6 @@ pub(crate) fn factor<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned
             namespace_resolution
         ),
         member_access,
-        map_with_span(
-            just(Token::Op("$")),
-            |_, span| (Expr::Local { name: (String::from("$"), span.clone()) }, span)
-        ),
         builtin_func
     ))(input)
 }
@@ -51,73 +49,64 @@ fn unary<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
     )(input)
 }
 
+fn builtin_func_inner<'a, 'b>(input: Tokens<'a, 'b>, ident_parser: impl Parser<Tokens<'a,'b>,Spanned<String>,TokError<'a,'b>>) -> TokResult<'a, 'b, Spanned<Expr>> {
+    delimited(
+        just(Token::Separator('(')),
+        choice((
+            preceded(
+                peek(choice((
+                    ident_parser,
+                    map_with_span(
+                        just(Token::K(Keyword::Parent)),
+                        |_, span| (String::from("parent"), span)
+                    ),
+                    map_with_span(
+                        just(Token::K(Keyword::This)),
+                        |_, span| (String::from("this"), span)
+                    )
+                ))),
+                choice((
+                    namespace_resolution,
+                    member_access
+                ))
+            ),
+            map_with_span(
+                just(Token::Op("$")),
+                |_, span| (Expr::Local { name: (String::from("$"), span.clone()) }, span)
+            ),
+        )),
+        just(Token::Separator(')'))
+    )(input)
+}
+
 fn builtin_func<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
     // TODO: Make sure that it does the same as the original
+
     map_with_span(
         choice((
             then(
                 to(ignore(just(Token::B(BuiltFunc::AddressOf))), String::from("addressof")),
-                delimited(
-                    just(Token::Separator('(')),
-                    choice((
-                        preceded(
-                            peek(choice((
-                                ident,
-                                map_with_span(
-                                    just(Token::K(Keyword::Parent)),
-                                    |_, span| (String::from("parent"), span)
-                                ),
-                                map_with_span(
-                                    just(Token::K(Keyword::This)),
-                                    |_, span| (String::from("this"), span)
-                                )
-                            ))),
-                            member_access
-                        ),
-                        map_with_span(
-                            just(Token::Op("$")),
-                            |_, span| (Expr::Local { name: (String::from("$"), span.clone()) }, span)
-                        ),
-                    )),
-                    just(Token::Separator(')'))
-                )
+                |input2| builtin_func_inner(input2, ident)
             ),
             then(
                 to(ignore(just(Token::B(BuiltFunc::SizeOf))), String::from("sizeof")),
-                delimited(
-                    just(Token::Separator('(')),
-                    choice((
-                        preceded(
-                            peek(choice((
-                                ident,
-                                map_with_span(
-                                    just(Token::K(Keyword::Parent)),
-                                    |_, span| (String::from("parent"), span)
-                                ),
-                                map_with_span(
-                                    just(Token::K(Keyword::This)),
-                                    |_, span| (String::from("this"), span)
-                                )
-                            ))),
-                            choice((
-                                namespace_resolution,
-                                member_access
-                            ))
-                        ),
-                        map(
-                            value_type_any,
-                            |(type_, span)| (
-                                Expr::UnnamedParameter { type_: (type_, span.clone()) },
-                                span
-                            )
-                        ),
-                        map_with_span(
-                            just(Token::Op("$")),
-                            |_, span| (Expr::Local { name: (String::from("$"), span.clone()) }, span)
-                        ),
-                    )),
-                    just(Token::Separator(')'))
-                )
+                |input2| builtin_func_inner(input2, map(
+                    then(
+                        ident,
+                        custom_type
+                    ),
+                    |((a, a_span), (b, b_span))| ("TODO".to_string(), a_span.start..b_span.end) 
+                ))
+            ),
+            then(
+                to(ignore(just(Token::B(BuiltFunc::TypeNameOf))), String::from("typenameof")),
+                |input2| builtin_func_inner(input2, map(
+                    then(
+                        ident,
+                        custom_type
+                    ),
+                    |((a, a_span), (b, b_span))| ("TODO".to_string(), a_span.start..b_span.end) 
+                ))
             )
         )),
         |((name, name_span), (argument, arg_span)), span| {
