@@ -116,7 +116,11 @@ fn recover_from_error<'a, 'b>(e: TokError<'a, 'b>) -> TokResult<'a, 'b, Spanned<
 
             match context {
                 nom_supreme::error::StackContext::Context(error_msg) => rest.state.report_error(RecoveredError(span.clone(), error_msg.to_string())),
-                _ => unreachable!()
+                nom_supreme::error::StackContext::Kind(error_kind) => {
+                    let error = error_kind.description().to_string();
+                    eprintln!("Unreachable code entered: {:?} | {}", span.clone(), error);
+                    rest.state.report_error(RecoveredError(span.clone(), error))
+                },
             };
 
             Ok((rest, (Expr::Error, span)))
