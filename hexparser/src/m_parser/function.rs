@@ -172,7 +172,24 @@ pub(crate) fn function_variable_decl<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult
                 ))
             ),
             |(expr, body), span| {
-                expr
+                match expr.0 {
+                    Expr::ArrayDefinition { value_type, array_name, size, body: body_ } => match body {
+                        Some(_) => (Expr::ArrayDefinition { value_type, array_name, size, body: body_ }, expr.1), // TODO: This should throw an error of some kind
+                        None => (Expr::ArrayDefinition { value_type, array_name, size, body: body_ }, expr.1)
+                    },
+                    Expr::Definition { value_type, name, body: body_ } => match body {
+                        Some(body) => {
+                            let a = body_.0;
+                            if let Expr::Value{ val: Value::Null } = a {
+                            } else {
+                                // TODO: This should throw an error of some kind
+                            };
+                            (Expr::Definition { value_type, name, body: Box::new(body) }, span)
+                        },
+                        None => (Expr::Definition { value_type, name, body: body_ }, expr.1)
+                    }
+                    _ => unreachable!()
+                }
             }
         )
     )))(input)
