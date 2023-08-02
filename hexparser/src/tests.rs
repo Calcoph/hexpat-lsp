@@ -1654,3 +1654,50 @@ fn test_pattern_unions() {
     let ((ex, _), _, _) = parse(test_str, &includeable_folders);
     expr_comparer(&ex, &expected_output).unwrap()
 }
+
+#[test]
+fn test_pattern_at_in_function() {
+    let test_str = "
+        fn func_with_at() {
+            u32 contents @ 0x00;
+        }
+    ";
+
+    let expected_output = Expr::ExprList {
+        list: vec![ 
+            (
+                Expr::Func {
+                    name: (String::from("func_with_at"), 0..0),
+                    args: (vec![], 0..0),
+                    body: spanbox!(Expr::ExprList {
+                        list: vec![(
+                            Expr::Definition {
+                                value_type: (
+                                    HexTypeDef {
+                                        endianness: Endianness::Unkown,
+                                        name: (HexType::V(ValueType::U32), 0..0),
+                                    },
+                                    0..0,
+                                ),
+                                name: blocal!("contents"),
+                                body: bnum!(),
+                            },
+                            0..0,
+                        )]
+                    })
+                },
+                0..0,
+            )
+        ],
+    };
+
+    let includeable_folders = vec![
+        String::from("~/.local/share/imhex"),
+        String::from("/usr/share/imhex"),
+        String::from("%localappdata%/imhex"),
+        String::from("%programfiles%/imhex"),
+    ];
+
+    let ((ex, _), _, _) = parse(test_str, &includeable_folders);
+    expr_comparer(&ex, &expected_output).unwrap()
+}
