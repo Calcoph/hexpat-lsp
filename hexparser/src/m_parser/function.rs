@@ -165,42 +165,14 @@ pub(crate) fn function_variable_decl<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult
         ),
         map_with_span(
             then(
-                parse_type,
-                then(
-                    separated_list1(
-                        just(Token::Separator(',')),
-                        ident_local
-                    ).context("Expected variable name"),
-                    opt(preceded(
-                        just(Token::Op("=")),
-                        non_opt(mathematical_expression.context("Expected mathematical expression"))
-                    ))
-                )
+                member_variable,
+                opt(preceded(
+                    just(Token::Op("=")),
+                    non_opt(mathematical_expression.context("Expected mathematical expression"))
+                ))
             ),
-            |(value_type, (mut names, body)), span| {
-                let body = Box::new(match body {
-                    Some(body) => body,
-                    None => (Expr::Value { val: Value::Null }, span.clone()),
-                });
-                let names_span = names.get(0).unwrap().1.start..names.get(names.len()-1).unwrap().1.end;
-                match names.len() {
-                    1 => (
-                        Expr::Definition {
-                            value_type,
-                            name: Box::new((names.pop().unwrap().0, names_span)),
-                            body
-                        },
-                        span
-                    ),
-                    _ => (
-                        Expr::Definition {
-                            value_type,
-                            name: Box::new((Expr::ExprList { list: names }, names_span)),
-                            body
-                        },
-                        span
-                    )
-                }
+            |(expr, body), span| {
+                expr
             }
         )
     )))(input)
