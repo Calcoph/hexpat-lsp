@@ -18,7 +18,9 @@ use nom::{
 };
 use nom_supreme::ParserExt;
 
-use crate::{token::{Spanned, Tokens, Token, Keyword, ValueType}, combinators::{map_with_span, spanned}, m_parser::{ident, parse_type, mathematical_expression, statement_body, FuncArgument, ident_local, Assignment, BinaryOp, member_access, function_call, assignment_expr, HexTypeDef}, Expr, Value, recovery_err::{TokResult, expression_recovery, non_opt}};
+use crate::{token::{Spanned, Tokens, Token, Keyword, ValueType}, combinators::{map_with_span, spanned}, m_parser::{ident, parse_type, mathematical_expression, FuncArgument, ident_local, Assignment, BinaryOp, member_access, function_call, assignment_expr, HexTypeDef}, Expr, Value, recovery_err::{TokResult, expression_recovery, non_opt}};
+
+use super::{code_block, member_variable};
 
 fn function_arguments<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Vec<Spanned<FuncArgument>>>> {
     map_with_span(
@@ -214,7 +216,7 @@ pub(crate) fn function_while_loop<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a
                     mathematical_expression.context("Expected boolean expression"),
                     just(Token::Separator(')')).context("Missing )"),
                 ),
-                statement_body.context("Expected expression")
+                code_block::function_statement::statement_body.context("Expected expression")
             )
         ),
         |(condition, body), span| (
@@ -245,7 +247,7 @@ pub(crate) fn function_for_loop<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 
                     ),
                     just(Token::Separator(')')).context("Missing )"),
                 ),
-                statement_body.context("Expected expression")
+                code_block::function_statement::statement_body.context("Expected expression")
             )
         ),
         |((var_init,
@@ -309,7 +311,9 @@ pub(crate) fn function_statements<'a, 'b: 'a>() -> (impl FnMut(Tokens<'a,'b>) ->
         function_variable_decl,
     ));
     let no_semicolon_expr = choice((
-        function_conditional,
+        code_block::function_statement::conditional,
+        code_block::function_statement::match_statement,
+        code_block::function_statement::try_catch,
         function_while_loop,
         function_for_loop,
     ));
@@ -393,47 +397,4 @@ pub(crate) fn function_controlflow_statement<'a, 'b>(input: Tokens<'a, 'b>) -> T
             |_, span| (Expr::Continue, span)
         ),
     )))(input)
-}
-
-pub(crate) fn function_conditional<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
-    expression_recovery(map_with_span(
-        preceded(
-            just(Token::K(Keyword::If)),
-            then(
-                delimited(
-                    just(Token::Separator('(')).context("Missing ("),
-                    mathematical_expression.context("Expected boolean expression"),
-                    just(Token::Separator(')')).context("Missing )")
-                ),
-                then(
-                    statement_body.context("Expected expression"),
-                    opt(preceded(
-                        just(Token::K(Keyword::Else)),
-                        non_opt(statement_body).context("Expected expression")
-                    ))
-                )
-            )
-        ),
-        |(test_,
-            (consequent, alternative)
-         ), span| {
-            let alternative = Box::new(match alternative {
-                Some(alt) => alt,
-                None => (Expr::Value { val: Value::Null }, span.clone()),
-            });
-            (
-                Expr::IfBlock {
-                    ifs: Box::new((
-                        Expr::If {
-                            test: Box::new(test_),
-                            consequent: Box::new(consequent)
-                        },
-                        span.clone()
-                    )), // TODO: Fix this mess (specially the span)
-                    alternative
-                },
-                span
-            )
-        }
-    ))(input)
 }
