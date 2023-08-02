@@ -512,7 +512,7 @@ fn recursive_namespace_access_to_hextype(expr: Expr, v: &mut Vec<String>) {
 
 struct TODO;
 
-fn custom_type_parameters<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<TODO>> {
+fn custom_type_parameters<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
     map_with_span(opt(delimited(
         just(Token::Op("<")),
         separated_list1(
@@ -523,7 +523,7 @@ fn custom_type_parameters<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Sp
             ))
         ),
         just(Token::Op(">"))
-    )), |a, span| (TODO, span))(input)
+    )), |a, span| (Expr::Value { val: Value::Null }, span))(input)
 }
 
 fn custom_type<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<HexType>> {
