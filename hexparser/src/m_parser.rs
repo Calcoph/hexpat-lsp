@@ -995,7 +995,7 @@ fn parse_enum<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>>
                 ),
                 delimited(
                     just(Token::Separator('{')).context("Missing {"),
-                    spanned(separated_list0(
+                    spanned(terminated(separated_list0(
                         just(Token::Separator(',')),
                         choice((
                             then(
@@ -1017,7 +1017,7 @@ fn parse_enum<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>>
                             ),
                             map(ident, |(a, a_span)| ((a, a_span.clone()), (Expr::Value { val: Value::Null }, a_span)))
                         )),
-                    )),
+                    ), opt(just(Token::Separator(','))))),
                     just(Token::Separator('}')).context("Expected } or valid enum expression")
                 )
             )
