@@ -677,7 +677,7 @@ fn array_declaration<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Option<
 fn member_variable<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
     choice((
         map_with_span(
-            tuple((
+            tuple(( // parseMemberArrayVariable parse_member_variable
                 parse_type,
                 namespace_resolution,
                 array_declaration,
@@ -718,12 +718,26 @@ fn member_variable<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<E
                 tuple((
                     parse_type,
                     namespace_resolution,
-                    preceded(
-                        just(Token::Op("@")),
-                        mathematical_expression.context("Expected mathematical expression")
+                    terminated( // TODO: remove "terminated" so "In" part is taken into account
+                        preceded(
+                            just(Token::Op("@")),
+                            mathematical_expression.context("Expected mathematical expression")
+                        ),
+                        opt(preceded(
+                            just(Token::K(Keyword::In)),
+                            mathematical_expression
+                        ))
                     )
                 )),
-                map_with_span(
+                tuple((
+                    parse_type,
+                    namespace_resolution,
+                    preceded(
+                        just(Token::Op("=")),
+                        mathematical_expression
+                    )
+                )),
+                map_with_span( // parseMemberVariable parse_member_variable
                     tuple((
                         parse_type,
                         namespace_resolution,
