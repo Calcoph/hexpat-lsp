@@ -297,7 +297,10 @@ pub(crate) fn function_statements<'a, 'b: 'a>() -> (impl FnMut(Tokens<'a,'b>) ->
         function_controlflow_statement,
         function_assignment,
         function_call,
-        function_variable_decl,
+        preceded( // TODO: Remove preceded so const is taken into account
+            opt(just(Token::K(Keyword::Const))),
+            function_variable_decl
+        )
     ));
     let no_semicolon_expr = choice((
         code_block::function_statement::conditional,
