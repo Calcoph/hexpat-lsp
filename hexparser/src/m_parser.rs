@@ -428,23 +428,33 @@ fn attribute_arg<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Exp
     )(input)
 }
 
-fn attribute<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
-    map_with_span(
-        separated_list1(
-            just(Token::Separator(',')),
-            attribute_arg
+fn attribute<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Option<Spanned<Expr>>> {
+    opt(delimited(
+        then(
+            just(Token::Separator('[')),
+            just(Token::Separator('['))
         ),
-        |arguments, span| {
-            let arg_span = arguments.get(0).unwrap().1.start..arguments.get(arguments.len()-1).unwrap().1.end;
-            let expr = Expr::Attribute {
-                arguments: (
-                    arguments,
-                    arg_span
-                )
-            };
-            (expr, span)
-        }
-    )(input)
+        map_with_span(
+            separated_list1(
+                just(Token::Separator(',')),
+                attribute_arg
+            ),
+            |arguments, span| {
+                let arg_span = arguments.get(0).unwrap().1.start..arguments.get(arguments.len()-1).unwrap().1.end;
+                let expr = Expr::Attribute {
+                    arguments: (
+                        arguments,
+                        arg_span
+                    )
+                };
+                (expr, span)
+            }
+        ),
+        non_opt(then(
+            just(Token::Separator(']')).context("Missing ]]"),
+            just(Token::Separator(']')).context("Missing ]")
+        ))
+    ))(input)
 }
 
 
@@ -598,6 +608,43 @@ fn padding<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
             )
         ),
         mathematical_expression
+    ))(input)
+}
+
+fn non_dolar_assignment_expr<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
+    expression_recovery(map_with_span(
+        tuple((
+            ident_local,
+            opt(choice((
+                to(just(Token::Op("+")), Assignment::Add),
+                to(just(Token::Op("-")), Assignment::Sub),
+                to(just(Token::Op("*")), Assignment::Mul),
+                to(just(Token::Op("/")), Assignment::Div),
+                to(just(Token::Op("%")), Assignment::Mod),
+                to(just(Token::Op("<<")), Assignment::LShift),
+                to(just(Token::Op(">>")), Assignment::RShift),
+                to(just(Token::Op("|")), Assignment::BOr),
+                to(just(Token::Op("&")), Assignment::BAnd),
+                to(just(Token::Op("^")), Assignment::BXor),
+            ))),
+            preceded(
+                just(Token::Op("=")),
+                mathematical_expression.context("Expected mathematical expression")
+            )
+        )),
+        |(loperand, assignment, roperand), span| {
+            let assignment = match assignment {
+                Some((ass, _)) => ass,
+                None => Assignment::Just
+            };
+            let expr = Expr::Binary {
+                loperand: Box::new(loperand),
+                operator: BinaryOp::Assign(assignment),
+                roperand: Box::new(roperand),
+            };
+    
+            (expr, span)
+        }
     ))(input)
 }
 
@@ -899,17 +946,7 @@ pub(crate) fn member<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned
                 function_controlflow_statement
             )),
             then(
-                opt(delimited(
-                    then(
-                        just(Token::Separator('[')),
-                        just(Token::Separator('['))
-                    ),
-                    attribute,
-                    non_opt(then(
-                        just(Token::Separator(']')).context("Missing ]]"),
-                        just(Token::Separator(']')).context("Missing ]")
-                    ))
-                )),
+                attribute,
                 many1(just(Token::Separator(';'))).context("Missing ;")
             )
         )
@@ -1051,11 +1088,18 @@ fn parse_enum<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>>
     ))(input)
 }
 
-fn bitfield_entry<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
-    choice((
+fn bitfield_entry_statements<'a, 'b: 'a>() -> (impl FnMut(Tokens<'a,'b>) -> TokResult<'a, 'b, Spanned<Expr>>, impl FnMut(Tokens<'a,'b>) -> TokResult<'a, 'b, Spanned<Expr>>) {
+    let semicolon_expr = terminated(choice((
+        non_dolar_assignment_expr,
         map_with_span(
             separated_pair(
-                ident,
+                preceded(
+                    opt(choice((
+                        just(Token::K(Keyword::Unsigned)),
+                        just(Token::K(Keyword::Signed))
+                    ))),
+                    ident
+                ),
                 just(Token::Op(":")),
                 mathematical_expression
             ),
@@ -1081,8 +1125,92 @@ fn bitfield_entry<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Ex
                 span
             )
         ),
-        code_block::bitfield::conditional
-    ))(input)
+        map_with_span(
+            value_type_any,
+            |(name, n_span), span| (
+                Expr::BitFieldEntry {
+                    name: ("TYPE".to_string(), n_span.clone()), // TODO
+                    length: Box::new((Expr::Value { val: Value::Null }, n_span))
+                },
+                span
+            )
+        ),
+        map_with_span(
+            function_call,
+            |(name, n_span), span| (
+                Expr::BitFieldEntry {
+                    name: ("FUNCTION".to_string(), n_span.clone()), // TODO
+                    length: Box::new((Expr::Value { val: Value::Null }, n_span)) // TODO
+                },
+                span
+            )
+        ),
+        map_with_span(
+            then(
+                opt(then(
+                    namespace_resolution,
+                    custom_type_parameters,
+                )),
+                choice((
+                    then(
+                        ident,
+                        delimited(
+                            just(Token::Separator('[')),
+                            choice((
+                                delimited(
+                                    then(
+                                        just(Token::K(Keyword::While)),
+                                        just(Token::Separator('('))
+                                    ),
+                                    mathematical_expression,
+                                    just(Token::Separator(')'))
+                                ),
+                                mathematical_expression
+                            )),
+                            just(Token::Separator(']')),
+                        )
+                    ),
+                    separated_pair(
+                        ident,
+                        just(Token::Op(":")),
+                        mathematical_expression
+                    ),
+                    then(
+                        ident,
+                        member_variable
+                    )
+                ))
+            ),
+            |(name, other), span| (
+                Expr::BitFieldEntry {
+                    name: ("TODO".to_string(), span.clone()),
+                    length: Box::new((Expr::Value { val: Value::Null }, span.clone()))
+                },
+                span
+            )
+        ),
+        function_controlflow_statement
+    )), attribute);
+
+    let no_semicolon_expr = choice((
+        code_block::bitfield::conditional,
+        code_block::bitfield::try_catch,
+        code_block::bitfield::match_statement,
+    ));
+
+    (semicolon_expr, no_semicolon_expr)
+}
+
+fn bitfield_entry<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
+    let (semicolon_expr, no_semicolon_expr) = bitfield_entry_statements();
+
+    expression_recovery(choice((
+        terminated(
+            semicolon_expr,
+            many1(just(Token::Separator(';'))).context("Missing ;")
+        ),
+        no_semicolon_expr,
+    )))(input)
 }
 
 fn parse_bitfield<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
@@ -1093,13 +1221,7 @@ fn parse_bitfield<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Ex
                 ident.context("Expected bitfield name"),
                 delimited(
                     just(Token::Separator('{')).context("Missing {"),
-                    terminated(
-                        separated_list0(
-                            many1(just(Token::Separator(';'))),
-                            bitfield_entry
-                        ),
-                        many0(just(Token::Separator(';')))
-                    ),
+                    many0(bitfield_entry),
                     just(Token::Separator('}')).context("Expected } or valid bitfield expression")
                 )
             )
@@ -1429,17 +1551,7 @@ fn statements<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>>
         terminated(
             semicolon_expr,
             then(
-                opt(delimited(
-                    then(
-                        just(Token::Separator('[')),
-                        just(Token::Separator('['))
-                    ),
-                    attribute,
-                    non_opt(then(
-                        just(Token::Separator(']')).context("Missing ]]"),
-                        just(Token::Separator(']')).context("Missing ]")
-                    ))
-                )),
+                attribute,
                 |input: Tokens<'a, 'b>| {
                     match many1(just(Token::Separator(';'))).context("Missing ;").parse(input) {
                         Ok((i, _)) => Ok((i, (Expr::Error, 0..1))), // It doesn't matter if it's not really an error, it will be ignored by terminated()
@@ -1467,17 +1579,7 @@ fn statements<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>>
         terminated(
             no_semicolon_expr,
             then(
-                opt(delimited(
-                    then(
-                        just(Token::Separator('[')),
-                        just(Token::Separator('['))
-                    ),
-                    attribute,
-                    non_opt(then(
-                        just(Token::Separator(']')).context("Missing ]]"),
-                        just(Token::Separator(']')).context("Missing ]")
-                    ))
-                )),
+                attribute,
                 many0(just(Token::Separator(';')))
             )
         )
