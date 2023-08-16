@@ -225,14 +225,9 @@ pub fn semantic_token_from_expr(
                 .position(|item| item.as_str() == SemanticTokenType::TYPE.as_str())
                 .unwrap(),
         }),
-        Expr::Return { value } => semantic_tokens.push(ImCompleteSemanticToken { // TODO: color the value, not the return
-            start: value.1.start,
-            length: value.1.len(),
-            token_type: LEGEND_TYPE
-                .iter()
-                .position(|item| item.as_str() == SemanticTokenType::KEYWORD.as_str())
-                .unwrap(),
-        }),
+        Expr::Return { value } => {
+            semantic_token_from_expr(value, semantic_tokens);
+        },
         Expr::Access { item, member } => {
             semantic_token_from_expr(item, semantic_tokens);
             semantic_token_from_expr(member, semantic_tokens);

@@ -2,6 +2,7 @@
 * Improved namespace completion
 * Improved error recovery
 * Multiline comments stop throwing errors
+* Return statements get colored correctly
 
 # v0.2.3
 * Sections
