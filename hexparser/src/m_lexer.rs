@@ -369,21 +369,40 @@ fn str_<'a, 'b>(input: StrSpan<'a, 'b>) -> StrResult<StrSpan<'a, 'b>, TokSpan<'a
     // A parser for strings
     let inp_start = input.span().start;
     let state = input.extra;
+
+    let erroring_closing_quote = |input: StrSpan<'a, 'b>| -> StrResult<StrSpan<'a, 'b>, StrSpan<'a, 'b>> {
+        let state = input.extra;
+        let span = input.span();
+        let span = if span.end == 0 {
+            0..0
+        } else {
+            span.end-1..span.end
+        };
+
+        match just(r#"""#)(input) {
+            Err(_) => {
+                state.report_error(RecoveredError(span, "Missing closing \"".to_string()));
+                Ok((input, StrSpan::new_extra("", state)))
+            },
+            a => a
+        }
+    };
+
     map( // TODO: Match for the Error of "delimited" (missing closing '"'")
         delimited(
-            just("\""),
+            just(r#"""#),
             many0(choice((
-                just("\\\\"),
-                just("\\\""),
+                just(r"\\"),
+                just(r#"\""#),
                 map_opt(
                     take(1 as u8),
                     |c: StrSpan| match *c.fragment() {
-                        "\"" => None,
+                        r#"""# => None,
                         _ => Some(c)
                     }
                 )
             ))),
-            just("\"")
+            erroring_closing_quote // just(r#"""#)
         ),
         move |s: Vec<StrSpan<'a, 'b>>| {
             let (span, s) = if s.len() > 0 {
@@ -603,14 +622,14 @@ fn lexer<'a, 'b>(input: StrSpan<'a, 'b>) -> StrResult<StrSpan<'a, 'b>, Vec<TokSp
         delimited(just("/*"), anything_until_multicomment_end, just("*/"))
     ));
 
-    let padding = map(
+    let padding = map_with_span(
         choice((
             comment,
             multispace1
         )),
-        |s: StrSpan| {
+        |s: StrSpan, span| {
             let state = s.extra;
-            TokSpan::from_strspan(Token::Comment(s.fragment()), state, s.span())
+            TokSpan::from_strspan(Token::Comment(s.fragment()), state, span)
         }
     );
 

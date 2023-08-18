@@ -416,7 +416,14 @@ pub fn parse(
                     }),
                 },
                 Token::Pre(_) => None,
-                Token::Comment(_) => None,
+                Token::Comment(_) => Some(ImCompleteSemanticToken {
+                    start: span.start,
+                    length: span.len(),
+                    token_type: LEGEND_TYPE
+                        .iter()
+                        .position(|item| item.as_str() == SemanticTokenType::COMMENT.as_str())
+                        .unwrap(),
+                }),
                 Token::Err => None,
             })
             .collect::<Vec<_>>();
