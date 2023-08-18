@@ -32,7 +32,7 @@ use nom::{
 };
 use nom_supreme::error::{GenericErrorTree, ErrorTree};
 
-use crate::{recovery_err::{StrResult, StrSpan, RecoveredError, ParseState, ToRange}, token::{TokSpan, FromStrSpan, Token, PreProc, Keyword, BuiltFunc, ValueType}, combinators::ignore};
+use crate::{recovery_err::{StrResult, StrSpan, RecoveredError, ParseState, ToRange}, token::{TokSpan, FromStrSpan, Token, PreProc, Keyword, BuiltFunc, ValueType}, combinators::{ignore, map_with_span}};
 
 pub fn anything_until_multicomment_end<T, E: ParseError<T>>(input: T) -> IResult<T, T, E>
 where
@@ -482,28 +482,33 @@ fn lexer<'a, 'b>(input: StrSpan<'a, 'b>) -> StrResult<StrSpan<'a, 'b>, Vec<TokSp
 
     // A parser for preproccessor directives start
     let preproc =
-        map(
+        map_with_span(
             then(
-                then(
+                preceded(
                     just("#"),
-                    choice(( // TODO: Error recovery here
+                    opt(choice((
                         just("include"),
                         just("pragma"),
                         just("define"),
-                    ))
+                    )))
                 ),
                 not_line_ending,
             ),
-            |((pound, command), arg): ((StrSpan, StrSpan), StrSpan)| {
-                let pre = match *command.fragment() {
-                    "include" => PreProc::Include(arg.fragment()),
-                    "pragma" => PreProc::Pragma(arg.fragment()),
-                    "define" => PreProc::Define(arg.fragment()),
-                    _ => unreachable!()
-                };
-                let span = pound.span().start..arg.span().end;
-                let state = command.extra;
-                TokSpan::from_strspan(Token::Pre(pre), state, span)
+            |(command, arg): (Option<StrSpan>, StrSpan), span| {
+                if let Some(command) = command {
+                    let pre = match *command.fragment() {
+                        "include" => PreProc::Include(arg.fragment()),
+                        "pragma" => PreProc::Pragma(arg.fragment()),
+                        "define" => PreProc::Define(arg.fragment()),
+                        _ => unreachable!()
+                    };
+                    let state = command.extra;
+                    TokSpan::from_strspan(Token::Pre(pre), state, span)
+                } else {
+                    let state = arg.extra;
+                    state.report_error(RecoveredError(span.clone(), "#pragma, #include or #define not found".to_string()));
+                    TokSpan::from_strspan(Token::Err, state, span)
+                }
             }
         );
 

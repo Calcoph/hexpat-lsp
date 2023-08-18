@@ -47,7 +47,9 @@ impl<'a, 'b> ToRange for StrSpan<'a, 'b> {
 
     #[allow(unused_variables)]
     fn consumed_span(&self, next_start: usize) -> Range<usize> {
-        unimplemented!()
+        let start = self.span().start;
+
+        start..next_start
     }
 }
 
