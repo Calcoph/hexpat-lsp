@@ -6,6 +6,7 @@
 * Comments get colored correctly
 * Booleans get colored correctly
 * Punctuation get colored correctly
+* #include no longer throw errors on the first opened file as if the files didn't exist
 
 # v0.2.3
 * Sections

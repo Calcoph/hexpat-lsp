@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::str::FromStr;
 
 use dashmap::DashMap;
 use hexparser::recovery_err::RecoveredError;
@@ -307,7 +308,7 @@ impl LanguageServer for Backend {
         self.on_change(TextDocumentItem {
             uri: params.text_document.uri,
             text: params.text_document.text,
-            version: params.text_document.version,
+            version: Some(params.text_document.version),
         })
         .await
     }
@@ -320,7 +321,7 @@ impl LanguageServer for Backend {
         self.on_change(TextDocumentItem {
             uri: params.text_document.uri,
             text: std::mem::take(&mut params.content_changes[0].text),
-            version: params.text_document.version,
+            version: Some(params.text_document.version),
         })
         .await
     }
@@ -412,7 +413,7 @@ impl Notification for CustomNotification {
 struct TextDocumentItem {
     uri: Url,
     text: String,
-    version: i32,
+    version: Option<i32>,
 }
 impl Backend {
     async fn inlay_hint(&self, params: InlayHintParams) -> Result<Vec<(usize, usize, String)>> {
@@ -445,6 +446,10 @@ impl Backend {
         let rope = ropey::Rope::from_str(&params.text);
         self.document_map
             .insert(params.uri.to_string(), rope.clone());
+        self.update_parse(params.uri, rope, &params.text, params.version).await
+    }
+
+    async fn update_parse(&self, uri: Url, rope: Rope, text: &str, version: Option<i32>) {
         let mut paths_v = vec![];
         let paths = self.configuration.get(CONFIG_IMHEX_BASE_FOLDERS);
         match paths {
@@ -456,7 +461,7 @@ impl Backend {
             },
             None => (),
         };
-        let (ast, errors, semantic_tokens) = parse(&params.text, &paths_v);
+        let (ast, errors, semantic_tokens) = parse(text, &paths_v);
         self.client
             .log_message(MessageType::INFO, format!("{:?}", errors))
             .await;
@@ -481,15 +486,15 @@ impl Backend {
             })
             .collect::<Vec<_>>();
         self.client
-            .publish_diagnostics(params.uri.clone(), diagnostics, Some(params.version))
+            .publish_diagnostics(uri.clone(), diagnostics, version)
             .await;
 
-        self.ast_map.insert(params.uri.to_string(), ast);
+        self.ast_map.insert(uri.to_string(), ast);
         self.client
             .log_message(MessageType::INFO, &format!("{:?}", semantic_tokens))
             .await;
         self.semantic_token_map
-            .insert(params.uri.to_string(), semantic_tokens);
+            .insert(uri.to_string(), semantic_tokens);
     }
 
     async fn update_configuration(&self) {
@@ -528,6 +533,12 @@ impl Backend {
 
         self.configuration.insert(CONFIG_IMHEX_BASE_FOLDERS.to_string(), paths);
         self.configuration.insert(CONFIG_IMHEX_PORT.to_string(), port);
+
+        for document in self.document_map.iter() {
+            let uri = Url::from_str(document.key()).unwrap();
+            let rope = document.value();
+            self.update_parse(uri, rope.clone(), &rope.to_string(), None).await
+        }
     }
 
     fn execute_run_on_imhex(&self, command: ExecuteCommandParams) -> Result<Option<jValue>> {
