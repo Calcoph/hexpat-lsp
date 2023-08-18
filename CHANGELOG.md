@@ -3,6 +3,9 @@
 * Improved error recovery
 * Multiline comments stop throwing errors
 * Return statements get colored correctly
+* Comments get colored correctly
+* Booleans get colored correctly
+* Punctuation get colored correctly
 
 # v0.2.3
 * Sections

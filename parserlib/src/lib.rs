@@ -17,4 +17,6 @@ pub const LEGEND_TYPE: &[SemanticTokenType] = &[
     SemanticTokenType::new("dollar"), // 13
     SemanticTokenType::ENUM_MEMBER, // 14
     SemanticTokenType::new("union"), // 15
+    SemanticTokenType::new("boolean"), // 16
+    SemanticTokenType::new("punctuation"), // 17
 ];

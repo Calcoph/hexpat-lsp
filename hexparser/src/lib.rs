@@ -101,7 +101,14 @@ pub fn parse(
                 (tok.fragment(), off..off+tok.extra.1)
             })
             .filter_map(|(token, span)| match token {
-                Token::Bool(_) => None,
+                Token::Bool(_) => Some(ImCompleteSemanticToken {
+                    start: span.start,
+                    length: span.len(),
+                    token_type: LEGEND_TYPE
+                        .iter()
+                        .position(|item| item.as_str() == SemanticTokenType::new("boolean").as_str())
+                        .unwrap(),
+                }),
                 Token::Num(_) => Some(ImCompleteSemanticToken {
                     start: span.start,
                     length: span.len(),
@@ -135,7 +142,14 @@ pub fn parse(
                             .position(|item| item.as_str() == SemanticTokenType::new("dollar").as_str())
                             .unwrap(),
                     }),
-                    "::" => None,
+                    "::" => Some(ImCompleteSemanticToken {
+                        start: span.start,
+                        length: span.len(),
+                        token_type: LEGEND_TYPE
+                            .iter()
+                            .position(|item| item.as_str() == SemanticTokenType::new("punctuation").as_str())
+                            .unwrap(),
+                    }),
                     _ => Some(ImCompleteSemanticToken {
                         start: span.start,
                         length: span.len(),
@@ -145,7 +159,14 @@ pub fn parse(
                             .unwrap(),
                     })
                 },
-                Token::Separator(_) => None,
+                Token::Separator(_) => Some(ImCompleteSemanticToken {
+                    start: span.start,
+                    length: span.len(),
+                    token_type: LEGEND_TYPE
+                        .iter()
+                        .position(|item| item.as_str() == SemanticTokenType::new("punctuation").as_str())
+                        .unwrap(),
+                }),
                 Token::Ident(_) => None,
                 Token::K(k) => match k {
                     Keyword::Struct => Some(ImCompleteSemanticToken {
