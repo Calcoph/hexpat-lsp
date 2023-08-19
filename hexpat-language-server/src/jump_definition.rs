@@ -1,6 +1,16 @@
 use im_rc::Vector;
 use hexparser::{m_parser::{Expr, HexTypeDef, HexType, FuncArgument}, token::Spanned};
 
+macro_rules! early_return_get_definition_of_expr {
+    ($expr:expr, $definition_ass_list:expr, $ident_offset:expr, $is_defining:expr) => {
+        match get_definition_of_expr($expr, $definition_ass_list, $ident_offset, $is_defining) {
+            (true, None) => {}
+            (false, None) => return (false, None),
+            (_, Some(value)) => return (false, Some(value)),
+        }
+    };
+}
+
 pub fn get_definition(ast: &Spanned<Expr>, ident_offset: usize) -> Option<Spanned<String>> {
     let mut definition_ass_list = Vector::new();
     let (_, name) = get_definition_of_expr(&ast, &mut definition_ass_list, ident_offset, false);
@@ -49,85 +59,44 @@ fn get_definition_of_expr(
                     get_definition_of_expr(roperand, definition_ass_list, ident_offset, false)
                 }
                 (false, None) => (false, None),
-                (true, Some(value)) | (false, Some(value)) => (false, Some(value)),
+                (_, Some(value)) => (false, Some(value)),
             }
         }
         Expr::Call { func_name, arguments } => {
-            match get_definition_of_expr(func_name, definition_ass_list, ident_offset, false) {
-                (true, None) => {}
-                (true, Some(value)) => return (false, Some(value)),
-                (false, None) => return (false, None),
-                (false, Some(value)) => return (false, Some(value)),
-            }
+            early_return_get_definition_of_expr!(func_name, definition_ass_list, ident_offset, false);
             for expr in &arguments.0 {
-                match get_definition_of_expr(&expr, definition_ass_list, ident_offset, false) {
-                    (true, None) => continue,
-                    (true, Some(value)) => return (false, Some(value)),
-                    (false, None) => return (false, None),
-                    (false, Some(value)) => return (false, Some(value)),
-                }
+                early_return_get_definition_of_expr!(&expr, definition_ass_list, ident_offset, false)
             }
             (true, None)
         }
         Expr::If { test, consequent } => {
-            match get_definition_of_expr(test, definition_ass_list, ident_offset, false) {
-                (true, None) => {}
-                (true, Some(value)) => return (false, Some(value)),
-                (false, None) => return (false, None),
-                (false, Some(value)) => return (false, Some(value)),
-            }
+            early_return_get_definition_of_expr!(test, definition_ass_list, ident_offset, false);
             get_definition_of_expr(consequent, &mut definition_ass_list.clone(), ident_offset, false)
         }
         Expr::IfBlock { ifs, alternative } => {
-            match get_definition_of_expr(ifs, definition_ass_list, ident_offset, false) {
-                (true, None) => {}
-                (true, Some(value)) => return (false, Some(value)),
-                (false, None) => return (false, None),
-                (false, Some(value)) => return (false, Some(value)),
-            }
+            early_return_get_definition_of_expr!(ifs, definition_ass_list, ident_offset, false);
             get_definition_of_expr(alternative, &mut definition_ass_list.clone(), ident_offset, false)
         },
         Expr::Definition { value_type, name, body } => {
             match get_definition_of_type_def(value_type, definition_ass_list, ident_offset) {
                 (true, None) => (),
-                (true, Some(value)) => return (false, Some(value)),
                 (false, None) => return (false, None),
-                (false, Some(value)) => return (false, Some(value)),
+                (_, Some(value)) => return (false, Some(value)),
             }
-            match get_definition_of_expr(name, definition_ass_list, ident_offset, true) {
-                (true, None) => (),
-                (true, Some(value)) => return (false, Some(value)),
-                (false, None) => return (false, None),
-                (false, Some(value)) => return (false, Some(value)),
-            }
+            early_return_get_definition_of_expr!(name, definition_ass_list, ident_offset, true);
             get_definition_of_expr(body, definition_ass_list, ident_offset, false)
         },
         Expr::ExprList { list } => {
             for expr in list.iter() {
-                match get_definition_of_expr(&expr, definition_ass_list, ident_offset, false) {
-                    (true, None) => continue,
-                    (true, Some(value)) => return (false, Some(value)),
-                    (false, None) => return (false, None),
-                    (false, Some(value)) => return (false, Some(value)),
-                }
+                early_return_get_definition_of_expr!(&expr, definition_ass_list, ident_offset, false)
             }
             (true, None)
         },
         Expr::UnnamedParameter { type_ } => get_definition_of_type(type_, definition_ass_list, ident_offset),
         Expr::Unary { operation: _, operand } => get_definition_of_expr(operand, definition_ass_list, ident_offset, false),
         Expr::Ternary { loperand, moperand, roperand } => {
-            match get_definition_of_expr(loperand, definition_ass_list, ident_offset, false) {
-                (true, None) => (),
-                (true, Some(value)) => return (false, Some(value)),
-                (false, None) => return (false, None),
-                (false, Some(value)) => return (false, Some(value)),
-            }
-            match get_definition_of_expr(moperand, definition_ass_list, ident_offset, false) {
-                (true, None) => (),
-                (true, Some(value)) => return (false, Some(value)),
-                (false, None) => return (false, None),
-                (false, Some(value)) => return (false, Some(value)),
-            }
+            early_return_get_definition_of_expr!(loperand, definition_ass_list, ident_offset, false);
+            early_return_get_definition_of_expr!(moperand, definition_ass_list, ident_offset, false);
             get_definition_of_expr(roperand, definition_ass_list, ident_offset, false)
         },
         Expr::BitFieldEntry { name, length: _ } => (true, None), // TODO: Add name to the definition list
@@ -155,12 +124,7 @@ fn get_definition_of_expr(
             let mut new_scope = definition_ass_list.clone();
             for arg in &args.0 {
                 match arg.0 {
-                    FuncArgument::Parameter(ref arg) => match get_definition_of_expr(arg, &mut new_scope, ident_offset, true) {
-                        (true, None) => continue,
-                        (true, Some(value)) => return (false, Some(value)),
-                        (false, None) => return (false, None),
-                        (false, Some(value)) => return (false, Some(value)),
-                    },
+                    FuncArgument::Parameter(ref arg) => early_return_get_definition_of_expr!(arg, &mut new_scope, ident_offset, true),
                     FuncArgument::ParameterPack(_) => (),
                 }
             }
@@ -177,12 +141,7 @@ fn get_definition_of_expr(
             ret
         },
         Expr::Namespace { name, body } => {
-            match get_definition_of_expr(name, definition_ass_list, ident_offset, true) {
-                (true, None) => (),
-                (true, Some(value)) => return (false, Some(value)),
-                (false, None) => return (false, None),
-                (false, Some(value)) => return (false, Some(value)),
-            };
+            early_return_get_definition_of_expr!(name, definition_ass_list, ident_offset, true);
             // TODO: retain the scope but with a prefix of the namespace name
             get_definition_of_expr(body, &mut definition_ass_list.clone(), ident_offset, false)
         },
@@ -190,9 +149,8 @@ fn get_definition_of_expr(
             definition_ass_list.push_back(NameDefinition::Var(name.clone()));
             match get_definition_of_type_def(value_type, definition_ass_list, ident_offset) {
                 (true, None) => (),
-                (true, Some(value)) => return (false, Some(value)),
                 (false, None) => return (false, None),
-                (false, Some(value)) => return (false, Some(value)),
+                (_, Some(value)) => return (false, Some(value)),
             }
             get_definition_of_expr(body, definition_ass_list, ident_offset, false)
         },
@@ -201,55 +159,25 @@ fn get_definition_of_expr(
             get_definition_of_expr(body, definition_ass_list, ident_offset, false)
         },
         Expr::Access { item, member } => {
-            match get_definition_of_expr(item, definition_ass_list, ident_offset, is_defining) {
-                (true, None) => (),
-                (true, Some(value)) => return (false, Some(value)),
-                (false, None) => return (false, None),
-                (false, Some(value)) => return (false, Some(value)),
-            }
+            early_return_get_definition_of_expr!(item, definition_ass_list, ident_offset, is_defining);
             get_definition_of_expr(member, definition_ass_list, ident_offset, is_defining)
         },
         Expr::Attribute { arguments } => {
             for expr in arguments.0.iter() {
-                match get_definition_of_expr(&expr, definition_ass_list, ident_offset, false) {
-                    (true, None) => continue,
-                    (true, Some(value)) => return (false, Some(value)),
-                    (false, None) => return (false, None),
-                    (false, Some(value)) => return (false, Some(value)),
-                }
+                early_return_get_definition_of_expr!(&expr, definition_ass_list, ident_offset, false);
             }
             (true, None)
         },
         Expr::AttributeArgument { name, value } => (true, None),  // TODO: Check if anything defined can be in arguments
         Expr::WhileLoop { condition, body } => {
-            match get_definition_of_expr(condition, definition_ass_list, ident_offset, false) {
-                (true, None) => (),
-                (true, Some(value)) => return (false, Some(value)),
-                (false, None) => return (false, None),
-                (false, Some(value)) => return (false, Some(value)),
-            }
+            early_return_get_definition_of_expr!(condition, definition_ass_list, ident_offset, false);
             get_definition_of_expr(body, &mut definition_ass_list.clone(), ident_offset, false)
         },
         Expr::ForLoop { var_init, var_test, var_change, body } => {
             let mut new_scope = definition_ass_list.clone();
-            match get_definition_of_expr(var_init, &mut new_scope, ident_offset, false) {
-                (true, None) => (),
-                (true, Some(value)) => return (false, Some(value)),
-                (false, None) => return (false, None),
-                (false, Some(value)) => return (false, Some(value)),
-            }
-            match get_definition_of_expr(var_test, &mut new_scope, ident_offset, false) {
-                (true, None) => (),
-                (true, Some(value)) => return (false, Some(value)),
-                (false, None) => return (false, None),
-                (false, Some(value)) => return (false, Some(value)),
-            }
-            match get_definition_of_expr(var_change, &mut new_scope, ident_offset, false) {
-                (true, None) => (),
-                (true, Some(value)) => return (false, Some(value)),
-                (false, None) => return (false, None),
-                (false, Some(value)) => return (false, Some(value)),
-            }
+            early_return_get_definition_of_expr!(var_init, &mut new_scope, ident_offset, false);
+            early_return_get_definition_of_expr!(var_test, &mut new_scope, ident_offset, false);
+            early_return_get_definition_of_expr!(var_change, &mut new_scope, ident_offset, false);
             get_definition_of_expr(body, &mut new_scope, ident_offset, false)
         },
         Expr::Cast { cast_operator: _, operand } => get_definition_of_expr(operand, definition_ass_list, ident_offset, false),
