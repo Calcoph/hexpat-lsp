@@ -9,7 +9,7 @@ use nom::{
         not,
         opt
     },
-    sequence::{pair as then, terminated, delimited, preceded, separated_pair},
+    sequence::{pair as then, terminated, delimited, preceded, separated_pair, tuple},
     multi::{
        many0,
        many1,
@@ -35,13 +35,11 @@ fn function_arguments<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanne
                     map_with_span(
                         separated_pair(
                             just(Token::V(ValueType::Auto)), // TODO: Maybe don't ignore this
-                            then(
+                            tuple((
                                 just(Token::Separator('.')),
-                                then(
-                                    just(Token::Separator('.')),
-                                    just(Token::Separator('.')),
-                                )
-                            ),
+                                just(Token::Separator('.')),
+                                just(Token::Separator('.')),
+                            )),
                             ident
                         ),
                         |(_, name), span| {

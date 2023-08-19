@@ -388,7 +388,7 @@ fn str_<'a, 'b>(input: StrSpan<'a, 'b>) -> StrResult<StrSpan<'a, 'b>, TokSpan<'a
         }
     };
 
-    map( // TODO: Match for the Error of "delimited" (missing closing '"'")
+    map(
         delimited(
             just(r#"""#),
             many0(choice((

@@ -1613,7 +1613,7 @@ fn value_type_any<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<He
         spanned(take(1 as usize)),
         |(consumed, span): (Tokens<'a, 'b>, Range<usize>)|{
             match consumed.tokens[0].fragment() {
-                Token::V(type_) => Ok((HexType::V(*type_), span)), // TODO: Parse the number instead of always being 0.0
+                Token::V(type_) => Ok((HexType::V(*type_), span)),
                 _ => Err(ErrorTree::Base {
                     location: consumed,
                     kind: BaseErrorKind::External(Box::new(tokio::io::Error::new(ErrorKind::Other, "Expceted type")))

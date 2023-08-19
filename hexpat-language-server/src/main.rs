@@ -19,6 +19,7 @@ use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
 
 const LSP_NAME: &str = "hexpat-language-server";
+const LSP_VERSION: &str = "v0.2.4 (pre-release)";
 const COMMAND_RUN_ON_IMHEX: &str = "hexpat-language-server.runOnImHex";
 const DEFAULT_IMHEX_PORT: u16 = 31337;
 
@@ -44,7 +45,10 @@ struct Backend {
 impl LanguageServer for Backend {
     async fn initialize(&self, _: InitializeParams) -> Result<InitializeResult> {
         Ok(InitializeResult {
-            server_info: None,
+            server_info: Some(ServerInfo {
+                name: LSP_NAME.to_string(),
+                version: Some(LSP_VERSION.to_string())
+            }),
             capabilities: ServerCapabilities {
                 text_document_sync: Some(TextDocumentSyncCapability::Kind(
                     TextDocumentSyncKind::FULL,
@@ -619,7 +623,7 @@ impl Backend {
 
 #[tokio::main]
 async fn main() {
-    eprintln!("{LSP_NAME} v0.2.4 (pre-release)");
+    eprintln!("{LSP_NAME} {LSP_VERSION}");
     env_logger::init();
 
     let stdin = tokio::io::stdin();
