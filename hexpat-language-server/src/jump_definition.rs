@@ -260,8 +260,8 @@ fn get_definition_of_expr(
         Expr::ArrayAccess { array, index } => (true, None), // TODO
         Expr::ArrayDefinition { value_type, array_name, size, body } => (true, None), // TODO
         Expr::Type { val } => (true, None), // TODO
-        Expr::Match => (true, None), // TODO
-        Expr::TryCatch => (true, None), // TODO
+        Expr::Match { parameters, branches } => (true, None), // TODO
+        Expr::TryCatch { try_block, catch_block } => (true, None), // TODO
     }
 }
 

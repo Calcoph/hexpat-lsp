@@ -193,8 +193,20 @@ pub enum Expr {
     Type {
         val: HexTypeDef
     },
-    Match,
-    TryCatch,
+    Match {
+        parameters: Vec<Spanned<Expr>>,
+        branches: Vec<MatchBranch>
+    },
+    TryCatch {
+        try_block: Box<Spanned<Self>>,
+        catch_block: Option<Box<Spanned<Self>>>
+    },
+}
+
+#[derive(Debug, Clone)]
+pub struct MatchBranch {
+    pub case: Spanned<MatchCase>,
+    pub body: Spanned<Expr>
 }
 
 #[derive(Debug, Clone)]
@@ -457,27 +469,62 @@ fn attribute<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Option<Spanned<
     ))(input)
 }
 
+#[derive(Debug, Clone)]
+pub enum MatchCaseElement {
+    Range(Spanned<Expr>, Spanned<Expr>),
+    Expr(Spanned<Expr>)
+}
 
-fn case_parameters<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<TODO>> {
+#[derive(Debug, Clone)]
+pub enum MatchCaseItem {
+    Anything,
+    Element(MatchCaseElement),
+    OrList(Vec<MatchCaseElement>)
+}
+
+#[derive(Debug, Clone)]
+pub struct MatchCase {
+    pub case: Vec<Spanned<MatchCaseItem>>
+}
+
+fn case_parameters<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<MatchCase>> {
     map_with_span(delimited(
         just(Token::Separator('(')),
-        tuple((
+        separated_list1(
+            just(Token::Separator(',')),
             choice((
-                map(just(Token::K(Keyword::Underscore)), |a| TODO),
-                map(separated_list1(
+                to(just(Token::K(Keyword::Underscore)), MatchCaseItem::Anything),
+                map_with_span(separated_list1(
                     just(Token::Separator('|')),
-                    then(
-                        mathematical_expression,
-                        opt(preceded(
-                            tuple((just(Token::Separator('.')),just(Token::Separator('.')),just(Token::Separator('.')))),
-                            mathematical_expression
-                        ))
+                    map(
+                        then(
+                            mathematical_expression,
+                            opt(preceded(
+                                tuple((just(Token::Separator('.')),just(Token::Separator('.')),just(Token::Separator('.')))),
+                                mathematical_expression
+                            ))
+                        ),
+                        |(expr, range_end)| {
+                            match range_end {
+                                Some(range_end) => {
+                                    // expr is range_start
+                                    MatchCaseElement::Range(expr, range_end)
+                                },
+                                None => MatchCaseElement::Expr(expr),
+                            }
+                        }
                     )
-                ), |a| TODO)
+                ), |mut elements, span| {
+                    if elements.len() == 1 {
+                        (MatchCaseItem::Element(elements.pop().unwrap()), span)
+                    } else {
+                        (MatchCaseItem::OrList(elements), span)
+                    }
+                })
             )),
-        )),
+        ),
         just(Token::Separator(')'))
-    ), |a, span| (TODO, span))(input)
+    ), |case, span| (MatchCase {case}, span))(input)
 }
 
 #[derive(Debug, Clone)]

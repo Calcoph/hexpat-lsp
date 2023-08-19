@@ -7,6 +7,8 @@
 * Booleans get colored correctly
 * Punctuation get colored correctly
 * #include no longer throw errors on the first opened file as if the files didn't exist
+* Match statement support
+* Try-Catch statement support
 
 # v0.2.3
 * Sections

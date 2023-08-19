@@ -10,7 +10,7 @@ use nom_supreme::ParserExt;
 
 use crate::{m_parser::{function::function_statement, operations::mathematical_expression, member}, combinators::{map_with_span, spanned}, token::{Token, Tokens, Spanned, Keyword}, Expr, recovery_err::{TokResult, expression_recovery, non_opt, TokError}, Value};
 
-use super::{case_parameters, parameters};
+use super::{case_parameters, parameters, MatchBranch};
 
 
 pub(crate) mod function_statement;
@@ -107,20 +107,33 @@ where
     P: Parser<Tokens<'a, 'b>, Spanned<Expr>, TokError<'a,'b>> + Copy
 {
     expression_recovery(map_with_span(
-        tuple((
+        preceded(
             just(Token::K(Keyword::Match)),
-            parameters,
-            delimited(
-                just(Token::Separator('{')),
-                many1(separated_pair(
-                    case_parameters,
-                    just(Token::Op(":")),
-                    member_parser
-                )),
-                just(Token::Separator('}'))
-            )
-        )),
-        |(a, b, c), span| (Expr::Match, span) // TODO
+            tuple((
+                parameters,
+                delimited(
+                    just(Token::Separator('{')),
+                    many1(separated_pair(
+                        case_parameters,
+                        just(Token::Op(":")),
+                        member_parser
+                    )),
+                    just(Token::Separator('}'))
+                )
+            ))
+        ),
+        |(parameters, branches), span| {
+            let branches = branches.into_iter().map(|(case, body)| {
+                MatchBranch {
+                    case,
+                    body
+                }
+            }).collect();
+            (Expr::Match {
+                parameters,
+                branches
+            }, span)
+        } // TODO
     ))(input)
 }
 
@@ -129,22 +142,33 @@ where
     P: Parser<Tokens<'a, 'b>, Spanned<Expr>, TokError<'a,'b>> + Copy
 {
     expression_recovery(map_with_span(
-        tuple((
+        preceded(
             just(Token::K(Keyword::Try)),
-            delimited(
-                just(Token::Separator('{')),
-                many0(member_parser),
-                just(Token::Separator('}'))
-            ),
-            opt(then(
-                just(Token::K(Keyword::Catch)),
-                delimited(
+            then(
+                spanned(delimited(
                     just(Token::Separator('{')),
                     many0(member_parser),
                     just(Token::Separator('}'))
-                )
-            ))
-        )),
-        |a, span| (Expr::TryCatch, span) // TODO
+                )),
+                opt(spanned(preceded(
+                    just(Token::K(Keyword::Catch)),
+                    delimited(
+                        just(Token::Separator('{')),
+                        many0(member_parser),
+                        just(Token::Separator('}'))
+                    )
+                )))
+            )
+        ),
+        |((try_block, try_span), catch_block), span| {
+            let catch_block = catch_block.map(|(catch_block, catch_span)| {
+                Box::new((Expr::ExprList { list: catch_block }, catch_span))
+            });
+
+            (Expr::TryCatch {
+                try_block: Box::new((Expr::ExprList { list: try_block }, try_span)),
+                catch_block,
+            }, span) // TODO
+        }
     ))(input)
 }

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use parserlib::LEGEND_TYPE;
 use tower_lsp::lsp_types::SemanticTokenType;
 
-use hexparser::{ImCompleteSemanticToken, m_parser::Expr, token::Spanned};
+use hexparser::{ImCompleteSemanticToken, m_parser::{Expr, MatchBranch, MatchCaseItem, MatchCaseElement}, token::Spanned};
 
 pub fn semantic_token_from_ast(ast: &Spanned<Expr>) -> Vec<ImCompleteSemanticToken> {
     let mut semantic_tokens = vec![];
@@ -283,7 +283,54 @@ pub fn semantic_token_from_expr(
         Expr::ArrayAccess { array, index } => {}, // TODO
         Expr::ArrayDefinition { value_type, array_name, size, body } => {}, // TODO
         Expr::Type { val } => (), // TODO
-        Expr::Match => (), // TODO
-        Expr::TryCatch => (), // TODO
+        Expr::Match { parameters, branches } => {
+            for parameter in parameters {
+                semantic_token_from_expr(parameter, semantic_tokens)
+            }
+
+            for branch in branches {
+                let MatchBranch {
+                    case,
+                    body,
+                } = branch;
+                semantic_token_from_expr(body, semantic_tokens);
+                for (item, item_span) in case.0.case.iter() {
+                    match item {
+                        MatchCaseItem::Anything => {
+                            semantic_tokens.push(ImCompleteSemanticToken {
+                                start: item_span.start,
+                                length: item_span.len(),
+                                token_type: LEGEND_TYPE
+                                    .iter()
+                                    .position(|item| item.as_str() == SemanticTokenType::VARIABLE.as_str())
+                                    .unwrap(),
+                            });
+                        },
+                        MatchCaseItem::Element(element) => semantic_token_from_match_element(element, semantic_tokens),
+                        MatchCaseItem::OrList(elements) => {
+                            for element in elements {
+                                semantic_token_from_match_element(element, semantic_tokens)
+                            }
+                        },
+                    }
+                }
+            }
+        },
+        Expr::TryCatch { try_block, catch_block } => {
+            semantic_token_from_expr(&try_block, semantic_tokens);
+            if let Some(catch_block) = catch_block {
+                semantic_token_from_expr(&catch_block, semantic_tokens)
+            }
+        },
+    }
+}
+
+fn semantic_token_from_match_element(element: &MatchCaseElement, semantic_tokens: &mut Vec<ImCompleteSemanticToken>) {
+    match element {
+        MatchCaseElement::Range(exp1, exp2) => {
+            semantic_token_from_expr(exp1, semantic_tokens);
+            semantic_token_from_expr(exp2, semantic_tokens);
+        },
+        MatchCaseElement::Expr(exp) => semantic_token_from_expr(exp, semantic_tokens),
     }
 }

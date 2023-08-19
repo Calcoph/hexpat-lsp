@@ -401,8 +401,8 @@ pub fn get_reference_of_expr(
         Expr::ArrayAccess { array: item, index: member } => {}, // TODO
         Expr::ArrayDefinition { value_type, array_name, size: index, body } => {}, // TODO
         Expr::Type { val } => (), // TODO
-        Expr::Match => (), // TODO
-        Expr::TryCatch => (), // TODO
+        Expr::Match { parameters, branches  } => (), // TODO
+        Expr::TryCatch { try_block, catch_block } => (), // TODO
     }
 }
 

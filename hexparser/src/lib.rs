@@ -73,8 +73,8 @@ pub fn type_inference(expr: &Spanned<Expr>, symbol_type_table: &mut HashMap<Rang
         Expr::ArrayAccess { .. } => (), // TODO
         Expr::ArrayDefinition { .. } => (), // TODO
         Expr::Type { .. } => (), // TODO
-        Expr::Match => (), // TODO
-        Expr::TryCatch => (), // TODO
+        Expr::Match { .. } => (), // TODO
+        Expr::TryCatch { .. } => (), // TODO
     }
 }
 
