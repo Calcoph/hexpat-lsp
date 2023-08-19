@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use hexparser::{m_parser::Expr, token::Spanned};
+use hexparser::{m_parser::{Expr, MatchBranch, MatchCaseItem, MatchCaseElement}, token::Spanned};
 use tower_lsp::lsp_types::{CompletionItem, CompletionItemKind, InsertTextFormat};
 
 use crate::namespace_handling::namespace_to_string;
@@ -15,7 +15,6 @@ pub enum ImCompleteCompletionItem {
     NamespacedItem{namespace: String, item: Box<Self>},
     BitField(String)
 }
-/// return (need_to_continue_search, founded reference)
 pub fn completion(
     ast: &Spanned<Expr>,
     ident_offset: usize,
@@ -25,6 +24,7 @@ pub fn completion(
     map
 }
 
+/// return need_to_continue_search
 pub fn get_completion_of(
     expr: &Spanned<Expr>,
     definition_map: &mut HashMap<String, ImCompleteCompletionItem>,
@@ -229,9 +229,63 @@ pub fn get_completion_of(
         Expr::ArrayAccess { array: item, index: member } => true, // TODO
         Expr::ArrayDefinition { value_type, array_name, size, body } => true,
         Expr::Type { val } => true, // TODO
-        Expr::Match { parameters, branches  } => true, // TODO
-        Expr::TryCatch { try_block, catch_block } => true, // TODO
+        Expr::Match { parameters, branches  } => {
+            for parameter in parameters {
+                if !get_completion_of(parameter, definition_map, ident_offset) {
+                    return false;
+                }
+            }
+
+            for branch in branches {
+                if !get_completion_of_match_branch(branch, definition_map, ident_offset) {
+                    return false;
+                }
+            }
+
+            true
+        },
+        Expr::TryCatch { try_block, catch_block } => {
+            if let Some(catch_block) = catch_block {
+                if !get_completion_of(try_block, definition_map, ident_offset) {
+                    return false;
+                }
+                get_completion_of(catch_block, definition_map, ident_offset)
+            } else {
+                get_completion_of(try_block, definition_map, ident_offset)
+            }
+        },
     }
+}
+
+fn get_completion_of_match_branch(branch: &MatchBranch, definition_map: &mut HashMap<String, ImCompleteCompletionItem>, ident_offset: usize) -> bool {
+    let MatchBranch {
+        case,
+        body
+    } = branch;
+
+    for (case, _) in case.0.case.iter() {
+        match case {
+            MatchCaseItem::Anything => (),
+            MatchCaseItem::Element(element) => {
+                if !get_completion_of_match_case_element(element, definition_map, ident_offset) {
+                    return false
+                }
+            },
+            MatchCaseItem::OrList(elements) => {
+                for element in elements {
+                    if !get_completion_of_match_case_element(element, definition_map, ident_offset) {
+                        return false
+                    }
+                }
+            },
+        };
+    }
+
+    get_completion_of(body, definition_map, ident_offset)
+}
+
+fn get_completion_of_match_case_element(element: &MatchCaseElement, definition_map: &mut HashMap<String, ImCompleteCompletionItem>, ident_offset: usize) -> bool {
+    true // TODO
 }
 
 pub fn add_completion(item: ImCompleteCompletionItem, ret: &mut Vec<CompletionItem>, namespace: Option<String>) {
