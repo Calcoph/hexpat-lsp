@@ -775,10 +775,31 @@ fn member_variable<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<E
                 parse_type,
                 namespace_resolution,
                 array_declaration,
-                opt(preceded(
-                    just(Token::Op("@")),
-                    non_opt(mathematical_expression).context("Expected mathematical expression")
-                ))
+                opt(choice((
+                    preceded(
+                        just(Token::Op("@")),
+                        non_opt(mathematical_expression).context("Expected mathematical expression")
+                    ),
+                    preceded(
+                        just(Token::Op("=")),
+                        delimited(
+                            just(Token::Separator('[')),
+                            map_with_span(
+                                separated_list1(
+                                    just(Token::Separator(',')),
+                                    mathematical_expression
+                                ),
+                                |elements, span| {
+                                    (
+                                        Expr::ExprList { list: elements },
+                                        span
+                                    )
+                                }
+                            ),
+                            just(Token::Separator(']'))
+                        )
+                    )
+                )))
             )),
             |(value_type, name, array_size, body), span| {
                 let body = Box::new(match body {
@@ -1173,16 +1194,6 @@ fn bitfield_entry_statements<'a, 'b: 'a>() -> (impl FnMut(Tokens<'a,'b>) -> TokR
             )
         ),
         map_with_span(
-            value_type_any,
-            |(name, n_span), span| (
-                Expr::BitFieldEntry {
-                    name: ("TYPE".to_string(), n_span.clone()), // TODO
-                    length: Box::new((Expr::Value { val: Value::Null }, n_span))
-                },
-                span
-            )
-        ),
-        map_with_span(
             function_call,
             |(name, n_span), span| (
                 Expr::BitFieldEntry {
@@ -1194,10 +1205,13 @@ fn bitfield_entry_statements<'a, 'b: 'a>() -> (impl FnMut(Tokens<'a,'b>) -> TokR
         ),
         map_with_span(
             then(
-                opt(then(
-                    namespace_resolution,
-                    custom_type_parameters,
-                )),
+                opt(choice((
+                    ignore(parse_type), // TODO: Don't ignore
+                    ignore(tuple(( // TODO: Don't ignore
+                        namespace_resolution,
+                        custom_type_parameters,
+                    )))
+                ))),
                 choice((
                     then(
                         ident,
