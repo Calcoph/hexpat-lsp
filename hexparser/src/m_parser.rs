@@ -975,7 +975,48 @@ fn member_variable<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<E
                     )
                 }
             }
-        )
+        ),
+        map_with_span(
+            choice((
+                tuple((
+                    parse_type,
+                    terminated( // TODO: remove "terminated" so "In" part is taken into account
+                        preceded(
+                            just(Token::Op("@")),
+                            mathematical_expression.context("Expected mathematical expression")
+                        ),
+                        opt(preceded(
+                            just(Token::K(Keyword::In)),
+                            mathematical_expression
+                        ))
+                    )
+                )),
+                tuple((
+                    parse_type,
+                    preceded(
+                        just(Token::Op("=")),
+                        mathematical_expression
+                    )
+                )),
+                map_with_span( // parseMemberVariable parse_member_variable
+                    parse_type,
+                    |value_type, span| {
+                        (
+                            value_type,
+                            (Expr::Value { val: Value::Null }, span)
+                        )
+                    }
+                )
+            )),
+            |(value_type, body), span| (
+                Expr::Definition {
+                    value_type,
+                    name: Box::new((Expr::Value { val: Value::Null }, span.clone())),
+                    body: Box::new(body)
+                },
+                span
+            )
+        ),
     ))(input)
 }
 
@@ -1002,7 +1043,6 @@ pub(crate) fn member<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned
         terminated(
             choice((
                 assignment_expr,
-                member_declaration,
                 preceded(
                     just(Token::V(ValueType::Padding)),
                     delimited(
@@ -1011,6 +1051,7 @@ pub(crate) fn member<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned
                         just(Token::Separator(']')).context("Missing ]")
                     )
                 ),
+                member_declaration,
                 function_controlflow_statement
             )),
             then(
