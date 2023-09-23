@@ -101,7 +101,7 @@ pub fn semantic_token_from_expr(
         Expr::Unary { operation: _, operand } => {
             semantic_token_from_expr(operand, semantic_tokens)
         },
-        Expr::Using { new_name: (_, name_span), template_parameters, old_name: (_, old_name_span) } => { // TODO: template_parameters
+        Expr::Using { new_name: (_, name_span), template_parameters, old_name: (_, old_name_span) } => {
             semantic_tokens.push(ImCompleteSemanticToken {
                 start: name_span.start,
                 length: name_span.len(),
@@ -119,6 +119,9 @@ pub fn semantic_token_from_expr(
                     .position(|item| item.as_str() == SemanticTokenType::TYPE.as_str())
                     .unwrap(),
             });
+            if let Some(template_parameters) = template_parameters {
+                semantic_token_from_expr(template_parameters, semantic_tokens);
+            }
         },
         Expr::Continue => semantic_tokens.push(ImCompleteSemanticToken {
             start: expr.1.start,
@@ -165,7 +168,7 @@ pub fn semantic_token_from_expr(
             }
             semantic_token_from_expr(body, semantic_tokens)
         },
-        Expr::Struct { name: (_, name_span), body, template_parameters } => { // TODO: template_parameters
+        Expr::Struct { name: (_, name_span), body, template_parameters } => {
             semantic_tokens.push(ImCompleteSemanticToken {
                 start: name_span.start,
                 length: name_span.len(),
@@ -174,7 +177,10 @@ pub fn semantic_token_from_expr(
                     .position(|item| item.as_str() == SemanticTokenType::STRUCT.as_str())
                     .unwrap(),
             });
-            semantic_token_from_expr(body, semantic_tokens)
+            semantic_token_from_expr(body, semantic_tokens);
+            if let Some(template_parameters) = template_parameters {
+                semantic_token_from_expr(template_parameters, semantic_tokens)
+            }
         },
         Expr::Namespace { name, body } => {
             semantic_tokens.push(ImCompleteSemanticToken {
@@ -269,7 +275,7 @@ pub fn semantic_token_from_expr(
             });
             semantic_token_from_expr(operand, semantic_tokens);  
         },
-        Expr::Union { name: (_, name_span), body, template_parameters } => { // TODO: template_parameters
+        Expr::Union { name: (_, name_span), body, template_parameters } => {
             semantic_tokens.push(ImCompleteSemanticToken {
                 start: name_span.start,
                 length: name_span.len(),
@@ -279,10 +285,38 @@ pub fn semantic_token_from_expr(
                     .unwrap(),
             });
             semantic_token_from_expr(body, semantic_tokens);
+            if let Some(template_parameters) = template_parameters {
+                semantic_token_from_expr(template_parameters, semantic_tokens)
+            }
         },
-        Expr::ArrayAccess { array, index } => {}, // TODO
-        Expr::ArrayDefinition { value_type, array_name, size, body } => {}, // TODO
-        Expr::Type { val } => (), // TODO
+        Expr::ArrayAccess { array, index } => {
+            semantic_token_from_expr(array, semantic_tokens);
+            semantic_token_from_expr(index, semantic_tokens);
+        },
+        Expr::ArrayDefinition { value_type: (_, type_span), array_name, size, body } => {
+            semantic_token_from_expr(array_name, semantic_tokens);
+            semantic_token_from_expr(size, semantic_tokens);
+            semantic_tokens.push(ImCompleteSemanticToken {
+                start: type_span.start,
+                length: type_span.len(),
+                token_type: LEGEND_TYPE
+                    .iter()
+                    .position(|item| item.as_str() == SemanticTokenType::TYPE.as_str())
+                    .unwrap(),
+            });
+            semantic_token_from_expr(body, semantic_tokens)
+        },
+        Expr::Type { val } => {
+            let type_span = &expr.1;
+            semantic_tokens.push(ImCompleteSemanticToken {
+                start: type_span.start,
+                length: type_span.len(),
+                token_type: LEGEND_TYPE
+                    .iter()
+                    .position(|item| item.as_str() == SemanticTokenType::TYPE.as_str())
+                    .unwrap(),
+            });
+        },
         Expr::Match { parameters, branches } => {
             for parameter in parameters {
                 semantic_token_from_expr(parameter, semantic_tokens)
