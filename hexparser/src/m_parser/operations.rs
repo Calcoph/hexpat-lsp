@@ -126,7 +126,7 @@ fn shift_expression<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<
         then(
             choice((
                 to(just(Token::Op("<<")), BinaryOp::LShift),
-                to(just(Token::Op(">>")), BinaryOp::RShift)
+                to(then(just(Token::Op(">")), just(Token::Op(">"))), BinaryOp::RShift)
             )),
             additive_expression
         ),
@@ -178,7 +178,7 @@ fn relation_expression<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spann
             choice((
                 to(just(Token::Op(">")), BinaryOp::Greater),
                 to(just(Token::Op("<")), BinaryOp::Less),
-                to(just(Token::Op(">=")), BinaryOp::GreaterEqual),
+                to(then(just(Token::Op(">")), just(Token::Op("="))), BinaryOp::GreaterEqual),
                 to(just(Token::Op("<=")), BinaryOp::LessEqual)
             )),
             binary_or_expression

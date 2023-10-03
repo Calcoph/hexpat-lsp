@@ -443,13 +443,11 @@ fn lexer<'a, 'b>(input: StrSpan<'a, 'b>) -> StrResult<StrSpan<'a, 'b>, Vec<TokSp
                 just("=="),
                 just("!="),
                 just("<="),
-                just(">="),
             )),
             just("&&"),
             just("||"),
             just("^^"),
             just("<<"),
-            just(">>"),
             choice((
                 just("="),
                 just(":"),

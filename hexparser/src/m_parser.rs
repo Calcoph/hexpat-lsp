@@ -669,7 +669,7 @@ fn non_dolar_assignment_expr<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b,
                 to(just(Token::Op("/")), Assignment::Div),
                 to(just(Token::Op("%")), Assignment::Mod),
                 to(just(Token::Op("<<")), Assignment::LShift),
-                to(just(Token::Op(">>")), Assignment::RShift),
+                to(then(just(Token::Op(">")), just(Token::Op(">"))), Assignment::RShift),
                 to(just(Token::Op("|")), Assignment::BOr),
                 to(just(Token::Op("&")), Assignment::BAnd),
                 to(just(Token::Op("^")), Assignment::BXor),
@@ -712,7 +712,7 @@ fn assignment_expr<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<E
                 to(just(Token::Op("/")), Assignment::Div),
                 to(just(Token::Op("%")), Assignment::Mod),
                 to(just(Token::Op("<<")), Assignment::LShift),
-                to(just(Token::Op(">>")), Assignment::RShift),
+                to(then(just(Token::Op(">")), just(Token::Op(">"))), Assignment::RShift),
                 to(just(Token::Op("|")), Assignment::BOr),
                 to(just(Token::Op("&")), Assignment::BAnd),
                 to(just(Token::Op("^")), Assignment::BXor),
@@ -1612,7 +1612,7 @@ fn normal_placement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<
                 ignore(just(Token::K(Keyword::BigEndian))),
                 ignore(just(Token::K(Keyword::LittleEndian))),
                 ignore(value_type_any),
-        ))),
+                ))),
         placement.context("Expected variable declaration")
     ))(input)
 }
