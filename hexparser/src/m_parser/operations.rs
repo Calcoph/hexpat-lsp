@@ -176,10 +176,10 @@ fn relation_expression<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spann
     fold_many0_once(
         then(
             choice((
+                to(then(just(Token::Op(">")), just(Token::Op("="))), BinaryOp::GreaterEqual),
+                to(just(Token::Op("<=")), BinaryOp::LessEqual),
                 to(just(Token::Op(">")), BinaryOp::Greater),
                 to(just(Token::Op("<")), BinaryOp::Less),
-                to(then(just(Token::Op(">")), just(Token::Op("="))), BinaryOp::GreaterEqual),
-                to(just(Token::Op("<=")), BinaryOp::LessEqual)
             )),
             binary_or_expression
         ),
