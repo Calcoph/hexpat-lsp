@@ -198,7 +198,7 @@ pub fn get_reference_of_expr(
         Expr::Using { new_name, template_parameters, old_name } => (), // TODO
         Expr::Continue => (),
         Expr::Break => (),
-        Expr::ExprList { list } => for exp in list {
+        Expr::StatementList { list } => for exp in list {
             get_reference_of_expr(
                 exp,
                 reference_symbol,

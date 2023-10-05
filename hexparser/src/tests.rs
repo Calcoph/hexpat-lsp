@@ -4,7 +4,7 @@ use std::{cell::RefCell, collections::HashMap, env::args};
 
 use nom::multi::separated_list1;
 use nom::bytes::complete::tag as just;
-use crate::{m_lexer, m_parser::{self, token_parse, parse_namespace, ident, parse_struct, BinaryOp, HexTypeDef, Endianness, HexType, FuncArgument, UnaryOp}, simple_debug::SimpleDebug, token::{Token, Tokens, ValueType}, expand_preprocessor_tokens, Expr, Value, parse};
+use crate::{m_lexer, m_parser::{self, token_parse, parse_namespace, ident, parse_struct, BinaryOp, HexTypeDef, Endianness, HexType, FuncArgument, UnaryOp, Statement, FuncCall, Definition}, simple_debug::SimpleDebug, token::{Token, Tokens, ValueType}, expand_preprocessor_tokens, Expr, Value, parse};
 
 macro_rules! get_tokens {
     ( $test_str:expr, $var:ident ) => {
@@ -110,16 +110,112 @@ fn eq_hextype(ht1: &HexType, ht2: &HexType) -> bool {
     }
 } 
 
-fn expr_comparer(expr1: &Expr, expr2: &Expr) -> Result<(), CompErr>{
+fn stmnt_comparer(stmnt1: &Statement, stmnt2: &Statement) -> Result<(), CompErr> {
+    match (stmnt1, stmnt2) {
+        (Statement::If { test: test1, consequent: cons1 },
+            Statement::If { test: test2, consequent: cons2 }
+        ) => match expr_comparer(&test1.0, &test2.0) {
+            Ok(_) => match expr_comparer(&cons1.0, &cons2.0) {
+                Ok(_) => Ok(()),
+                Err(e) => Err(e),
+            },
+            Err(e) => Err(e),
+        },
+        (Statement::IfBlock { ifs: if1, alternative: alt1 },
+            Statement::IfBlock { ifs: if2, alternative: alt2 }
+        ) => match expr_comparer(&if1.0, &if2.0) {
+            Ok(_) => match expr_comparer(&alt1.0, &alt2.0) {
+                Ok(_) => Ok(()),
+                Err(e) => Err(e),
+            },
+            Err(e) => Err(e),
+        },
+        (Statement::BitFieldEntry { name: (n1, _), length: l1 },
+            Statement::BitFieldEntry { name: (n2, _), length: l2 }
+        ) => match n1 == n2 {
+            true => match expr_comparer(&l1.0, &l2.0) {
+                Ok(_) => Ok(()),
+                Err(e) => Err(e),
+            },
+            false => {println!("Different bitfield names");Err(CompErr)},
+        },
+        (
+            Statement::Using { new_name: (n1, _), template_parameters: None, old_name: (
+                HexTypeDef { endianness: e1, name: (hn1, _) }, _
+            ) },
+            Statement::Using { new_name: (n2, _), template_parameters: None, old_name: (
+                HexTypeDef { endianness: e2, name: (hn2, _) }, _
+            ) }
+        ) => match n1 == n2 {
+            true => match e1 == e2 {
+                true => match eq_hextype(hn1, hn2) {
+                    true => Ok(()),
+                    false => {println!("Different types |{hn1:?}, {hn2:?}|");Err(CompErr)},
+                },
+                false => {println!("Different endianness |{e1:?}, {e2:?}|");Err(CompErr)},
+            },
+            false => {println!("Different names |{n1:?}, {n2:?}|");Err(CompErr)},
+        },
+        (Statement::ForLoop { var_init: v_i1, var_test: v_t1, var_change: v_c1, body: b1 },
+            Statement::ForLoop { var_init: v_i2, var_test: v_t2, var_change: v_c2, body: b2 }
+        ) => match stmnt_comparer(&v_i1.0, &v_i2.0) {
+            Ok(_) => match expr_comparer(&v_t1.0, &v_t2.0) {
+                Ok(_) => match stmnt_comparer(&v_c1.0, &v_c2.0) {
+                    Ok(_) => match expr_comparer(&b1.0, &b2.0) {
+                        Ok(_) => Ok(()),
+                        Err(e) => Err(e),
+                    },
+                    Err(e) => Err(e),
+                },
+                Err(e) => Err(e),
+            },
+            Err(e) => Err(e),
+        },
+        (Statement::Union { name: (n1, _), body: b1, template_parameters: None },
+            Statement::Union { name: (n2, _), body: b2, template_parameters: None }
+        ) => match n1 == n2 {
+            true => match expr_comparer(&b1.0, &b2.0) {
+                Ok(_) => Ok(()),
+                Err(e) => Err(e),
+            },
+            false => {println!("Different names |{n1:?}, {n2:?}|");Err(CompErr)},
+        },
+        (Statement::ArrayDefinition {
+            value_type: (HexTypeDef { endianness: e1, name: (hn1, _) }, _),
+            array_name: n1, size: s1, body: b1 },
+        Statement::ArrayDefinition {
+            value_type: (HexTypeDef { endianness: e2, name: (hn2, _) }, _),
+            array_name: n2, size: s2, body: b2 }
+        ) => match e1 == e2 {
+            true => match eq_hextype(hn1, hn2) {
+                true => match expr_comparer(&n1.0, &n2.0) {
+                    Ok(_) => match expr_comparer(&s1.0, &s2.0) {
+                        Ok(_) => match expr_comparer(&b1.0, &b2.0) {
+                            Ok(_) => Ok(()),
+                            Err(e) => Err(e),
+                        },
+                        Err(e) => Err(e),
+                    },
+                    Err(e) => Err(e),
+                },
+                false => {println!("Different types |{hn1:?}, {hn2:?}|");Err(CompErr)},
+            },
+            false => {println!("Different endianness |{e1:?}, {e2:?}|");Err(CompErr)},
+        },
+        (e1, e2) => {println!("Expected {e1:?}.\nGot {e2:?}");Err(CompErr)}
+    }
+}
+
+fn expr_comparer(expr1: &Expr, expr2: &Expr) -> Result<(), CompErr> {
     match (expr1, expr2) {
         (Expr::Error, Expr::Error) => Ok(()),
         (Expr::Value { val: val1 }, Expr::Value { val: val2 }) => match val1 == val2 {
             true => Ok(()),
             false => {println!("Different values |{val1:?} {val2:?}|");Err(CompErr)},
         },
-        (Expr::ExprList { list: list1 }, Expr::ExprList { list: list2 }) => {
+        (Expr::StatementList { list: list1 }, Expr::StatementList { list: list2 }) => {
             for ((l1, _), (l2, _)) in list1.iter().zip(list2.iter()) {
-                match expr_comparer(l1, l2) {
+                match stmnt_comparer(l1, l2) {
                     Ok(_) => (),
                     Err(e) => return Err(e),
                 }
@@ -172,8 +268,8 @@ fn expr_comparer(expr1: &Expr, expr2: &Expr) -> Result<(), CompErr>{
             },
             Err(e) => Err(e),
         },
-        (Expr::Call { func_name: fname1, arguments: (args1, _) },
-            Expr::Call { func_name: fname2, arguments: (args2, _) }
+        (Expr::Call(FuncCall { func_name: fname1, arguments: (args1, _) }),
+            Expr::Call(FuncCall { func_name: fname2, arguments: (args2, _) })
         ) => match expr_comparer(&fname1.0, &fname2.0) {
             Ok(_) => {
                 for ((a1, _), (a2, _)) in args1.iter().zip(args2.iter()) {
@@ -189,31 +285,13 @@ fn expr_comparer(expr1: &Expr, expr2: &Expr) -> Result<(), CompErr>{
             },
             Err(e) => Err(e),
         },
-        (Expr::If { test: test1, consequent: cons1 },
-            Expr::If { test: test2, consequent: cons2 }
-        ) => match expr_comparer(&test1.0, &test2.0) {
-            Ok(_) => match expr_comparer(&cons1.0, &cons2.0) {
-                Ok(_) => Ok(()),
-                Err(e) => Err(e),
-            },
-            Err(e) => Err(e),
-        },
-        (Expr::IfBlock { ifs: if1, alternative: alt1 },
-            Expr::IfBlock { ifs: if2, alternative: alt2 }
-        ) => match expr_comparer(&if1.0, &if2.0) {
-            Ok(_) => match expr_comparer(&alt1.0, &alt2.0) {
-                Ok(_) => Ok(()),
-                Err(e) => Err(e),
-            },
-            Err(e) => Err(e),
-        },
         (
-            Expr::Definition { value_type: (
+            Expr::Definition(Definition { value_type: (
                 HexTypeDef { endianness: e1, name: (hn1, _) }, _
-            ), name: n1, body: b1 },
-            Expr::Definition { value_type: (
+            ), name: n1, body: b1 }),
+            Expr::Definition(Definition { value_type: (
                 HexTypeDef { endianness: e2, name: (hn2, _) }, _
-            ), name: n2, body: b2 }
+            ), name: n2, body: b2 })
         ) => match e1 == e2 {
             true => match eq_hextype(hn1, hn2) {
                 true => match expr_comparer(&n1.0, &n2.0) {
@@ -227,15 +305,6 @@ fn expr_comparer(expr1: &Expr, expr2: &Expr) -> Result<(), CompErr>{
             },
             false => {println!("Different endianness");Err(CompErr)},
         }
-        (Expr::BitFieldEntry { name: (n1, _), length: l1 },
-            Expr::BitFieldEntry { name: (n2, _), length: l2 }
-        ) => match n1 == n2 {
-            true => match expr_comparer(&l1.0, &l2.0) {
-                Ok(_) => Ok(()),
-                Err(e) => Err(e),
-            },
-            false => {println!("Different bitfield names");Err(CompErr)},
-        },
         (Expr::EnumEntry { name: (n1, _), value: v1 },
             Expr::EnumEntry { name: (n2, _), value: v2 }
         ) => match n1 == n2 {
@@ -253,106 +322,6 @@ fn expr_comparer(expr1: &Expr, expr2: &Expr) -> Result<(), CompErr>{
                 Err(e) => Err(e),
             },
             false => {println!("Different namespace names");Err(CompErr)},
-        },
-        (
-            Expr::Using { new_name: (n1, _), template_parameters: None, old_name: (
-                HexTypeDef { endianness: e1, name: (hn1, _) }, _
-            ) },
-            Expr::Using { new_name: (n2, _), template_parameters: None, old_name: (
-                HexTypeDef { endianness: e2, name: (hn2, _) }, _
-            ) }
-        ) => match n1 == n2 {
-            true => match e1 == e2 {
-                true => match eq_hextype(hn1, hn2) {
-                    true => Ok(()),
-                    false => {println!("Different types |{hn1:?}, {hn2:?}|");Err(CompErr)},
-                },
-                false => {println!("Different endianness |{e1:?}, {e2:?}|");Err(CompErr)},
-            },
-            false => {println!("Different names |{n1:?}, {n2:?}|");Err(CompErr)},
-        },
-        (Expr::Return { value: v1 },
-            Expr::Return { value: v2 }
-        ) => match expr_comparer(&v1.0, &v2.0) {
-            Ok(_) => Ok(()),
-            Err(e) => Err(e),
-        },
-        (Expr::Continue, Expr::Continue) => Ok(()),
-        (Expr::Break, Expr::Break) => Ok(()),
-        (Expr::Func { name: (n1, _), args: (ar1, _), body: b1 },
-            Expr::Func { name: (n2, _), args: (ar2, _), body: b2 }
-        ) => match n1 == n2 {
-            true => match expr_comparer(&b1.0, &b2.0) {
-                Ok(_) => {
-                    for ((arg1, _), (arg2, _)) in ar1.iter().zip(ar2.iter()) {
-                        match (arg1, arg2) {
-                            (FuncArgument::Parameter(p1), FuncArgument::Parameter(p2)) => match expr_comparer(&p1.0, &p2.0) {
-                                Ok(_) => (),
-                                Err(e) => return Err(e),
-                            },
-                            (FuncArgument::ParameterPack((s1, _)), FuncArgument::ParameterPack((s2, _))) => match s1 == s2{
-                                true => (),
-                                false => {println!("Different parameter pack name |{s1:?}, {s2:?}|");return Err(CompErr)},
-                            },
-                            _ => {println!("Expected {arg1:?}, found {arg1:?}");return Err(CompErr)}
-                        }
-                    };
-                    if ar1.len() == ar2.len() {
-                        Ok(())
-                    } else {
-                        println!("Diferent length function arguments");
-                        Err(CompErr)
-                    }
-                },
-                Err(e) => Err(e),
-            },
-            false => {println!("Different names |{n1:?}, {n2:?}|");Err(CompErr)},
-        },
-        (Expr::Struct { name: (n1, _), body: b1, template_parameters: None },
-            Expr::Struct { name: (n2, _), body: b2, template_parameters: None }
-        ) => match n1 == n2 {
-            true => match expr_comparer(&b1.0, &b2.0) {
-                Ok(_) => Ok(()),
-                Err(e) => Err(e),
-            },
-            false => {println!("Different names |{n1:?}, {n2:?}|");Err(CompErr)},
-        },
-        (Expr::Namespace { name: n1, body: b1 },
-            Expr::Namespace { name: n2, body: b2 }
-        ) => match expr_comparer(&n1.0, &n2.0) {
-            Ok(_) => match expr_comparer(&b1.0, &b2.0) {
-                Ok(_) => Ok(()),
-                Err(e) => Err(e),
-            },
-            Err(e) => Err(e),
-        },
-        (Expr::Enum { name: (n1, _), value_type: (
-            HexTypeDef { endianness: e1, name: (hn1, _) }, _
-        ), body: b1 },
-            Expr::Enum { name: (n2, _), value_type: (
-                HexTypeDef { endianness: e2, name: (hn2, _) }, _
-            ), body: b2 }
-        ) => match n1 == n2 {
-            true => match e1 == e2 {
-                true => match eq_hextype(hn1, hn2) {
-                    true => match expr_comparer(&b1.0, &b2.0) {
-                        Ok(_) => Ok(()),
-                        Err(e) => {println!("Different enum bodies");Err(e)},
-                    },
-                    false => {println!("Different types");Err(CompErr)},
-                },
-                false => {println!("Different endianness");Err(CompErr)},
-            },
-            false => {println!("Different enum names");Err(CompErr)},
-        },
-        (Expr::Bitfield { name: (n1, _), body: b1 },
-            Expr::Bitfield { name: (n2, _), body: b2 }
-        ) => match n1 == n2 {
-            true => match expr_comparer(&b1.0, &b2.0) {
-                Ok(_) => Ok(()),
-                Err(e) => Err(e),
-            },
-            false => {println!("Different names |{n1:?}, {n2:?}|");Err(CompErr)},
         },
         (Expr::Access { item: i1, member: m1 },
             Expr::Access { item: i2, member: m2 }
@@ -407,21 +376,6 @@ fn expr_comparer(expr1: &Expr, expr2: &Expr) -> Result<(), CompErr>{
             },
             Err(e) => Err(e),
         },
-        (Expr::ForLoop { var_init: v_i1, var_test: v_t1, var_change: v_c1, body: b1 },
-            Expr::ForLoop { var_init: v_i2, var_test: v_t2, var_change: v_c2, body: b2 }
-        ) => match expr_comparer(&v_i1.0, &v_i2.0) {
-            Ok(_) => match expr_comparer(&v_t1.0, &v_t2.0) {
-                Ok(_) => match expr_comparer(&v_c1.0, &v_c2.0) {
-                    Ok(_) => match expr_comparer(&b1.0, &b2.0) {
-                        Ok(_) => Ok(()),
-                        Err(e) => Err(e),
-                    },
-                    Err(e) => Err(e),
-                },
-                Err(e) => Err(e),
-            },
-            Err(e) => Err(e),
-        },
         (Expr::Cast { cast_operator: (
             HexTypeDef { endianness: e1, name: (hn1, _) }, _
         ), operand: op1 },
@@ -432,37 +386,6 @@ fn expr_comparer(expr1: &Expr, expr2: &Expr) -> Result<(), CompErr>{
             true => match eq_hextype(hn1, hn2) {
                 true => match expr_comparer(&op1.0, &op2.0) {
                     Ok(_) => Ok(()),
-                    Err(e) => Err(e),
-                },
-                false => {println!("Different types |{hn1:?}, {hn2:?}|");Err(CompErr)},
-            },
-            false => {println!("Different endianness |{e1:?}, {e2:?}|");Err(CompErr)},
-        },
-        (Expr::Union { name: (n1, _), body: b1, template_parameters: None },
-            Expr::Union { name: (n2, _), body: b2, template_parameters: None }
-        ) => match n1 == n2 {
-            true => match expr_comparer(&b1.0, &b2.0) {
-                Ok(_) => Ok(()),
-                Err(e) => Err(e),
-            },
-            false => {println!("Different names |{n1:?}, {n2:?}|");Err(CompErr)},
-        },
-        (Expr::ArrayDefinition {
-            value_type: (HexTypeDef { endianness: e1, name: (hn1, _) }, _),
-            array_name: n1, size: s1, body: b1 },
-        Expr::ArrayDefinition {
-            value_type: (HexTypeDef { endianness: e2, name: (hn2, _) }, _),
-            array_name: n2, size: s2, body: b2 }
-        ) => match e1 == e2 {
-            true => match eq_hextype(hn1, hn2) {
-                true => match expr_comparer(&n1.0, &n2.0) {
-                    Ok(_) => match expr_comparer(&s1.0, &s2.0) {
-                        Ok(_) => match expr_comparer(&b1.0, &b2.0) {
-                            Ok(_) => Ok(()),
-                            Err(e) => Err(e),
-                        },
-                        Err(e) => Err(e),
-                    },
                     Err(e) => Err(e),
                 },
                 false => {println!("Different types |{hn1:?}, {hn2:?}|");Err(CompErr)},
@@ -487,14 +410,14 @@ fn test_pattern_arrays() {
 
         Signature sign @ 0x0;
     ";
-    let expected_output = Expr::ExprList {
+    let expected_output = Expr::StatementList {
         list: vec![
-            (Expr::Func {
+            (Statement::Func {
                 name: (String::from("end_of_signature"), 0..0),
                 args: (vec![], 0..0),
-                body: spanbox!(Expr::ExprList {
+                body: spanbox!(Expr::StatementList {
                     list: vec![
-                        (Expr::Return {
+                        (Statement::Return {
                             value: spanbox!(Expr::Binary {
                                 loperand: blocal!("$"),
                                 operator: BinaryOp::GreaterEqual,
@@ -504,11 +427,11 @@ fn test_pattern_arrays() {
                     ]
                 })
             }, 0..0),
-            (Expr::Struct {
+            (Statement::Struct {
                 name: (String::from("Signature"), 0..0),
-                body: spanbox!(Expr::ExprList {
+                body: spanbox!(Expr::StatementList {
                     list: vec![
-                        (Expr::ArrayDefinition {
+                        (Statement::ArrayDefinition {
                             value_type: (HexTypeDef {
                                 endianness: Endianness::Unkown,
                                 name: (HexType::V(ValueType::U8), 0..0)
@@ -517,7 +440,7 @@ fn test_pattern_arrays() {
                             size: bnum!(),
                             body: bnull!()
                         }, 0..0),
-                        (Expr::ArrayDefinition {
+                        (Statement::ArrayDefinition {
                             value_type: (HexTypeDef {
                                 endianness: Endianness::Unkown,
                                 name: (HexType::V(ValueType::U8), 0..0)
@@ -539,7 +462,7 @@ fn test_pattern_arrays() {
                 }),
                 template_parameters: None
             }, 0..0),
-            (Expr::Definition {
+            (Statement::Definition {
                 value_type: (HexTypeDef {
                     endianness: Endianness::Unkown,
                     name: (HexType::Custom(String::from("Signature")), 0..0)
@@ -600,16 +523,16 @@ fn test_pattern_attributes() {
         NoUniqueAddressTest noUniqueAddressTest @ 0x40;
     ";
 
-    let expected_output = Expr::ExprList { list: vec![
+    let expected_output = Expr::StatementList { list: vec![
         (Expr::Struct {
             name: (String::from("FormatTransformTest"), 0..0),
-            body: spanbox!(Expr::ExprList { list: vec![
+            body: spanbox!(Expr::StatementList { list: vec![
                 (Expr::Definition {
                     value_type: (HexTypeDef {
                         endianness: Endianness::Unkown,
                         name: (HexType::V(ValueType::U32), 0..0)
                     }, 0..0),
-                    name: spanbox!(Expr::ExprList { list: vec![
+                    name: spanbox!(Expr::StatementList { list: vec![
                         local!("x"),
                         local!("y"),
                         local!("z")
@@ -621,7 +544,7 @@ fn test_pattern_attributes() {
         }, 0..0),
         (Expr::Struct {
             name: (String::from("SealedTest"), 0..0),
-            body: spanbox!(Expr::ExprList { list: vec![
+            body: spanbox!(Expr::StatementList { list: vec![
                 (Expr::Definition {
                     value_type: (HexTypeDef {
                         endianness: Endianness::Unkown,
@@ -635,7 +558,7 @@ fn test_pattern_attributes() {
         }, 0..0),
         (Expr::Struct {
             name: (String::from("HiddenTest"), 0..0),
-            body: spanbox!(Expr::ExprList { list: vec![
+            body: spanbox!(Expr::StatementList { list: vec![
                 (Expr::Definition {
                     value_type: (HexTypeDef {
                         endianness: Endianness::Unkown,
@@ -649,7 +572,7 @@ fn test_pattern_attributes() {
         }, 0..0),
         (Expr::Struct {
             name: (String::from("ColorTest"), 0..0),
-            body: spanbox!(Expr::ExprList { list: vec![
+            body: spanbox!(Expr::StatementList { list: vec![
                 (Expr::ArrayDefinition {
                     value_type: (HexTypeDef {
                         endianness: Endianness::Unkown,
@@ -664,7 +587,7 @@ fn test_pattern_attributes() {
         }, 0..0),
         (Expr::Struct {
             name: (String::from("NoUniqueAddressTest"), 0..0),
-            body: spanbox!(Expr::ExprList { list: vec![
+            body: spanbox!(Expr::StatementList { list: vec![
                 (Expr::Definition {
                     value_type: (HexTypeDef {
                         endianness: Endianness::Unkown,
@@ -691,7 +614,7 @@ fn test_pattern_attributes() {
                 name: blocal!("value"),
                 body: bnull!()
             })), 0..0)], 0..0),
-            body: spanbox!(Expr::ExprList { list: vec![
+            body: spanbox!(Expr::StatementList { list: vec![
                 (Expr::Return { value: spanbox!(Expr::Value { val: Value::Str(String::from("Hello World")) }) }, 0..0)
             ] })
         }, 0..0),
@@ -702,7 +625,7 @@ fn test_pattern_attributes() {
                 name: blocal!("value"),
                 body: bnull!()
             })), 0..0)], 0..0),
-            body: spanbox!(Expr::ExprList { list: vec![
+            body: spanbox!(Expr::StatementList { list: vec![
                 (Expr::Return { value: bnum!() }, 0..0)
             ] })
         }, 0..0),
@@ -772,10 +695,10 @@ fn test_pattern_bitfields() {
         be TestBitfield testBitfield @ 0x12;
     ";
 
-    let expected_output = Expr::ExprList { list: vec![
+    let expected_output = Expr::StatementList { list: vec![
         (Expr::Bitfield {
             name: (String::from("TestBitfield"), 0..0),
-            body: spanbox!(Expr::ExprList {
+            body: spanbox!(Expr::StatementList {
                 list: vec![
                     (Expr::BitFieldEntry {
                         name: (String::from("a"), 0..0),
@@ -837,14 +760,14 @@ fn test_pattern_enums() {
         String::from("%programfiles%/imhex")
     ];
 
-    let expected_output = Expr::ExprList { list: vec![
+    let expected_output = Expr::StatementList { list: vec![
         (Expr::Enum {
             name: (String::from("TestEnum"), 0..0),
             value_type: (HexTypeDef {
                 endianness: Endianness::Unkown,
                 name: (HexType::V(ValueType::U32), 0..0)
             }, 0..0),
-            body: spanbox!(Expr::ExprList { list: vec![
+            body: spanbox!(Expr::StatementList { list: vec![
                 (Expr::EnumEntry {
                     name: (String::from("A"), 0..0),
                     value: bnull!()
@@ -919,10 +842,10 @@ fn test_pattern_extra_semicolon() {
         String::from("%programfiles%/imhex")
     ];
 
-    let expected_output = Expr::ExprList { list: vec![
+    let expected_output = Expr::StatementList { list: vec![
         (Expr::Struct {
             name: (String::from("Test"), 0..0),
-            body: spanbox!(Expr::ExprList { list: vec![
+            body: spanbox!(Expr::StatementList { list: vec![
                 (Expr::Definition {
                     value_type: (HexTypeDef {
                         endianness: Endianness::Unkown,
@@ -952,7 +875,7 @@ fn test_pattern_extra_semicolon() {
         }, 0..0),
         (Expr::Struct {
             name: (String::from("Test2"), 0..0),
-            body: spanbox!(Expr::ExprList { list: vec![
+            body: spanbox!(Expr::StatementList { list: vec![
                 (Expr::Definition {
                     value_type: (HexTypeDef {
                         endianness: Endianness::Unkown,
@@ -1023,11 +946,11 @@ fn test_pattern_namespaces() {
         String::from("%programfiles%/imhex")
     ];
 
-    let expected_output = Expr::ExprList { list: vec![
+    let expected_output = Expr::StatementList { list: vec![
         (Expr::Namespace {
             name: blocal!("A"),
-            body: spanbox!(Expr::ExprList { list: vec![
-                (Expr::Struct { name: (String::from("Test"), 0..0), body: spanbox!(Expr::ExprList { list: vec![
+            body: spanbox!(Expr::StatementList { list: vec![
+                (Expr::Struct { name: (String::from("Test"), 0..0), body: spanbox!(Expr::StatementList { list: vec![
                      (Expr::Definition {
                         value_type: (HexTypeDef {
                             endianness: Endianness::Unkown,
@@ -1043,8 +966,8 @@ fn test_pattern_namespaces() {
         }, 0..0),
         (Expr::Namespace {
             name: blocal!("B"),
-            body: spanbox!(Expr::ExprList { list: vec![
-                (Expr::Struct { name: (String::from("Test"), 0..0), body: spanbox!(Expr::ExprList { list: vec![
+            body: spanbox!(Expr::StatementList { list: vec![
+                (Expr::Struct { name: (String::from("Test"), 0..0), body: spanbox!(Expr::StatementList { list: vec![
                      (Expr::Definition {
                         value_type: (HexTypeDef {
                             endianness: Endianness::Unkown,
@@ -1139,11 +1062,11 @@ fn test_pattern_nested_structs() {
         String::from("%programfiles%/imhex")
     ];
 
-    let expected_output = Expr::ExprList { list: vec![
+    let expected_output = Expr::StatementList { list: vec![
         (Expr::Func {
             name: (String::from("end_of_body"), 0..0),
             args: (vec![], 0..0),
-            body: spanbox!(Expr::ExprList { list: vec![
+            body: spanbox!(Expr::StatementList { list: vec![
                 (Expr::Definition {
                     value_type: (HexTypeDef {
                         endianness: Endianness::Unkown,
@@ -1201,7 +1124,7 @@ fn test_pattern_nested_structs() {
         }, 0..0),
         (Expr::Struct {
             name: (String::from("Header"), 0..0),
-            body: spanbox!(Expr::ExprList { list: vec![
+            body: spanbox!(Expr::StatementList { list: vec![
                 (Expr::Definition {
                     value_type: (HexTypeDef {
                         endianness: Endianness::Unkown,
@@ -1215,7 +1138,7 @@ fn test_pattern_nested_structs() {
         }, 0..0),
         (Expr::Struct {
             name: (String::from("Body"), 0..0),
-            body: spanbox!(Expr::ExprList { list: vec![
+            body: spanbox!(Expr::StatementList { list: vec![
                 (Expr::ArrayDefinition {
                     value_type: (HexTypeDef {
                         endianness: Endianness::Unkown,
@@ -1239,7 +1162,7 @@ fn test_pattern_nested_structs() {
         }, 0..0),
         (Expr::Struct {
             name: (String::from("Data"), 0..0),
-            body: spanbox!(Expr::ExprList { list: vec![
+            body: spanbox!(Expr::StatementList { list: vec![
                 (Expr::Definition {
                     value_type: (HexTypeDef {
                         endianness: Endianness::Unkown,
@@ -1292,10 +1215,10 @@ fn test_pattern_padding() {
         String::from("%programfiles%/imhex")
     ];
 
-    let expected_output = Expr::ExprList { list: vec![
+    let expected_output = Expr::StatementList { list: vec![
         (Expr::Struct {
             name: (String::from("TestStruct"), 0..0),
-            body: spanbox!(Expr::ExprList {
+            body: spanbox!(Expr::StatementList {
                 list: vec![
                     (Expr::Definition {
                         value_type: (HexTypeDef {
@@ -1347,7 +1270,7 @@ fn test_pattern_placement() {
         String::from("%programfiles%/imhex")
     ];
 
-    let expected_output = Expr::ExprList { list: vec![
+    let expected_output = Expr::StatementList { list: vec![
         (Expr::Definition {
             value_type: (HexTypeDef {
                 endianness: Endianness::Unkown,
@@ -1388,7 +1311,7 @@ fn test_pattern_pointers() {
         String::from("%programfiles%/imhex")
     ];
 
-    let expected_output = Expr::ExprList { list: vec![
+    let expected_output = Expr::StatementList { list: vec![
         (Expr::Definition {
             value_type: (HexTypeDef {
                 endianness: Endianness::Unkown,
@@ -1408,7 +1331,7 @@ fn test_pattern_pointers() {
         (Expr::Func {
             name: (String::from("Rel"), 0..0),
             args: (vec![(FuncArgument::Parameter(spanbox!(Expr::UnnamedParameter { type_: (HexType::V(ValueType::U128), 0..0) })), 0..0)], 0..0),
-            body: spanbox!(Expr::ExprList {
+            body: spanbox!(Expr::StatementList {
                 list: vec![
                     (Expr::Return {
                         value: bnum!()
@@ -1457,10 +1380,10 @@ fn test_pattern_rvalues() {
         String::from("%programfiles%/imhex")
     ];
 
-    let expected_output = Expr::ExprList { list: vec![
+    let expected_output = Expr::StatementList { list: vec![
         (Expr::Union {
             name: (String::from("C"), 0..0),
-            body: spanbox!(Expr::ExprList { list: vec![
+            body: spanbox!(Expr::StatementList { list: vec![
                 (Expr::Definition {
                     value_type: (HexTypeDef {
                         endianness: Endianness::Unkown,
@@ -1489,7 +1412,7 @@ fn test_pattern_rvalues() {
         }, 0..0),
         (Expr::Struct {
             name: (String::from("B"), 0..0),
-            body: spanbox!(Expr::ExprList {
+            body: spanbox!(Expr::StatementList {
                 list: vec![
                     (Expr::Definition {
                         value_type: (HexTypeDef {
@@ -1505,7 +1428,7 @@ fn test_pattern_rvalues() {
         }, 0..0),
         (Expr::Struct {
             name: (String::from("A"), 0..0),
-            body: spanbox!(Expr::ExprList {
+            body: spanbox!(Expr::StatementList {
                 list: vec![
                     (Expr::Definition {
                         value_type: (HexTypeDef {
@@ -1559,10 +1482,10 @@ fn test_pattern_structs() {
         String::from("%programfiles%/imhex")
     ];
 
-    let expected_output = Expr::ExprList { list: vec![
+    let expected_output = Expr::StatementList { list: vec![
         (Expr::Struct {
             name: (String::from("TestStruct"), 0..0),
-            body: spanbox!(Expr::ExprList {
+            body: spanbox!(Expr::StatementList {
                 list: vec![
                     (Expr::Definition {
                         value_type: (HexTypeDef {
@@ -1617,10 +1540,10 @@ fn test_pattern_unions() {
         String::from("%programfiles%/imhex")
     ];
 
-    let expected_output = Expr::ExprList { list: vec![
+    let expected_output = Expr::StatementList { list: vec![
         (Expr::Union {
             name: (String::from("TestUnion"), 0..0),
-            body: spanbox!(Expr::ExprList { list: vec![
+            body: spanbox!(Expr::StatementList { list: vec![
                 (Expr::ArrayDefinition {
                     value_type: (HexTypeDef {
                         endianness: Endianness::Unkown,
@@ -1663,13 +1586,13 @@ fn test_pattern_at_in_function() {
         }
     ";
 
-    let expected_output = Expr::ExprList {
+    let expected_output = Expr::StatementList {
         list: vec![ 
             (
                 Expr::Func {
                     name: (String::from("func_with_at"), 0..0),
                     args: (vec![], 0..0),
-                    body: spanbox!(Expr::ExprList {
+                    body: spanbox!(Expr::StatementList {
                         list: vec![(
                             Expr::Definition {
                                 value_type: (

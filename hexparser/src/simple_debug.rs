@@ -1,6 +1,6 @@
 use nom_supreme::error::StackContext;
 
-use crate::{recovery_err::{TokError, TokResult}, token::{Tokens, Spanned, Token, TokSpan}, Expr};
+use crate::{recovery_err::{TokError, TokResult}, token::{Tokens, Spanned, Token, TokSpan}, Expr, m_parser::Statement};
 
 
 pub trait SimpleDebug {
@@ -463,6 +463,64 @@ where
     }
 }
 
+impl SimpleDebug for Statement {
+    fn dbg(&self, indentation: i32) {
+        match self {
+            Statement::Return { .. } => print!("S::Return"),
+            Statement::Continue => print!("S::Continue"),
+            Statement::Break => print!("S::Break"),
+            Statement::Func { .. } => print!("S::Func"),
+            Statement::Struct { .. } => print!("S::Struct"),
+            Statement::Namespace { .. } => print!("S::Namespace"),
+            Statement::Enum { .. } => print!("S::Enum"),
+            Statement::Bitfield { .. } => print!("S::Bitfield"),
+            Statement::Using { .. } => print!("S::Using"),
+            Statement::Error => print!("S::Error"),
+            Statement::Union { .. } => print!("S::Union"),
+            Statement::ArrayDefinition { .. } => print!("S::ArrayDefinition"),
+            Statement::WhileLoop { .. } => print!("S::WhileLoop"),
+            Statement::Definition { .. } => print!("S::Definition"),
+            Statement::Assignment {.. } => print!("S::Assignment"),
+            Statement::ForLoop { .. } => print!("S::ForLoop"),
+            Statement::Padding { .. } => print!("S::Padding"),
+            Statement::Call(_) => print!("S::Call"),
+            Statement::BitFieldEntry { .. } => print!("S::BitFieldEntry"),
+            Statement::Match { .. } => print!("S::Match"),
+            Statement::TryCatch { .. } => print!("S::TryCatch"),
+            Statement::If { .. } => print!("S::If"),
+            Statement::IfBlock { .. } => print!("S::IfBlock"),
+        }
+    }
+
+    fn dbg_ln(&self, indentation: i32) {
+        match self {
+            Statement::Return { .. } => println!("S::Return"),
+            Statement::Continue => println!("S::Continue"),
+            Statement::Break => println!("S::Break"),
+            Statement::Func { .. } => println!("S::Func"),
+            Statement::Struct { .. } => println!("S::Struct"),
+            Statement::Namespace { .. } => println!("S::Namespace"),
+            Statement::Enum { .. } => println!("S::Enum"),
+            Statement::Bitfield { .. } => println!("S::Bitfield"),
+            Statement::Using { .. } => println!("S::Using"),
+            Statement::Error => println!("S::Error"),
+            Statement::Union { .. } => println!("S::Union"),
+            Statement::ArrayDefinition { .. } => println!("S::ArrayDefinition"),
+            Statement::WhileLoop { .. } => println!("S::WhileLoop"),
+            Statement::Definition { .. } => println!("S::Definition"),
+            Statement::Assignment {.. } => println!("S::Assignment"),
+            Statement::ForLoop { .. } => println!("S::ForLoop"),
+            Statement::Padding { .. } => println!("S::Padding"),
+            Statement::Call(_) => println!("S::Call"),
+            Statement::BitFieldEntry { .. } => println!("S::BitFieldEntry"),
+            Statement::Match { .. } => println!("S::Match"),
+            Statement::TryCatch { .. } => println!("S::TryCatch"),
+            Statement::If { .. } => println!("S::If"),
+            Statement::IfBlock { .. } => println!("S::IfBlock"),
+        }
+    }
+}
+
 impl SimpleDebug for Expr {
     fn dbg(&self, indentation: i32) {
         for _ in 0..indentation {
@@ -479,43 +537,30 @@ impl SimpleDebug for Expr {
                 };
                 print!(")")
             },
+            Expr::StatementList { list } => {
+                print!("E::StatementList(");
+                for (i, _) in list {
+                    i.dbg(0);
+                    print!(", ");
+                };
+                print!(")")
+            },
             Expr::UnnamedParameter { .. } => print!("E::UnnamedParameter"),
             Expr::Local { .. } => print!("E::Local"),
             Expr::Unary { .. } => print!("E::Unary"),
             Expr::Binary { .. } => print!("E::Binary"),
             Expr::Ternary { .. } => print!("E::Ternary"),
             Expr::Call { .. } => print!("E::Call"),
-            Expr::If { .. } => print!("E::If"),
-            Expr::IfBlock { .. } => print!("E:IfBlock"),
-            Expr::Definition { .. } => print!("E::Definition"),
-            Expr::BitFieldEntry { .. } => print!("E::BitFieldEntry"),
             Expr::EnumEntry { .. } => print!("E::EnumEntry"),
             Expr::NamespaceAccess { .. } => print!("E::NamespaceAccess"),
-            Expr::Using { .. } => print!("E::Using"),
-            Expr::Return { .. } => print!("E::Return"),
-            Expr::Continue => print!("E::Continue"),
-            Expr::Break => print!("E::Break"),
-            Expr::Func { .. } => print!("E::Func"),
-            Expr::Struct { .. } => print!("E::Struct"),
-            Expr::Namespace { body, .. } => {
-                print!("E::Namespace(");
-                body.0.dbg(0);
-                print!(")")
-            },
-            Expr::Enum { .. } => print!("E::Enum"),
-            Expr::Bitfield { .. } => print!("E::BitField"),
             Expr::Access { .. } => print!("E::Access"),
             Expr::Attribute { .. } => print!("E::Attribute"),
             Expr::AttributeArgument { .. } => print!("E::AttributeArgument"),
             Expr::WhileLoop { .. } => print!("E::WhileLoop"),
-            Expr::ForLoop { .. } => print!("E::ForLoop"),
             Expr::Cast { .. } => print!("E::Cast"),
-            Expr::Union { .. } => print!("E::Union"),
             Expr::ArrayAccess { .. } => print!("E::ArrayAccess"),
-            Expr::ArrayDefinition { .. } => print!("E::ArrayDefinition"),
             Expr::Type { .. } => print!("E::Type"),
-            Expr::Match { .. } => print!("E::Match"),
-            Expr::TryCatch { .. } => print!("E::TryCatch"),
+            Expr::Definition(_) => print!("E::Definition"),
         }
     }
 
@@ -537,39 +582,33 @@ impl SimpleDebug for Expr {
                 };
                 println!(")")
             },
+            Expr::StatementList { list } => {
+                println!("E::StatementList(");
+                for (i, _) in list {
+                    i.dbg(indentation+1);
+                    println!(",")
+                };
+                for _ in 0..indentation {
+                    print!("  ");
+                };
+                println!(")")
+            },
             Expr::UnnamedParameter { .. } => println!("E::UnnamedParameter"),
             Expr::Local { .. } => println!("E::Local"),
             Expr::Unary { .. } => println!("E::Unary"),
             Expr::Binary { .. } => println!("E::Binary"),
             Expr::Ternary { .. } => println!("E::Ternary"),
             Expr::Call { .. } => println!("E::Call"),
-            Expr::If { .. } => println!("E::If"),
-            Expr::IfBlock { .. } => println!("E::IfBlock"),
-            Expr::Definition { .. } => println!("E::Definition"),
-            Expr::BitFieldEntry { .. } => println!("E::BitFieldEntry"),
             Expr::EnumEntry { .. } => println!("E::EnumEntry"),
             Expr::NamespaceAccess { .. } => println!("E::NamespaceAccess"),
-            Expr::Using { .. } => println!("E::Using"),
-            Expr::Return { .. } => println!("E::Return"),
-            Expr::Continue => println!("E::Continue"),
-            Expr::Break => println!("E::Break"),
-            Expr::Func { .. } => println!("E::Func"),
-            Expr::Struct { .. } => println!("E::Struct"),
-            Expr::Namespace { .. } => println!("E::Namespace"),
-            Expr::Enum { .. } => println!("E::Enum"),
-            Expr::Bitfield { .. } => println!("E::BitField"),
             Expr::Access { .. } => println!("E::Access"),
             Expr::Attribute { .. } => println!("E::Attribute"),
             Expr::AttributeArgument { .. } => println!("E::AttributeArgument"),
             Expr::WhileLoop { .. } => println!("E::WhileLoop"),
-            Expr::ForLoop { .. } => println!("E::ForLoop"),
             Expr::Cast { .. } => println!("E::Cast"),
-            Expr::Union { .. } => println!("E::Union"),
             Expr::ArrayAccess { .. } => println!("E::ArrayAccess"),
-            Expr::ArrayDefinition { .. } => println!("E::ArrayDefinition"),
             Expr::Type { .. } => println!("E::Type"),
-            Expr::Match { .. } => println!("E::Match"),
-            Expr::TryCatch { .. } => println!("E::TryCatch"),
+            Expr::Definition(_) => println!("E::Definition"),
         }
     }
 }

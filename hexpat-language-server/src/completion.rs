@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use hexparser::{m_parser::{Expr, MatchBranch, MatchCaseItem, MatchCaseElement}, token::Spanned};
+use hexparser::{m_parser::{Expr, MatchBranch, MatchCaseItem, MatchCaseElement, Statement, FuncCall, Definition}, token::Spanned};
 use tower_lsp::lsp_types::{CompletionItem, CompletionItemKind, InsertTextFormat};
 
 use crate::namespace_handling::namespace_to_string;
@@ -22,6 +22,207 @@ pub fn completion(
     let mut map = HashMap::new();
     get_completion_of(ast, &mut map, ident_offset);
     map
+}
+
+pub fn get_completion_of_expressions(
+    exprs: &Vec<Spanned<Expr>>,
+    definition_map: &mut HashMap<String, ImCompleteCompletionItem>,
+    ident_offset: usize,
+) -> bool {
+    for expr in exprs {
+        if !get_completion_of(expr, definition_map, ident_offset) {
+            return false
+        }
+    }
+    true
+}
+
+pub fn get_completion_of_statements(
+    stmnts: &Vec<Spanned<Statement>>,
+    definition_map: &mut HashMap<String, ImCompleteCompletionItem>,
+    ident_offset: usize,
+) -> bool {
+    for stmnt in stmnts {
+        if !get_completion_of_statement(stmnt, definition_map, ident_offset) {
+            return false
+        }
+    }
+    true
+}
+
+pub fn get_completion_of_statement(
+    stmnt: &Spanned<Statement>,
+    definition_map: &mut HashMap<String, ImCompleteCompletionItem>,
+    ident_offset: usize,
+) -> bool {
+    match &stmnt.0 {
+        Statement::Using { new_name, template_parameters, old_name } => {
+            definition_map.insert(
+                new_name.0.clone(),
+                ImCompleteCompletionItem::Variable(new_name.0.clone())
+            );
+
+            true
+        }, // TODO
+        Statement::Return { value } => true, // TODO
+        Statement::Continue => true, // TODO
+        Statement::Break => true, // TODO
+        Statement::Func { name, args, body } => {
+            definition_map.insert(
+                name.0.clone(),
+                ImCompleteCompletionItem::Function(name.0.clone(), Vec::new())
+            );
+
+            for arg in &args.0 {
+                match &arg.0 {
+                    hexparser::m_parser::FuncArgument::Parameter(param) => {
+                        if !get_completion_of(param, definition_map, ident_offset) {
+                            return false;
+                        }
+                    },
+                    hexparser::m_parser::FuncArgument::ParameterPack(param) => {
+                        definition_map.insert(
+                            param.0.clone(),
+                            ImCompleteCompletionItem::Variable(param.0.clone())
+                        );
+                    },
+                }
+            }
+
+            if ident_offset < body.1.end {
+                get_completion_of(body, definition_map, ident_offset);
+            }
+
+            true
+        }, // TODO
+        Statement::Struct { name, body, template_parameters } => {
+            definition_map.insert(
+                name.0.clone(),
+                ImCompleteCompletionItem::Struct(name.0.clone())
+            );
+            get_completion_of(body, definition_map, ident_offset)
+        }, // TODO
+        Statement::Namespace { name, body } => {
+            if !get_completion_of(name, definition_map, ident_offset) {
+                return false;
+            }
+
+            let mut namespace_hm = HashMap::new();
+
+            let ret = get_completion_of(body, &mut namespace_hm, ident_offset);
+
+            definition_map.extend(
+                namespace_hm.into_iter().map(|(v, item)| (v, ImCompleteCompletionItem::NamespacedItem {
+                        namespace: namespace_to_string(name),
+                        item: Box::new(item)
+                    })
+                )
+            );
+            ret
+        }, // TODO
+        Statement::Enum { name, value_type, body } => {
+            definition_map.insert(
+                name.0.clone(),
+                ImCompleteCompletionItem::Enum(name.0.clone())
+            );
+
+            get_completion_of_expressions(&body.0, definition_map, ident_offset)
+        }, // TODO
+        Statement::Bitfield { name, body } => {
+            definition_map.insert(
+                name.0.clone(),
+                ImCompleteCompletionItem::BitField(name.0.clone())
+            );
+
+            get_completion_of(body, definition_map, ident_offset)
+        }, // TODO 
+        Statement::If { test, consequent } => {
+            if !get_completion_of(test, definition_map, ident_offset) {
+                return false
+            }
+
+            get_completion_of_statements(&consequent.0, definition_map, ident_offset)
+        }
+        Statement::IfBlock { ifs, alternative } => {
+            if !get_completion_of(ifs, definition_map, ident_offset) {
+                return false;
+            }
+
+            get_completion_of_statements(&alternative.0, definition_map, ident_offset)
+        }, // TODO 
+        Statement::BitFieldEntry { name, length: _ } => {
+            definition_map.insert(
+                name.0.clone(),
+                ImCompleteCompletionItem::Variable(name.0.clone())
+            );
+
+            true
+        }, // TODO 
+        Statement::ForLoop { var_init, var_test, var_change, body } => {
+            if !get_completion_of_statement(var_init, definition_map, ident_offset) {
+                return false;
+            }
+
+            get_completion_of_statements(&body.0, definition_map, ident_offset)
+        }, 
+        Statement::Union { name, body, template_parameters } => {
+            definition_map.insert(
+                name.0.clone(),
+                ImCompleteCompletionItem::Struct(name.0.clone())
+            );
+
+            get_completion_of(body, definition_map, ident_offset)
+        }, // TODO 
+        Statement::ArrayDefinition { value_type, array_name, size, body } => true, 
+        Statement::Match { parameters, branches  } => {
+            for parameter in parameters {
+                if !get_completion_of(parameter, definition_map, ident_offset) {
+                    return false;
+                }
+            }
+
+            for branch in branches {
+                if !get_completion_of_match_branch(branch, definition_map, ident_offset) {
+                    return false;
+                }
+            }
+
+            true
+        },
+        Statement::TryCatch { try_block, catch_block } => {
+            if let Some(catch_block) = catch_block {
+                if !get_completion_of(try_block, definition_map, ident_offset) {
+                    return false;
+                }
+                get_completion_of(catch_block, definition_map, ident_offset)
+            } else {
+                get_completion_of(try_block, definition_map, ident_offset)
+            }
+        },
+        Statement::Assignment { loperand, operator, roperand } => {
+            /*
+            if !get_completion_of(loperand, definition_map, ident_offset) {
+                return false;
+            }
+
+            get_completion_of(roperand, definition_map, ident_offset)
+            */
+
+            true
+        },
+        Statement::Error => true,
+        Statement::WhileLoop { condition, body } => {
+            if ident_offset < stmnt.1.end {
+                // Inside the while loop body
+                get_completion_of_statements(&body.0, definition_map, ident_offset)
+            } else {
+                true
+            }
+        },
+        Statement::Definition(_) => todo!(),
+        Statement::Padding { padding_body } => todo!(),
+        Statement::Call(_) => todo!(), 
+    }
 }
 
 /// return need_to_continue_search
@@ -54,7 +255,7 @@ pub fn get_completion_of(
 
             true
         },
-        Expr::Call { func_name, arguments } => {
+        Expr::Call(FuncCall { func_name, arguments }) => {
             if !get_completion_of(func_name, definition_map, ident_offset) {
                 return false
             }
@@ -65,21 +266,7 @@ pub fn get_completion_of(
             }
             true
         }
-        Expr::If { test, consequent } => {
-            if !get_completion_of(test, definition_map, ident_offset) {
-                return false
-            }
-
-            get_completion_of(consequent, definition_map, ident_offset)
-        }
-        Expr::IfBlock { ifs, alternative } => {
-            if !get_completion_of(ifs, definition_map, ident_offset) {
-                return false;
-            }
-
-            get_completion_of(alternative, definition_map, ident_offset)
-        }, // TODO
-        Expr::Definition { value_type: _, name, body } => {
+        Expr::Definition(Definition { value_type: _, name, body }) => {
             match &name.0 {
                 Expr::Local { name } => {
                     definition_map.insert(
@@ -99,17 +286,10 @@ pub fn get_completion_of(
             }
             true
         }, // TODO
+        Expr::StatementList { list } => get_completion_of_statements(list, definition_map, ident_offset), // TODO
         Expr::UnnamedParameter { type_: _ } => true, // TODO
         Expr::Unary { operation: _, operand: _ } => true, // TODO
         Expr::Ternary { loperand: _, moperand: _, roperand: _ } => true, // TODO
-        Expr::BitFieldEntry { name, length: _ } => {
-            definition_map.insert(
-                name.0.clone(),
-                ImCompleteCompletionItem::Variable(name.0.clone())
-            );
-
-            true
-        }, // TODO
         Expr::EnumEntry { name, value } => {
             definition_map.insert(
                 name.0.clone(),
@@ -119,86 +299,6 @@ pub fn get_completion_of(
             true
         }, // TODO
         Expr::NamespaceAccess { previous, name } => true, // TODO
-        Expr::Using { new_name, template_parameters, old_name } => {
-            definition_map.insert(
-                new_name.0.clone(),
-                ImCompleteCompletionItem::Variable(new_name.0.clone())
-            );
-
-            true
-        }, // TODO
-        Expr::Return { value } => true, // TODO
-        Expr::Continue => true, // TODO
-        Expr::Break => true, // TODO
-        Expr::Func { name, args, body } => {
-            definition_map.insert(
-                name.0.clone(),
-                ImCompleteCompletionItem::Function(name.0.clone(), Vec::new())
-            );
-
-            for arg in &args.0 {
-                match &arg.0 {
-                    hexparser::m_parser::FuncArgument::Parameter(param) => {
-                        if !get_completion_of(param, definition_map, ident_offset) {
-                            return false;
-                        }
-                    },
-                    hexparser::m_parser::FuncArgument::ParameterPack(param) => {
-                        definition_map.insert(
-                            param.0.clone(),
-                            ImCompleteCompletionItem::Variable(param.0.clone())
-                        );
-                    },
-                }
-            }
-
-            if ident_offset < body.1.end {
-                get_completion_of(body, definition_map, ident_offset);
-            }
-
-            true
-        }, // TODO
-        Expr::Struct { name, body, template_parameters } => {
-            definition_map.insert(
-                name.0.clone(),
-                ImCompleteCompletionItem::Struct(name.0.clone())
-            );
-            get_completion_of(body, definition_map, ident_offset)
-        }, // TODO
-        Expr::Namespace { name, body } => {
-            if !get_completion_of(name, definition_map, ident_offset) {
-                return false;
-            }
-
-            let mut namespace_hm = HashMap::new();
-
-            let ret = get_completion_of(body, &mut namespace_hm, ident_offset);
-
-            definition_map.extend(
-                namespace_hm.into_iter().map(|(v, item)| (v, ImCompleteCompletionItem::NamespacedItem {
-                        namespace: namespace_to_string(name),
-                        item: Box::new(item)
-                    })
-                )
-            );
-            ret
-        }, // TODO
-        Expr::Enum { name, value_type, body } => {
-            definition_map.insert(
-                name.0.clone(),
-                ImCompleteCompletionItem::Enum(name.0.clone())
-            );
-
-            get_completion_of(body, definition_map, ident_offset)
-        }, // TODO
-        Expr::Bitfield { name, body } => {
-            definition_map.insert(
-                name.0.clone(),
-                ImCompleteCompletionItem::BitField(name.0.clone())
-            );
-
-            get_completion_of(body, definition_map, ident_offset)
-        }, // TODO
         Expr::Access { item, member } => true, // TODO
         Expr::Attribute { arguments } => true, // TODO
         Expr::AttributeArgument { name, value } => true, // TODO
@@ -210,50 +310,9 @@ pub fn get_completion_of(
                 true
             }
         },
-        Expr::ForLoop { var_init, var_test, var_change, body } => {
-            if !get_completion_of(var_init, definition_map, ident_offset) {
-                return false;
-            }
-
-            get_completion_of(body, definition_map, ident_offset)
-        },
         Expr::Cast { cast_operator, operand } => true, // TODO
-        Expr::Union { name, body, template_parameters } => {
-            definition_map.insert(
-                name.0.clone(),
-                ImCompleteCompletionItem::Struct(name.0.clone())
-            );
-
-            get_completion_of(body, definition_map, ident_offset)
-        }, // TODO
         Expr::ArrayAccess { array: item, index: member } => true, // TODO
-        Expr::ArrayDefinition { value_type, array_name, size, body } => true,
         Expr::Type { val } => true, // TODO
-        Expr::Match { parameters, branches  } => {
-            for parameter in parameters {
-                if !get_completion_of(parameter, definition_map, ident_offset) {
-                    return false;
-                }
-            }
-
-            for branch in branches {
-                if !get_completion_of_match_branch(branch, definition_map, ident_offset) {
-                    return false;
-                }
-            }
-
-            true
-        },
-        Expr::TryCatch { try_block, catch_block } => {
-            if let Some(catch_block) = catch_block {
-                if !get_completion_of(try_block, definition_map, ident_offset) {
-                    return false;
-                }
-                get_completion_of(catch_block, definition_map, ident_offset)
-            } else {
-                get_completion_of(try_block, definition_map, ident_offset)
-            }
-        },
     }
 }
 
@@ -281,7 +340,7 @@ fn get_completion_of_match_branch(branch: &MatchBranch, definition_map: &mut Has
         };
     }
 
-    get_completion_of(body, definition_map, ident_offset)
+    get_completion_of_statements(&body.0, definition_map, ident_offset)
 }
 
 fn get_completion_of_match_case_element(element: &MatchCaseElement, definition_map: &mut HashMap<String, ImCompleteCompletionItem>, ident_offset: usize) -> bool {

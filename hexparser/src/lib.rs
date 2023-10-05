@@ -44,37 +44,21 @@ pub fn type_inference(expr: &Spanned<Expr>, symbol_type_table: &mut HashMap<Rang
         Expr::Local {..} => {}
         Expr::Binary {..} => {}
         Expr::Call {..} => {}
-        Expr::If { .. } => (), // TODO
-        Expr::IfBlock { .. } => (), // TODO
-        Expr::Definition {..} => (), // TODO
-        Expr::BitFieldEntry {..} => (), // TODO
         Expr::EnumEntry {..} => (), // TODO
         Expr::Ternary {..} => (), // TODO
         Expr::NamespaceAccess {..} => (), // TODO
         Expr::Unary {..} => (), // TODO
-        Expr::Using {..} => (), // TODO
-        Expr::Continue => (), // TODO
-        Expr::Break => (), // TODO
-        Expr::ExprList {..} => (), // TODO
-        Expr::Func {..} => (), // TODO
-        Expr::Struct {..} => (), // TODO
-        Expr::Namespace {..} => (), // TODO
-        Expr::Enum {..} => (), // TODO
-        Expr::Bitfield {..} => (), // TODO
-        Expr::Return {..} => (), // TODO
+        Expr::StatementList {..} => (), // TODO
         Expr::Access {..} => (), // TODO
         Expr::Attribute {..} => (), // TODO
         Expr::AttributeArgument {..} => (), // TODO
         Expr::WhileLoop { .. } => (), // TODO
-        Expr::ForLoop { .. } => (), // TODO
         Expr::UnnamedParameter { .. } => (), // TODO
         Expr::Cast { .. } => (), // TODO
-        Expr::Union { .. } => (), // TODO
         Expr::ArrayAccess { .. } => (), // TODO
-        Expr::ArrayDefinition { .. } => (), // TODO
         Expr::Type { .. } => (), // TODO
-        Expr::Match { .. } => (), // TODO
-        Expr::TryCatch { .. } => (), // TODO
+        Expr::ExprList { .. } => (),
+        Expr::Definition(_) => (), // TODO
     }
 }
 

@@ -11,9 +11,9 @@ use nom::{
 };
 use nom_supreme::ParserExt;
 
-use crate::{token::{Spanned, Tokens, Token, Keyword, BuiltFunc}, combinators::{ignore, map_with_span, to}, m_parser::{numeric, operations::mathematical_expression, namespace_resolution, ident, value_type_any, member_access, function_call, parse_type}, Expr, recovery_err::{TokResult, TokError}};
+use crate::{token::{Spanned, Tokens, Token, Keyword, BuiltFunc}, combinators::{ignore, map_with_span, to}, m_parser::{numeric, operations::mathematical_expression, namespace_resolution, ident, value_type_any, member_access, function_call_expr, parse_type}, Expr, recovery_err::{TokResult, TokError}};
 
-use super::{custom_type, custom_type_parameters, HexTypeDef, Endianness};
+use super::{custom_type, custom_type_parameters, HexTypeDef, Endianness, FuncCall};
 
 pub(crate) fn factor<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
     choice((
@@ -24,7 +24,7 @@ pub(crate) fn factor<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned
             mathematical_expression.context("Expected mathematical expression"),
             just(Token::Separator(')')).context("Missing )")
         ),
-        function_call,
+        function_call_expr,
         preceded(
             peek(then(
                 ident,
@@ -144,7 +144,7 @@ fn builtin_func<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr
         )),
         |((name, name_span), (argument, arg_span)), span| {
             let func_name = Box::new((Expr::Local { name: (name, name_span.clone()) }, name_span));
-            (Expr::Call { func_name, arguments: (vec![(argument, arg_span.clone())], arg_span) }, span)
+            (Expr::Call(FuncCall { func_name, arguments: (vec![(argument, arg_span.clone())], arg_span) }), span)
         }
     )(input)
 }

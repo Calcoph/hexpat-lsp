@@ -5,7 +5,7 @@ use nom_locate::LocatedSpan;
 //use nom::error::{ParseError, ErrorKind, FromExternalError};
 use nom_supreme::error::{ErrorTree, GenericErrorTree};
 
-use crate::{token::{TokSpan, Tokens, Spanned, Token}, Expr};
+use crate::{token::{TokSpan, Tokens, Spanned, Token}, Expr, m_parser::Statement};
 
 pub type StrResult<I, O, E=ErrorTree<I>> = Result<(I, O), nom::Err<E>>;
 pub type TokError<'a, 'b> = GenericErrorTree<Tokens<'a, 'b>, &'a [TokSpan<'a, 'b>], &'static str, Box<dyn Error + 'a>>;
@@ -65,6 +65,98 @@ where
             },
             Err(e) => Err(e)
         }
+    }
+}
+
+pub fn statement_recovery<'a, 'b: 'a, F>(mut func: F) -> impl FnMut(Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Statement>>
+where
+    F: Parser<Tokens<'a, 'b>, Spanned<Statement>, TokError<'a, 'b>>
+{
+    move |input: Tokens<'a, 'b>| -> TokResult<'a, 'b, Spanned<Statement>> {
+        match func.parse(input) {
+            Ok(r) => Ok(r),
+            Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => {
+                recover_statement_from_error(e)
+            },
+            Err(e) => Err(e)
+        }
+    }
+}
+
+fn recover_statement_from_error<'a, 'b>(e: TokError<'a, 'b>) -> TokResult<'a, 'b, Spanned<Statement>> {
+    match e {
+        GenericErrorTree::Stack { base: _, contexts } => {
+            let (input, context) = contexts[contexts.len()-1];
+            let (rest, span) = match input.tokens.len() {
+                0 => {
+                    (input, input.span())
+                },
+                _ => {
+                    // Consumes tokens until finding a ';' or '}'
+                    let (mut rest, n_token) = input.take_split(1);
+                    let mut next_token = n_token;
+                    let mut continue_loop = |input| -> TokResult<'a, 'b, Tokens> {
+                        peek(choice((
+                            just(Token::Separator(';')),
+                            just(Token::Separator('}'))
+                        )))(input)
+                    }(next_token).is_err() && rest.tokens.len() > 0;
+                    let mut bracket_count = 0;
+                    continue_loop = false; // TODO: delete this (or not)
+                    while continue_loop { // TODO: First see where to split and then do it, instead of splitting by 1 at a time
+                        let (r, n_token) = rest.take_split(1);
+                        rest = r;
+                        next_token = n_token;
+
+                        let is_open_bracket = |input| -> TokResult<'a, 'b, Tokens> {peek(just(Token::Separator('{')))(input)};
+                        let is_semicolon = |input| -> TokResult<'a, 'b, Tokens> {peek(just(Token::Separator(';')))(input)};
+                        let is_close_bracket = |input| -> TokResult<'a, 'b, Tokens> {peek(just(Token::Separator('{')))(input)};
+
+                        if is_open_bracket(next_token).is_ok() {
+                            bracket_count += 1;
+                        } else if is_semicolon(next_token).is_ok() {
+                            if bracket_count <= 0 {
+                                continue_loop = false
+                            }
+                        } else if is_close_bracket(next_token).is_ok() {
+                            if bracket_count <= 0 {
+                                continue_loop = false
+                            }
+                            bracket_count -= 1;
+                        }
+
+                        continue_loop = continue_loop && rest.tokens.len() > 0; 
+                    }
+                    (rest, n_token.span())
+                }
+            };
+
+            match context {
+                nom_supreme::error::StackContext::Context(error_msg) => rest.state.report_error(RecoveredError(span.clone(), error_msg.to_string())),
+                nom_supreme::error::StackContext::Kind(error_kind) => {
+                    let error = error_kind.description().to_string();
+                    eprintln!("Unreachable code entered: {:?} | {}", span.clone(), error);
+                    rest.state.report_error(RecoveredError(span.clone(), error))
+                },
+            };
+
+            Ok((rest, (Statement::Error, span)))
+        },
+        GenericErrorTree::Base { location, kind } => Err(nom::Err::Error(TokError::Base { location, kind })),
+        GenericErrorTree::Alt(v) => {
+            let mut v2 = vec![];
+            for e in v {
+                match recover_statement_from_error(e) {
+                    Ok(a) => return Ok(a),
+                    Err(res) => match res {
+                        nom::Err::Error(res) => v2.push(res),
+                        nom::Err::Failure(res) => v2.push(res),
+                        _ => unreachable!(),
+                    },
+                };
+            };
+            Err(nom::Err::Error(TokError::Alt(v2)))
+        },
     }
 }
 

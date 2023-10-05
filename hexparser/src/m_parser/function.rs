@@ -18,9 +18,9 @@ use nom::{
 };
 use nom_supreme::ParserExt;
 
-use crate::{token::{Spanned, Tokens, Token, Keyword, ValueType}, combinators::{map_with_span, spanned}, m_parser::{ident, parse_type, mathematical_expression, FuncArgument, ident_local, Assignment, BinaryOp, member_access, function_call, assignment_expr, HexTypeDef}, Expr, Value, recovery_err::{TokResult, expression_recovery, non_opt}};
+use crate::{token::{Spanned, Tokens, Token, Keyword, ValueType}, combinators::{map_with_span, spanned}, m_parser::{ident, parse_type, mathematical_expression, FuncArgument, ident_local, AssignmentOp, BinaryOp, member_access, assignment_expr, HexTypeDef}, Expr, Value, recovery_err::{TokResult, expression_recovery, non_opt, statement_recovery}};
 
-use super::{code_block, member_variable};
+use super::{code_block, member_variable, Statement, Definition, function_call_statement};
 
 fn function_arguments<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Vec<Spanned<FuncArgument>>>> {
     map_with_span(
@@ -79,8 +79,8 @@ fn function_arguments<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanne
     )(input)
 }
 
-pub(crate) fn function_definition<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
-    expression_recovery(map_with_span(
+pub(crate) fn function_definition<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Statement>> {
+    statement_recovery(map_with_span(
         preceded(
             just(Token::K(Keyword::Fn)),
             then(
@@ -100,18 +100,18 @@ pub(crate) fn function_definition<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a
             )
         ),
         |(name, (args, (list, body_span))), span| (
-            Expr::Func {
+            Statement::Func {
                 name,
                 args,
-                body: Box::new((Expr::ExprList { list }, body_span))
+                body: Box::new((Expr::StatementList { list }, body_span))
             },
             span
         )
     ))(input)
 }
 
-pub(crate) fn function_variable_decl<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
-    expression_recovery(choice((
+pub(crate) fn function_variable_decl<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Statement>> {
+    statement_recovery(choice((
         map_with_span(
             then(
                 then(
@@ -152,11 +152,11 @@ pub(crate) fn function_variable_decl<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult
                     None => (Expr::Value { val: Value::Null }, span.clone())
                 });
                 (
-                    Expr::Definition {
+                    Statement::Definition(Definition {
                         value_type,
                         name: Box::new(name),
                         body
-                    },
+                    }),
                     span
                 )
             }
@@ -171,20 +171,20 @@ pub(crate) fn function_variable_decl<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult
             ),
             |(expr, body), span| {
                 match expr.0 {
-                    Expr::ArrayDefinition { value_type, array_name, size, body: body_ } => match body {
-                        Some(_) => (Expr::ArrayDefinition { value_type, array_name, size, body: body_ }, expr.1), // TODO: This should throw an error of some kind
-                        None => (Expr::ArrayDefinition { value_type, array_name, size, body: body_ }, expr.1)
+                    Statement::ArrayDefinition { value_type, array_name, size, body: body_ } => match body {
+                        Some(_) => (Statement::ArrayDefinition { value_type, array_name, size, body: body_ }, expr.1), // TODO: This should throw an error of some kind
+                        None => (Statement::ArrayDefinition { value_type, array_name, size, body: body_ }, expr.1)
                     },
-                    Expr::Definition { value_type, name, body: body_ } => match body {
+                    Statement::Definition(Definition { value_type, name, body: body_ }) => match body {
                         Some(body) => {
                             let a = body_.0;
                             if let Expr::Value{ val: Value::Null } = a {
                             } else {
                                 // TODO: This should throw an error of some kind
                             };
-                            (Expr::Definition { value_type, name, body: Box::new(body) }, span)
+                            (Statement::Definition(Definition { value_type, name, body: Box::new(body) }), span)
                         },
-                        None => (Expr::Definition { value_type, name, body: body_ }, expr.1)
+                        None => (Statement::Definition(Definition { value_type, name, body: body_ }), expr.1)
                     }
                     _ => unreachable!()
                 }
@@ -193,8 +193,8 @@ pub(crate) fn function_variable_decl<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult
     )))(input)
 }
 
-pub(crate) fn function_while_loop<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
-    expression_recovery(map_with_span(
+pub(crate) fn function_while_loop<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Statement>> {
+    statement_recovery(map_with_span(
         preceded(
             just(Token::K(Keyword::While)),
             then(
@@ -207,17 +207,17 @@ pub(crate) fn function_while_loop<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a
             )
         ),
         |(condition, body), span| (
-            Expr::WhileLoop {
+            Statement::WhileLoop {
                 condition: Box::new(condition),
-                body: Box::new(body)
+                body
             },
             span
         )
     ))(input)
 }
 
-pub(crate) fn function_for_loop<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
-    expression_recovery(map_with_span(
+pub(crate) fn function_for_loop<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Statement>> {
+    statement_recovery(map_with_span(
         preceded(
             just(Token::K(Keyword::For)),
             then(
@@ -243,11 +243,11 @@ pub(crate) fn function_for_loop<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 
          ),
           span|
         (
-            Expr::ForLoop {
+            Statement::ForLoop {
                 var_init: Box::new(var_init),
                 var_test: Box::new(var_test),
                 var_change: Box::new(var_change),
-                body: Box::new(body)
+                body
             },
             span
         )
@@ -277,7 +277,7 @@ pub(crate) fn func_arg<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spann
                 None => Box::new((Expr::Value { val: Value::Null }, span.clone())),
             };
             let expr = match name {
-                Some(name) => Expr::Definition { value_type, name: Box::new(name), body },
+                Some(name) => Expr::Definition(Definition { value_type, name: Box::new(name), body }),
                 None => {
                     let (HexTypeDef{ endianness: _, name: value_type }, _) = value_type;
                     Expr::UnnamedParameter { type_: value_type }
@@ -289,12 +289,15 @@ pub(crate) fn func_arg<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spann
     )(input)
 }
 
-pub(crate) fn function_statements<'a, 'b: 'a>() -> (impl FnMut(Tokens<'a,'b>) -> TokResult<'a, 'b, Spanned<Expr>>, impl FnMut(Tokens<'a,'b>) -> TokResult<'a, 'b, Spanned<Expr>>) {
+pub(crate) fn function_statements<'a, 'b: 'a>() -> (
+    impl FnMut(Tokens<'a,'b>) -> TokResult<'a, 'b, Spanned<Statement>>,
+    impl FnMut(Tokens<'a,'b>) -> TokResult<'a, 'b, Spanned<Statement>>
+) {
     let semicolon_expr = choice((
         assignment_expr,
         function_controlflow_statement,
         function_assignment,
-        function_call,
+        function_call_statement,
         preceded( // TODO: Remove preceded so const is taken into account
             opt(just(Token::K(Keyword::Const))),
             function_variable_decl
@@ -311,10 +314,10 @@ pub(crate) fn function_statements<'a, 'b: 'a>() -> (impl FnMut(Tokens<'a,'b>) ->
     (semicolon_expr, no_semicolon_expr)
 }
 
-pub(crate) fn function_statement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
+pub(crate) fn function_statement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Statement>> {
     let (semicolon_expr, no_semicolon_expr) = function_statements();
 
-    expression_recovery(choice((
+    statement_recovery(choice((
         terminated(
             semicolon_expr,
             many1(just(Token::Separator(';'))).context("Missing ;")
@@ -323,16 +326,16 @@ pub(crate) fn function_statement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a,
     )))(input)
 }
 
-pub(crate) fn function_statement_semicolonless<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
+pub(crate) fn function_statement_semicolonless<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Statement>> {
     let (semicolon_expr, no_semicolon_expr) = function_statements();
-    expression_recovery(choice((
+    statement_recovery(choice((
         semicolon_expr,
         no_semicolon_expr,
     )))(input)
 }
 
-fn function_assignment<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
-    expression_recovery(map_with_span(
+fn function_assignment<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Statement>> {
+    statement_recovery(map_with_span(
         preceded(
             peek(then(
                 ident,
@@ -348,9 +351,9 @@ fn function_assignment<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spann
             )
         ),
         |(loperand, roperand), span| (
-            Expr::Binary {
+            Statement::Assignment {
                 loperand: Box::new(loperand),
-                operator: BinaryOp::Assign(Assignment::Just),
+                operator: AssignmentOp::Just,
                 roperand: Box::new(roperand)
             },
             span
@@ -358,8 +361,8 @@ fn function_assignment<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spann
     ))(input)
 }
 
-pub(crate) fn function_controlflow_statement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
-    expression_recovery(choice(( // TODO: Probably this can do a more personalized recovery, instead of expression_recovery
+pub(crate) fn function_controlflow_statement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Statement>> {
+    statement_recovery(choice(( // TODO: Probably this can do a more personalized recovery, instead of expression_recovery
         map_with_span(
             preceded(
                 just(Token::K(Keyword::Return)),
@@ -373,18 +376,18 @@ pub(crate) fn function_controlflow_statement<'a, 'b>(input: Tokens<'a, 'b>) -> T
                     Some(val) => val,
                     None => (Expr::Value { val: Value::Null }, span.clone()),
                 };
-                let expr = Expr::Return { value: Box::new(value) };
+                let expr = Statement::Return { value: Box::new(value) };
 
                 (expr, span)
             }
         ),
         map_with_span(
             just(Token::K(Keyword::Break)),
-            |_, span| (Expr::Break, span)
+            |_, span| (Statement::Break, span)
         ),
         map_with_span(
             just(Token::K(Keyword::Continue)),
-            |_, span| (Expr::Continue, span)
+            |_, span| (Statement::Continue, span)
         ),
     )))(input)
 }

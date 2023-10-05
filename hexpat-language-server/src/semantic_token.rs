@@ -139,7 +139,7 @@ pub fn semantic_token_from_expr(
                 .position(|item| item.as_str() == SemanticTokenType::KEYWORD.as_str())
                 .unwrap(),
         }),
-        Expr::ExprList { list } => {
+        Expr::StatementList { list } => {
             for expr in list {
                 semantic_token_from_expr(expr, semantic_tokens)
             }

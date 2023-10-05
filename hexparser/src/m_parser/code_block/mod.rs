@@ -8,20 +8,20 @@ use nom::{
 };
 use nom_supreme::ParserExt;
 
-use crate::{m_parser::{function::function_statement, operations::mathematical_expression, member}, combinators::{map_with_span, spanned}, token::{Token, Tokens, Spanned, Keyword}, Expr, recovery_err::{TokResult, expression_recovery, non_opt, TokError}, Value};
+use crate::{m_parser::{function::function_statement, operations::mathematical_expression, member}, combinators::{map_with_span, spanned}, token::{Token, Tokens, Spanned, Keyword}, Expr, recovery_err::{TokResult, expression_recovery, non_opt, TokError, statement_recovery}, Value};
 
-use super::{case_parameters, parameters, MatchBranch};
+use super::{case_parameters, parameters, MatchBranch, Statement};
 
 
 pub(crate) mod function_statement;
 pub(crate) mod member;
 pub(crate) mod bitfield;
 
-fn conditional<'a, 'b, P>(input: Tokens<'a, 'b>, member_parser: P) -> TokResult<'a, 'b, Spanned<Expr>>
+fn conditional<'a, 'b, P>(input: Tokens<'a, 'b>, member_parser: P) -> TokResult<'a, 'b, Spanned<Statement>>
 where
-    P: Parser<Tokens<'a, 'b>, Spanned<Expr>, TokError<'a,'b>> + Copy
+    P: Parser<Tokens<'a, 'b>, Spanned<Statement>, TokError<'a,'b>> + Copy
 {
-    expression_recovery(map_with_span(
+    statement_recovery(map_with_span(
         then(
             map_with_span(separated_list1(
                 just(Token::K(Keyword::Else)),
@@ -34,15 +34,15 @@ where
                             just(Token::Separator(')')).context("Missing )")
                         ),
                         choice((
-                            map(
-                                delimited(
-                                    just(Token::Separator('{')),
-                                    spanned(many0(member_parser)),
-                                    just(Token::Separator('}')).context("Missing }")
-                                ),
-                                |(list, span)| (Expr::ExprList { list }, span)
+                            delimited(
+                                just(Token::Separator('{')),
+                                spanned(many0(member_parser)),
+                                just(Token::Separator('}')).context("Missing }")
                             ),
-                            member_parser.context("Invalid expression"),
+                            spanned(map(
+                                member_parser.context("Invalid expression"),
+                                |a| vec![a]
+                            )),
                         ))
                     ))
                 ), |a, span| (a, span))
@@ -50,33 +50,33 @@ where
             opt(preceded(
                 just(Token::K(Keyword::Else)),
                 choice((
-                    map(
-                        delimited(
-                            just(Token::Separator('{')),
-                            spanned(many0(member_parser)),
-                            non_opt(just(Token::Separator('}'))).context("Missing }")
-                        ),
-                        |(list, span)| (Expr::ExprList { list }, span)
+                    delimited(
+                        just(Token::Separator('{')),
+                        spanned(many0(member_parser)),
+                        non_opt(just(Token::Separator('}'))).context("Missing }")
                     ),
-                    member_parser.context("Invalid expression")
+                    spanned(map(
+                        member_parser.context("Invalid expression"),
+                        |a| vec![a]
+                    ))
                 ))
             ))
         ),
         |(ifs, alternative), span| {
             let mut v = vec![];
             for ((test, consequent), span) in ifs.0 {
-                v.push((Expr::If {
+                v.push((Statement::If {
                     test: Box::new(test),
-                    consequent: Box::new(consequent),
+                    consequent,
                 }, span))
             }
-            let alternative = Box::new(match alternative {
+            let alternative = match alternative {
                 Some(alt) => alt,
-                None => (Expr::Value { val: Value::Null }, span.clone()),
-            });
+                None => (vec![], span.clone()),
+            };
             (
-                Expr::IfBlock {
-                    ifs: Box::new((Expr::ExprList { list: v }, ifs.1)),
+                Statement::IfBlock {
+                    ifs: Box::new((Expr::StatementList { list: v }, ifs.1)),
                     alternative
                 },
                 span
@@ -85,28 +85,28 @@ where
     ))(input)
 }
 
-fn statement_body<'a, 'b, P>(input: Tokens<'a, 'b>, member_parser: P) -> TokResult<'a, 'b, Spanned<Expr>>
+fn statement_body<'a, 'b, P>(input: Tokens<'a, 'b>, member_parser: P) -> TokResult<'a, 'b, Spanned<Vec<Spanned<Statement>>>>
 where
-    P: Parser<Tokens<'a, 'b>, Spanned<Expr>, TokError<'a,'b>> + Copy
+    P: Parser<Tokens<'a, 'b>, Spanned<Statement>, TokError<'a,'b>> + Copy
 {
     choice((
-        map_with_span(
-            delimited(
-                just(Token::Separator('{')),
-                many0(member_parser),
-                just(Token::Separator('}'))
-            ),
-            |list, span| (Expr::ExprList { list }, span)
+        delimited(
+            just(Token::Separator('{')),
+            spanned(many0(member_parser)),
+            just(Token::Separator('}'))
         ),
-        member_parser
+        spanned(map(
+            member_parser,
+            |a| vec![a]
+        ))
     ))(input)
 }
 
-fn match_statement<'a, 'b, P>(input: Tokens<'a, 'b>, member_parser: P) -> TokResult<'a, 'b, Spanned<Expr>>
+fn match_statement<'a, 'b, P>(input: Tokens<'a, 'b>, member_parser: P) -> TokResult<'a, 'b, Spanned<Statement>>
 where
-    P: Parser<Tokens<'a, 'b>, Spanned<Expr>, TokError<'a,'b>> + Copy
+    P: Parser<Tokens<'a, 'b>, Spanned<Vec<Spanned<Statement>>>, TokError<'a,'b>> + Copy
 {
-    expression_recovery(map_with_span(
+    statement_recovery(map_with_span(
         preceded(
             just(Token::K(Keyword::Match)),
             tuple((
@@ -129,7 +129,7 @@ where
                     body
                 }
             }).collect();
-            (Expr::Match {
+            (Statement::Match {
                 parameters,
                 branches
             }, span)
@@ -137,11 +137,11 @@ where
     ))(input)
 }
 
-fn try_catch<'a, 'b, P>(input: Tokens<'a, 'b>, member_parser: P) -> TokResult<'a, 'b, Spanned<Expr>>
+fn try_catch<'a, 'b, P>(input: Tokens<'a, 'b>, member_parser: P) -> TokResult<'a, 'b, Spanned<Statement>>
 where
-    P: Parser<Tokens<'a, 'b>, Spanned<Expr>, TokError<'a,'b>> + Copy
+    P: Parser<Tokens<'a, 'b>, Spanned<Statement>, TokError<'a,'b>> + Copy
 {
-    expression_recovery(map_with_span(
+    statement_recovery(map_with_span(
         preceded(
             just(Token::K(Keyword::Try)),
             then(
@@ -162,11 +162,11 @@ where
         ),
         |((try_block, try_span), catch_block), span| {
             let catch_block = catch_block.map(|(catch_block, catch_span)| {
-                Box::new((Expr::ExprList { list: catch_block }, catch_span))
+                Box::new((Expr::StatementList { list: catch_block }, catch_span))
             });
 
-            (Expr::TryCatch {
-                try_block: Box::new((Expr::ExprList { list: try_block }, try_span)),
+            (Statement::TryCatch {
+                try_block: Box::new((Expr::StatementList { list: try_block }, try_span)),
                 catch_block,
             }, span) // TODO
         }

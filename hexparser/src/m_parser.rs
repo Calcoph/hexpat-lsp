@@ -24,7 +24,7 @@ use nom::{
 use nom_supreme::{error::{ErrorTree, BaseErrorKind, GenericErrorTree}, ParserExt};
 use serde::{Deserialize, Serialize};
 
-use crate::{token::{Spanned, TokSpan, Tokens, Token, Keyword, ValueType}, combinators::{spanned, ignore, to, map_with_span, fold_many0_once}, m_parser::{function::{function_statement, function_definition}, operations::mathematical_expression}, recovery_err::{TokResult, ToRange, RecoveredError, TokError, expression_recovery, non_opt}};
+use crate::{token::{Spanned, TokSpan, Tokens, Token, Keyword, ValueType}, combinators::{spanned, ignore, to, map_with_span, fold_many0_once}, m_parser::{function::{function_statement, function_definition}, operations::mathematical_expression}, recovery_err::{TokResult, ToRange, RecoveredError, TokError, expression_recovery, non_opt, statement_recovery}};
 
 pub use operations::UnaryOp;
 
@@ -68,12 +68,111 @@ impl std::fmt::Display for Value {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum Statement {
+    Return { value: Box<Spanned<Expr>> },
+    Continue,
+    Break,
+    Assignment {
+        loperand: Box<Spanned<Expr>>,
+        operator: AssignmentOp,
+        roperand: Box<Spanned<Expr>>
+    },
+    Func {
+        name: Spanned<String>,
+        args: Spanned<Vec<Spanned<FuncArgument>>>,
+        body: Box<Spanned<Expr>>
+    },
+    Struct {
+        name: Spanned<String>,
+        body: Box<Spanned<Expr>>,
+        template_parameters: Option<Box<Spanned<Expr>>>
+    },
+    Namespace {
+        name: Box<Spanned<Expr>>,
+        body: Box<Spanned<Expr>>
+    },
+    Enum {
+        name: Spanned<String>,
+        value_type: Spanned<HexTypeDef>,
+        body: Spanned<Vec<Spanned<Expr>>>
+    },
+    Bitfield {
+        name: Spanned<String>,
+        body: Box<Spanned<Expr>>
+    },
+    Using {
+        new_name: Spanned<String>,
+        template_parameters: Option<Box<Spanned<Expr>>>,
+        old_name: Spanned<HexTypeDef>
+    },
+    Error,
+    Union {
+        name: Spanned<String>,
+        body: Box<Spanned<Expr>>,
+        template_parameters: Option<Box<Spanned<Expr>>>
+    },
+    ArrayDefinition {
+        value_type: Spanned<HexTypeDef>,
+        array_name: Box<Spanned<Expr>>,
+        size: Box<Spanned<Expr>>,
+        body: Box<Spanned<Expr>>
+    },
+    WhileLoop {
+        condition: Box<Spanned<Expr>>,
+        body: Spanned<Vec<Spanned<Statement>>>
+    },
+    ForLoop {
+        var_init: Box<Spanned<Statement>>,
+        var_test: Box<Spanned<Expr>>,
+        var_change: Box<Spanned<Statement>>,
+        body: Spanned<Vec<Spanned<Statement>>>,
+    },
+    Definition(Definition),
+    Padding { padding_body: Spanned<Expr> },
+    Call(FuncCall),
+    BitFieldEntry {
+        name: Spanned<String>,
+        length: Box<Spanned<Expr>>
+    },
+    Match {
+        parameters: Vec<Spanned<Expr>>,
+        branches: Vec<MatchBranch>
+    },
+    TryCatch {
+        try_block: Box<Spanned<Expr>>,
+        catch_block: Option<Box<Spanned<Expr>>>
+    },
+    If {
+        test: Box<Spanned<Expr>>,
+        consequent: Spanned<Vec<Spanned<Statement>>>,
+    },
+    IfBlock {
+        ifs: Box<Spanned<Expr>>,
+        alternative: Spanned<Vec<Spanned<Statement>>>
+    },
+}
+
+#[derive(Debug, Clone)]
+pub struct Definition {
+    pub value_type: Spanned<HexTypeDef>,
+    pub name: Box<Spanned<Expr>>,
+    pub body: Box<Spanned<Expr>>
+}
+
+#[derive(Debug, Clone)]
+pub struct FuncCall {
+    pub func_name: Box<Spanned<Expr>>,
+    pub arguments: Spanned<Vec<Spanned<Expr>>>
+}
+
 // An expression node in the AST. Children are spanned so we can generate useful runtime errors.
 #[derive(Debug, Clone)]
 pub enum Expr {
     Error,
     Value{ val: Value },
     ExprList { list: Vec<Spanned<Self>> },
+    StatementList { list: Vec<Spanned<Statement>> },
     UnnamedParameter { type_: Spanned<HexType> },
     Local { name: Spanned<String> },
     Unary {
@@ -90,33 +189,7 @@ pub enum Expr {
         moperand: Box<Spanned<Self>>,
         roperand: Box<Spanned<Self>>
     },
-    Call {
-        func_name: Box<Spanned<Self>>,
-        arguments: Spanned<Vec<Spanned<Self>>>
-    },
-    If {
-        test: Box<Spanned<Self>>,
-        consequent: Box<Spanned<Self>>,
-    },
-    IfBlock {
-        ifs: Box<Spanned<Self>>,
-        alternative: Box<Spanned<Self>>
-    },
-    Definition {
-        value_type: Spanned<HexTypeDef>,
-        name: Box<Spanned<Self>>,
-        body: Box<Spanned<Self>>
-    },
-    ArrayDefinition {
-        value_type: Spanned<HexTypeDef>,
-        array_name: Box<Spanned<Self>>,
-        size: Box<Spanned<Self>>,
-        body: Box<Spanned<Self>>
-    },
-    BitFieldEntry {
-        name: Spanned<String>,
-        length: Box<Spanned<Self>>
-    },
+    Call(FuncCall),
     EnumEntry {
         name: Spanned<String>,
         value: Box<Spanned<Self>>
@@ -124,37 +197,6 @@ pub enum Expr {
     NamespaceAccess {
         previous: Box<Spanned<Self>>,
         name: Spanned<String>
-    },
-    Using {
-        new_name: Spanned<String>,
-        template_parameters: Option<Box<Spanned<Self>>>,
-        old_name: Spanned<HexTypeDef>
-    },
-    Return { value: Box<Spanned<Self>> },
-    Continue,
-    Break,
-    Func {
-        name: Spanned<String>,
-        args: Spanned<Vec<Spanned<FuncArgument>>>,
-        body: Box<Spanned<Self>>
-    },
-    Struct {
-        name: Spanned<String>,
-        body: Box<Spanned<Self>>,
-        template_parameters: Option<Box<Spanned<Self>>>
-    },
-    Namespace {
-        name: Box<Spanned<Self>>,
-        body: Box<Spanned<Self>>
-    },
-    Enum {
-        name: Spanned<String>,
-        value_type: Spanned<HexTypeDef>,
-        body: Box<Spanned<Self>>
-    },
-    Bitfield {
-        name: Spanned<String>,
-        body: Box<Spanned<Self>>
     },
     Access {
         item: Box<Spanned<Self>>,
@@ -175,38 +217,20 @@ pub enum Expr {
         condition: Box<Spanned<Self>>,
         body: Box<Spanned<Self>>
     },
-    ForLoop {
-        var_init: Box<Spanned<Self>>,
-        var_test: Box<Spanned<Self>>,
-        var_change: Box<Spanned<Self>>,
-        body: Box<Spanned<Self>>,
-    },
     Cast {
         cast_operator: Spanned<HexTypeDef>,
         operand: Box<Spanned<Self>>
     },
-    Union {
-        name: Spanned<String>,
-        body: Box<Spanned<Self>>,
-        template_parameters: Option<Box<Spanned<Self>>>
-    },
     Type {
         val: HexTypeDef
     },
-    Match {
-        parameters: Vec<Spanned<Expr>>,
-        branches: Vec<MatchBranch>
-    },
-    TryCatch {
-        try_block: Box<Spanned<Self>>,
-        catch_block: Option<Box<Spanned<Self>>>
-    },
+    Definition(Definition),
 }
 
 #[derive(Debug, Clone)]
 pub struct MatchBranch {
     pub case: Spanned<MatchCase>,
-    pub body: Spanned<Expr>
+    pub body: Spanned<Vec<Spanned<Statement>>>
 }
 
 #[derive(Debug, Clone)]
@@ -236,11 +260,11 @@ pub enum BinaryOp {
     LAnd,
     LXor,
     LOr,
-    Assign(Assignment)
+    Assign(AssignmentOp)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Assignment {
+pub enum AssignmentOp {
     Just,
     Add,
     Sub,
@@ -265,7 +289,7 @@ fn parameters<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Vec<Spanned<Ex
     )(input)
 }
 
-fn function_call<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
+fn function_call_expr<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
     expression_recovery(map(
         then(
             namespace_resolution,
@@ -282,10 +306,38 @@ fn function_call<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Exp
             let arguments = (arguments, args_span);
 
             (
-                Expr::Call {
+                Expr::Call(FuncCall {
                     func_name: Box::new(func_name),
                     arguments
-                },
+                }),
+                span
+            )
+        }
+    ))(input)
+}
+
+
+fn function_call_statement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Statement>> {
+    statement_recovery(map(
+        then(
+            namespace_resolution,
+            parameters 
+        ),
+        |(func_name, arguments)| {
+            let args_span = if arguments.len() > 0 {
+                arguments.get(0).unwrap().1.start..arguments.get(arguments.len()-1).unwrap().1.end
+            } else {
+                func_name.1.clone()
+            };
+
+            let span = func_name.1.start..args_span.end;
+            let arguments = (arguments, args_span);
+
+            (
+                Statement::Call(FuncCall {
+                    func_name: Box::new(func_name),
+                    arguments
+                }),
                 span
             )
         }
@@ -658,21 +710,21 @@ fn padding<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
     ))(input)
 }
 
-fn non_dolar_assignment_expr<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
-    expression_recovery(map_with_span(
+fn non_dolar_assignment_statement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Statement>> {
+    statement_recovery(map_with_span(
         tuple((
             ident_local,
             opt(choice((
-                to(just(Token::Op("+")), Assignment::Add),
-                to(just(Token::Op("-")), Assignment::Sub),
-                to(just(Token::Op("*")), Assignment::Mul),
-                to(just(Token::Op("/")), Assignment::Div),
-                to(just(Token::Op("%")), Assignment::Mod),
-                to(just(Token::Op("<<")), Assignment::LShift),
-                to(then(just(Token::Op(">")), just(Token::Op(">"))), Assignment::RShift),
-                to(just(Token::Op("|")), Assignment::BOr),
-                to(just(Token::Op("&")), Assignment::BAnd),
-                to(just(Token::Op("^")), Assignment::BXor),
+                to(just(Token::Op("+")), AssignmentOp::Add),
+                to(just(Token::Op("-")), AssignmentOp::Sub),
+                to(just(Token::Op("*")), AssignmentOp::Mul),
+                to(just(Token::Op("/")), AssignmentOp::Div),
+                to(just(Token::Op("%")), AssignmentOp::Mod),
+                to(just(Token::Op("<<")), AssignmentOp::LShift),
+                to(then(just(Token::Op(">")), just(Token::Op(">"))), AssignmentOp::RShift),
+                to(just(Token::Op("|")), AssignmentOp::BOr),
+                to(just(Token::Op("&")), AssignmentOp::BAnd),
+                to(just(Token::Op("^")), AssignmentOp::BXor),
             ))),
             preceded(
                 just(Token::Op("=")),
@@ -682,11 +734,11 @@ fn non_dolar_assignment_expr<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b,
         |(loperand, assignment, roperand), span| {
             let assignment = match assignment {
                 Some((ass, _)) => ass,
-                None => Assignment::Just
+                None => AssignmentOp::Just
             };
-            let expr = Expr::Binary {
+            let expr = Statement::Assignment {
                 loperand: Box::new(loperand),
-                operator: BinaryOp::Assign(assignment),
+                operator: assignment,
                 roperand: Box::new(roperand),
             };
     
@@ -695,8 +747,8 @@ fn non_dolar_assignment_expr<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b,
     ))(input)
 }
 
-fn assignment_expr<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
-    expression_recovery(map_with_span(
+fn assignment_expr<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Statement>> {
+    statement_recovery(map_with_span(
         tuple((
             choice((
                 ident_local,
@@ -706,16 +758,16 @@ fn assignment_expr<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<E
                 )
             )),
             opt(choice((
-                to(just(Token::Op("+")), Assignment::Add),
-                to(just(Token::Op("-")), Assignment::Sub),
-                to(just(Token::Op("*")), Assignment::Mul),
-                to(just(Token::Op("/")), Assignment::Div),
-                to(just(Token::Op("%")), Assignment::Mod),
-                to(just(Token::Op("<<")), Assignment::LShift),
-                to(then(just(Token::Op(">")), just(Token::Op(">"))), Assignment::RShift),
-                to(just(Token::Op("|")), Assignment::BOr),
-                to(just(Token::Op("&")), Assignment::BAnd),
-                to(just(Token::Op("^")), Assignment::BXor),
+                to(just(Token::Op("+")), AssignmentOp::Add),
+                to(just(Token::Op("-")), AssignmentOp::Sub),
+                to(just(Token::Op("*")), AssignmentOp::Mul),
+                to(just(Token::Op("/")), AssignmentOp::Div),
+                to(just(Token::Op("%")), AssignmentOp::Mod),
+                to(just(Token::Op("<<")), AssignmentOp::LShift),
+                to(then(just(Token::Op(">")), just(Token::Op(">"))), AssignmentOp::RShift),
+                to(just(Token::Op("|")), AssignmentOp::BOr),
+                to(just(Token::Op("&")), AssignmentOp::BAnd),
+                to(just(Token::Op("^")), AssignmentOp::BXor),
             ))),
             preceded(
                 just(Token::Op("=")),
@@ -725,11 +777,54 @@ fn assignment_expr<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<E
         |(loperand, assignment, roperand), span| {
             let assignment = match assignment {
                 Some((ass, _)) => ass,
-                None => Assignment::Just
+                None => AssignmentOp::Just
             };
-            let expr = Expr::Binary {
+            let expr = Statement::Assignment {
                 loperand: Box::new(loperand),
-                operator: BinaryOp::Assign(assignment),
+                operator: assignment,
+                roperand: Box::new(roperand),
+            };
+    
+            (expr, span)
+        }
+    ))(input)
+}
+
+fn assignment_statement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Statement>> {
+    statement_recovery(map_with_span(
+        tuple((
+            choice((
+                ident_local,
+                map_with_span(
+                    just(Token::Op("$")),
+                    |_, span| (Expr::Local { name: (String::from("$"), span.clone()) }, span)
+                )
+            )),
+            opt(choice((
+                to(just(Token::Op("+")), AssignmentOp::Add),
+                to(just(Token::Op("-")), AssignmentOp::Sub),
+                to(just(Token::Op("*")), AssignmentOp::Mul),
+                to(just(Token::Op("/")), AssignmentOp::Div),
+                to(just(Token::Op("%")), AssignmentOp::Mod),
+                to(just(Token::Op("<<")), AssignmentOp::LShift),
+                to(then(just(Token::Op(">")), just(Token::Op(">"))), AssignmentOp::RShift),
+                to(just(Token::Op("|")), AssignmentOp::BOr),
+                to(just(Token::Op("&")), AssignmentOp::BAnd),
+                to(just(Token::Op("^")), AssignmentOp::BXor),
+            ))),
+            preceded(
+                just(Token::Op("=")),
+                mathematical_expression.context("Expected mathematical expression")
+            )
+        )),
+        |(loperand, assignment, roperand), span| {
+            let assignment = match assignment {
+                Some((ass, _)) => ass,
+                None => AssignmentOp::Just
+            };
+            let expr = Statement::Assignment {
+                loperand: Box::new(loperand),
+                operator: assignment,
                 roperand: Box::new(roperand),
             };
     
@@ -768,7 +863,7 @@ fn array_declaration<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Option<
     )(input)
 }
 
-fn member_variable<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
+fn member_variable<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Statement>> {
     choice((
         map_with_span(
             tuple(( // parseMemberArrayVariable parse_member_variable
@@ -809,7 +904,7 @@ fn member_variable<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<E
 
                 match array_size {
                     Some(array_size) => (
-                        Expr::ArrayDefinition {
+                        Statement::ArrayDefinition {
                             value_type,
                             array_name: Box::new(name),
                             size: Box::new(array_size),
@@ -818,11 +913,11 @@ fn member_variable<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<E
                         span
                     ),
                     None => (
-                        Expr::Definition {
+                        Statement::Definition(Definition {
                             value_type,
                             name: Box::new(name),
                             body
-                        },
+                        }),
                         span
                     ),
                 }
@@ -882,11 +977,11 @@ fn member_variable<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<E
                 )
             )),
             |(value_type, name, body), span| (
-                Expr::Definition {
+                Statement::Definition(Definition {
                     value_type,
                     name: Box::new(name),
                     body: Box::new(body)
-                },
+                }),
                 span
             )
         ),
@@ -917,11 +1012,11 @@ fn member_variable<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<E
                 });
 
                 (
-                    Expr::Definition {
+                    Statement::Definition(Definition {
                         value_type,
                         name: Box::new(name),
                         body: body
-                    },
+                    }),
                     span
                 )
             }
@@ -957,7 +1052,7 @@ fn member_variable<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<E
 
                 match array_size {
                     Some(array_size) => (
-                        Expr::ArrayDefinition {
+                        Statement::ArrayDefinition {
                             value_type,
                             array_name: Box::new(name),
                             size: Box::new(array_size),
@@ -966,11 +1061,11 @@ fn member_variable<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<E
                         span
                     ),
                     None => (
-                        Expr::Definition {
+                        Statement::Definition(Definition {
                             value_type,
                             name: Box::new(name),
                             body
-                        },
+                        }),
                         span
                     )
                 }
@@ -1009,18 +1104,18 @@ fn member_variable<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<E
                 )
             )),
             |(value_type, body), span| (
-                Expr::Definition {
+                Statement::Definition(Definition {
                     value_type,
                     name: Box::new((Expr::Value { val: Value::Null }, span.clone())),
                     body: Box::new(body)
-                },
+                }),
                 span
             )
         ),
     ))(input)
 }
 
-fn member_declaration<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
+fn member_declaration<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Statement>> {
     preceded(
         peek(choice((
             ignore(just(Token::K(Keyword::BigEndian))),
@@ -1029,28 +1124,35 @@ fn member_declaration<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanne
             ignore(ident)
         ))),
         choice((
-            function_call,
+            function_call_statement,
             member_variable
         ))
     )(input)
 }
 
-pub(crate) fn member<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
-    expression_recovery(choice((
+pub(crate) fn member<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Statement>> {
+    statement_recovery(choice((
         code_block::member::conditional,
         code_block::member::match_statement,
         code_block::member::try_catch,
         terminated(
             choice((
-                assignment_expr,
-                preceded(
+                assignment_statement,
+                map_with_span(preceded(
                     just(Token::V(ValueType::Padding)),
                     delimited(
                         just(Token::Separator('[')).context("Missing ["),
                         padding.context("Expected padding expression"),
                         just(Token::Separator(']')).context("Missing ]")
                     )
-                ),
+                ), |padding_body, span| {
+                    (
+                        Statement::Padding {
+                            padding_body
+                        },
+                        span
+                    )
+                }),
                 member_declaration,
                 function_controlflow_statement
             )),
@@ -1082,8 +1184,8 @@ pub(crate) fn template_list<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, 
     )(input)
 }
 
-pub(crate) fn parse_struct<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
-    expression_recovery(map_with_span(
+pub(crate) fn parse_struct<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Statement>> {
+    statement_recovery(map_with_span(
         preceded(
             just(Token::K(Keyword::Struct)),
             tuple((
@@ -1105,9 +1207,9 @@ pub(crate) fn parse_struct<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, S
         ),
         |(name, template_parameters, inheritance, (body, body_span)), span| { // TODO: Take into account the inheritance.
             (
-                Expr::Struct {
+                Statement::Struct {
                     name,
-                    body: Box::new((Expr::ExprList { list: body }, body_span)),
+                    body: Box::new((Expr::StatementList { list: body }, body_span)),
                     template_parameters: template_parameters.boxed()
                 },
                 span
@@ -1116,8 +1218,8 @@ pub(crate) fn parse_struct<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, S
     ))(input)
 }
 
-fn parse_union<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
-    expression_recovery(map_with_span(
+fn parse_union<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Statement>> {
+    statement_recovery(map_with_span(
         preceded(
             just(Token::K(Keyword::Union)),
             tuple((
@@ -1132,9 +1234,9 @@ fn parse_union<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>
         ),
         |(name, template_parameters, (body, body_span)), span| {
             (
-                Expr::Union {
+                Statement::Union {
                     name,
-                    body: Box::new((Expr::ExprList { list: body }, body_span)),
+                    body: Box::new((Expr::StatementList { list: body }, body_span)),
                     template_parameters: template_parameters.boxed(),
                 },
                 span
@@ -1143,8 +1245,8 @@ fn parse_union<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>
     ))(input)
 }
 
-fn parse_enum<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
-    expression_recovery(map_with_span(
+fn parse_enum<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Statement>> {
+    statement_recovery(map_with_span(
         preceded(
             just(Token::K(Keyword::Enum)),
             then(
@@ -1186,10 +1288,10 @@ fn parse_enum<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>>
             let entries = entries.into_iter()
                 .map(|((name, name_span), value)| (Expr::EnumEntry { name: (name, name_span.clone()), value: Box::new(value) }, name_span)).collect();
             (
-                Expr::Enum {
+                Statement::Enum {
                     name,
                     value_type,
-                    body: Box::new((Expr::ExprList { list: entries }, entries_span))
+                    body: (entries, entries_span)
                 },
                 span
             )
@@ -1197,9 +1299,12 @@ fn parse_enum<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>>
     ))(input)
 }
 
-fn bitfield_entry_statements<'a, 'b: 'a>() -> (impl FnMut(Tokens<'a,'b>) -> TokResult<'a, 'b, Spanned<Expr>>, impl FnMut(Tokens<'a,'b>) -> TokResult<'a, 'b, Spanned<Expr>>) {
+fn bitfield_entry_statements<'a, 'b: 'a>() -> (
+    impl FnMut(Tokens<'a,'b>) -> TokResult<'a, 'b, Spanned<Statement>>,
+    impl FnMut(Tokens<'a,'b>) -> TokResult<'a, 'b, Spanned<Statement>>
+) {
     let semicolon_expr = terminated(choice((
-        non_dolar_assignment_expr,
+        non_dolar_assignment_statement,
         map_with_span(
             separated_pair(
                 preceded(
@@ -1213,7 +1318,7 @@ fn bitfield_entry_statements<'a, 'b: 'a>() -> (impl FnMut(Tokens<'a,'b>) -> TokR
                 mathematical_expression
             ),
             |(name, length), span| (
-                Expr::BitFieldEntry {
+                Statement::BitFieldEntry {
                     name,
                     length: Box::new(length)
                 },
@@ -1227,7 +1332,7 @@ fn bitfield_entry_statements<'a, 'b: 'a>() -> (impl FnMut(Tokens<'a,'b>) -> TokR
                 mathematical_expression
             ),
             |((_, pad_span), length), span| (
-                Expr::BitFieldEntry {
+                Statement::BitFieldEntry {
                     name: (String::from("padding"), pad_span),
                     length: Box::new(length)
                 },
@@ -1235,9 +1340,9 @@ fn bitfield_entry_statements<'a, 'b: 'a>() -> (impl FnMut(Tokens<'a,'b>) -> TokR
             )
         ),
         map_with_span(
-            function_call,
+            function_call_statement,
             |(name, n_span), span| (
-                Expr::BitFieldEntry {
+                Statement::BitFieldEntry {
                     name: ("FUNCTION".to_string(), n_span.clone()), // TODO
                     length: Box::new((Expr::Value { val: Value::Null }, n_span)) // TODO
                 },
@@ -1279,12 +1384,12 @@ fn bitfield_entry_statements<'a, 'b: 'a>() -> (impl FnMut(Tokens<'a,'b>) -> TokR
                     ),
                     then(
                         ident,
-                        member_variable
+                        to(member_variable, Expr::Value { val: Value::Null }) // TODO: Don't ignore
                     )
                 ))
             ),
             |(name, other), span| (
-                Expr::BitFieldEntry {
+                Statement::BitFieldEntry {
                     name: ("TODO".to_string(), span.clone()),
                     length: Box::new((Expr::Value { val: Value::Null }, span.clone()))
                 },
@@ -1303,10 +1408,10 @@ fn bitfield_entry_statements<'a, 'b: 'a>() -> (impl FnMut(Tokens<'a,'b>) -> TokR
     (semicolon_expr, no_semicolon_expr)
 }
 
-fn bitfield_entry<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
+fn bitfield_entry<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Statement>> {
     let (semicolon_expr, no_semicolon_expr) = bitfield_entry_statements();
 
-    expression_recovery(choice((
+    statement_recovery(choice((
         terminated(
             semicolon_expr,
             many1(just(Token::Separator(';'))).context("Missing ;")
@@ -1315,8 +1420,8 @@ fn bitfield_entry<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Ex
     )))(input)
 }
 
-fn parse_bitfield<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
-    expression_recovery(map_with_span(
+fn parse_bitfield<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Statement>> {
+    statement_recovery(map_with_span(
         preceded(
             just(Token::K(Keyword::Bitfield)),
             then(
@@ -1336,12 +1441,12 @@ fn parse_bitfield<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Ex
                 };
                 
                 (
-                    Expr::ExprList { list: body },
+                    Expr::StatementList { list: body },
                     span
                 )
             });
             (
-                Expr::Bitfield {
+                Statement::Bitfield {
                     name,
                     body
                 },
@@ -1412,8 +1517,8 @@ fn pointer_array_variable_placement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<
     )(input)
 }
 
-pub(crate) fn parse_namespace<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
-    expression_recovery(map_with_span(
+pub(crate) fn parse_namespace<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Statement>> {
+    statement_recovery(map_with_span(
         preceded(
             just(Token::K(Keyword::Namespace)),
             then(
@@ -1448,9 +1553,9 @@ pub(crate) fn parse_namespace<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b
                     }
                 }));
             (
-                Expr::Namespace {
+                Statement::Namespace {
                     name,
-                    body: Box::new((Expr::ExprList { list: body }, body_span))
+                    body: Box::new((Expr::StatementList { list: body }, body_span))
                 },
                 span
             )
@@ -1458,7 +1563,7 @@ pub(crate) fn parse_namespace<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b
     ))(input)
 }
 
-fn placement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
+fn placement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Statement>> {
     map_with_span(
         then(
             parse_type,
@@ -1543,7 +1648,7 @@ fn placement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> 
         |(value_type, (name, array_size, body)), span| {
             match array_size {
                 Some(Some(array_size)) => (
-                    Expr::ArrayDefinition {
+                    Statement::ArrayDefinition {
                         value_type,
                         array_name: Box::new(name),
                         body: Box::new(body),
@@ -1554,7 +1659,7 @@ fn placement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> 
                 Some(None) => {
                     let (array_name, name_span) = name;
                     (
-                        Expr::ArrayDefinition {
+                        Statement::ArrayDefinition {
                             value_type,
                             array_name: Box::new((array_name, name_span.clone())),
                             body: Box::new(body),
@@ -1564,11 +1669,11 @@ fn placement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> 
                     )
                 },
                 None => (
-                    Expr::Definition {
+                    Statement::Definition(Definition {
                         value_type,
                         name: Box::new(name),
                         body: Box::new(body)
-                    },
+                    }),
                     span
                 )
             }
@@ -1576,8 +1681,8 @@ fn placement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> 
     )(input)
 }
 
-fn using<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
-    expression_recovery(map_with_span(
+fn using<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Statement>> {
+    statement_recovery(map_with_span(
         preceded(
             just(Token::K(Keyword::Using)),
             tuple((
@@ -1595,7 +1700,7 @@ fn using<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
                 None => (HexTypeDef{ endianness: Endianness::Unkown, name: (HexType::Null, span.clone()) }, span.clone()),
             };
             (
-                Expr::Using {
+                Statement::Using {
                     new_name,
                     template_parameters: template_parameters.boxed(),
                     old_name
@@ -1606,8 +1711,8 @@ fn using<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
     ))(input)
 }
 
-fn normal_placement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
-    expression_recovery(preceded(
+fn normal_placement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Statement>> {
+    statement_recovery(preceded(
         peek(choice((
                 ignore(just(Token::K(Keyword::BigEndian))),
                 ignore(just(Token::K(Keyword::LittleEndian))),
@@ -1617,8 +1722,8 @@ fn normal_placement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<
     ))(input)
 }
 
-fn todo_placement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
-    expression_recovery(preceded(
+fn todo_placement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Statement>> {
+    statement_recovery(preceded(
         peek(tuple((
             ident,
             not(just(Token::Op("="))),
@@ -1626,13 +1731,13 @@ fn todo_placement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Ex
             not(just(Token::Separator('[')))
         ))),
         choice((
-            function_call,
+            function_call_statement,
             placement
         )).context("Expected placement")
     ))(input)
 }
 
-fn statements<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
+fn statements<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Statement>> {
     let semicolon_expr = choice((
         using,
         normal_placement,
@@ -1649,7 +1754,7 @@ fn statements<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>>
         function_statement
     ));
 
-    expression_recovery(choice((
+    statement_recovery(choice((
         terminated(
             semicolon_expr,
             then(
@@ -1752,13 +1857,13 @@ fn parser<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
                     let span = input.span();
                     let state = input.tokens[0].extra; 
                     state.0.report_error(RecoveredError(span.clone(), "Unexpected token".to_string()));
-                    Ok((rest, (Expr::Error, span)))
+                    Ok((rest, (Statement::Error, span)))
                 },
                 Err(e) => Err(e)
             },
             eof
         ),
-        |(list, _), span| (Expr::ExprList { list }, span)
+        |(list, _), span| (Expr::StatementList { list }, span)
     )(input)
 }
 
