@@ -40,7 +40,7 @@ enum NameDefinition {
     }
 }
 
-fn get_definition_of_expressions(
+fn get_definition_of_exprs(
     exprs: &Vec<Spanned<Expr>>,
     definition_ass_list: &mut Vector<NameDefinition>,
     ident_offset: usize,
@@ -58,9 +58,8 @@ fn get_definition_of_statements(
     ident_offset: usize,
     is_defining: bool
 ) -> (bool, Option<Spanned<String>>) {
-    for expr in stmnts {
-        todo!()
-        //early_return_get_definition_of_expr!(&expr, definition_ass_list, ident_offset, false)
+    for stmnt in stmnts {
+        early_return_get_definition_of_statement!(&stmnt, definition_ass_list, ident_offset, false)
     }
     (true, None)
 }
@@ -71,7 +70,108 @@ fn get_definition_of_statement(
     ident_offset: usize,
     is_defining: bool
 ) -> (bool, Option<Spanned<String>>) {
-    todo!()
+    match &stmnt.0 {
+        Statement::BitFieldEntry { name, length: _ } => (true, None), // TODO: Add name to the definition list
+        Statement::If { test, consequent } => {
+            early_return_get_definition_of_expr!(test, definition_ass_list, ident_offset, false);
+            get_definition_of_statements(&consequent.0, &mut definition_ass_list.clone(), ident_offset, false)
+        }
+        Statement::IfBlock { ifs, alternative } => {
+            early_return_get_definition_of_expr!(ifs, definition_ass_list, ident_offset, false);
+            get_definition_of_statements(&alternative.0, &mut definition_ass_list.clone(), ident_offset, false)
+        },
+        Statement::Using { new_name, template_parameters, old_name } => { // TODO: template_parameters
+            definition_ass_list.push_back(NameDefinition::Var(new_name.clone()));
+            get_definition_of_type_def(old_name, definition_ass_list, ident_offset)
+        },
+        Statement::Return { value } => get_definition_of_expr(value, definition_ass_list, ident_offset, false),
+        Statement::Continue => (true, None),
+        Statement::Break => (true, None),
+        Statement::Func { name, args, body } => {
+            definition_ass_list.push_back(NameDefinition::Var(name.clone()));
+            let mut new_scope = definition_ass_list.clone();
+            for arg in &args.0 {
+                match arg.0 {
+                    FuncArgument::Parameter(ref arg) => early_return_get_definition_of_expr!(arg, &mut new_scope, ident_offset, true),
+                    FuncArgument::ParameterPack(_) => (),
+                }
+            }
+            get_definition_of_expr(body, &mut new_scope, ident_offset, false)
+        },
+        Statement::Struct { name, body, template_parameters } => { // TODO: template_parameters
+            let mut new_scope = definition_ass_list.clone();
+            let ret = get_definition_of_expr(body, &mut new_scope, ident_offset, false);
+            definition_ass_list.push_back(NameDefinition::Struct {
+                name: name.clone(),
+                items: new_scope
+            });
+
+            ret
+        },
+        Statement::Namespace { name, body } => {
+            early_return_get_definition_of_expr!(name, definition_ass_list, ident_offset, true);
+            // TODO: retain the scope but with a prefix of the namespace name
+            get_definition_of_expr(body, &mut definition_ass_list.clone(), ident_offset, false)
+        },
+        Statement::Enum { name, value_type, body } => {
+            definition_ass_list.push_back(NameDefinition::Var(name.clone()));
+            match get_definition_of_type_def(value_type, definition_ass_list, ident_offset) {
+                (true, None) => (),
+                (false, None) => return (false, None),
+                (_, Some(value)) => return (false, Some(value)),
+            }
+            get_definition_of_exprs(&body.0, definition_ass_list, ident_offset, false)
+        },
+        Statement::Bitfield { name, body } => {
+            definition_ass_list.push_back(NameDefinition::Var(name.clone()));
+            get_definition_of_expr(body, definition_ass_list, ident_offset, false)
+        },
+        Statement::ForLoop { var_init, var_test, var_change, body } => {
+            let mut new_scope = definition_ass_list.clone();
+            early_return_get_definition_of_statement!(var_init, &mut new_scope, ident_offset, false);
+            early_return_get_definition_of_expr!(var_test, &mut new_scope, ident_offset, false);
+            early_return_get_definition_of_statement!(var_change, &mut new_scope, ident_offset, false);
+            get_definition_of_statements(&body.0, &mut new_scope, ident_offset, false)
+        },
+        Statement::Union { name, body, template_parameters } => { // TODO: template_parameters
+            definition_ass_list.push_back(NameDefinition::Var(name.clone()));
+            get_definition_of_expr(body, definition_ass_list, ident_offset, false)
+        },
+        Statement::ArrayDefinition { value_type, array_name, size, body } => (true, None), // TODO
+        Statement::Match { parameters, branches } => (true, None), // TODO
+        Statement::TryCatch { try_block, catch_block } => (true, None), // TODO
+        Statement::Assignment { loperand, operator, roperand } => {
+            match get_definition_of_expr(loperand, definition_ass_list, ident_offset, false) {
+                (true, None) => {
+                    get_definition_of_expr(roperand, definition_ass_list, ident_offset, false)
+                }
+                (false, None) => (false, None),
+                (_, Some(value)) => (false, Some(value)),
+            }
+        },
+        Statement::Error => (true, None),
+        Statement::WhileLoop { condition, body } => {
+            early_return_get_definition_of_expr!(condition, definition_ass_list, ident_offset, false);
+            get_definition_of_statements(&body.0, &mut definition_ass_list.clone(), ident_offset, false)
+        },
+        Statement::Definition(Definition { value_type, name, body }) => {
+            match get_definition_of_type_def(value_type, definition_ass_list, ident_offset) {
+                (true, None) => (),
+                (false, None) => return (false, None),
+                (_, Some(value)) => return (false, Some(value)),
+            }
+            early_return_get_definition_of_expr!(name, definition_ass_list, ident_offset, true);
+            get_definition_of_expr(body, definition_ass_list, ident_offset, false)
+        },
+        Statement::Padding { padding_body } => get_definition_of_expr(padding_body, definition_ass_list, ident_offset, is_defining),
+        Statement::Call(FuncCall { func_name, arguments }) => {
+            early_return_get_definition_of_expr!(func_name, definition_ass_list, ident_offset, false);
+            for expr in &arguments.0 {
+                early_return_get_definition_of_expr!(&expr, definition_ass_list, ident_offset, false)
+            }
+            (true, None)
+        }
+    }
 }
 
 /// return (need_to_continue_search, found reference)
@@ -106,7 +206,7 @@ fn get_definition_of_expr(
                 (_, Some(value)) => (false, Some(value)),
             }
         }
-        Expr::ExprList { list } => get_definition_of_expressionss(list, definition_ass_list, ident_offset, is_defining),
+        Expr::ExprList { list } => get_definition_of_exprs(list, definition_ass_list, ident_offset, is_defining),
         Expr::StatementList { list } => get_definition_of_statements(list, definition_ass_list, ident_offset, is_defining),
         Expr::UnnamedParameter { type_ } => get_definition_of_type(type_, definition_ass_list, ident_offset),
         Expr::Unary { operation: _, operand } => get_definition_of_expr(operand, definition_ass_list, ident_offset, false),
@@ -161,76 +261,6 @@ fn get_definition_of_expr(
             early_return_get_definition_of_expr!(name, definition_ass_list, ident_offset, true);
             get_definition_of_expr(body, definition_ass_list, ident_offset, false)
         },
-        /*
-        Expr::BitFieldEntry { name, length: _ } => (true, None), // TODO: Add name to the definition list 
-        Expr::If { test, consequent } => {
-            early_return_get_definition_of_expr!(test, definition_ass_list, ident_offset, false);
-            get_definition_of_expr(consequent, &mut definition_ass_list.clone(), ident_offset, false)
-        }
-        Expr::IfBlock { ifs, alternative } => {
-            early_return_get_definition_of_expr!(ifs, definition_ass_list, ident_offset, false);
-            get_definition_of_expr(alternative, &mut definition_ass_list.clone(), ident_offset, false)
-        },
-        Expr::Using { new_name, template_parameters, old_name } => { // TODO: template_parameters
-            definition_ass_list.push_back(NameDefinition::Var(new_name.clone()));
-            get_definition_of_type_def(old_name, definition_ass_list, ident_offset)
-        },
-        Expr::Return { value } => get_definition_of_expr(value, definition_ass_list, ident_offset, false),
-        Expr::Continue => (true, None),
-        Expr::Break => (true, None),
-        Expr::Func { name, args, body } => {
-            definition_ass_list.push_back(NameDefinition::Var(name.clone()));
-            let mut new_scope = definition_ass_list.clone();
-            for arg in &args.0 {
-                match arg.0 {
-                    FuncArgument::Parameter(ref arg) => early_return_get_definition_of_expr!(arg, &mut new_scope, ident_offset, true),
-                    FuncArgument::ParameterPack(_) => (),
-                }
-            }
-            get_definition_of_expr(body, &mut new_scope, ident_offset, false)
-        },
-        Expr::Struct { name, body, template_parameters } => { // TODO: template_parameters
-            let mut new_scope = definition_ass_list.clone();
-            let ret = get_definition_of_expr(body, &mut new_scope, ident_offset, false);
-            definition_ass_list.push_back(NameDefinition::Struct {
-                name: name.clone(),
-                items: new_scope
-            });
-
-            ret
-        },
-        Expr::Namespace { name, body } => {
-            early_return_get_definition_of_expr!(name, definition_ass_list, ident_offset, true);
-            // TODO: retain the scope but with a prefix of the namespace name
-            get_definition_of_expr(body, &mut definition_ass_list.clone(), ident_offset, false)
-        },
-        Expr::Enum { name, value_type, body } => {
-            definition_ass_list.push_back(NameDefinition::Var(name.clone()));
-            match get_definition_of_type_def(value_type, definition_ass_list, ident_offset) {
-                (true, None) => (),
-                (false, None) => return (false, None),
-                (_, Some(value)) => return (false, Some(value)),
-            }
-            get_definition_of_expr(body, definition_ass_list, ident_offset, false)
-        },
-        Expr::Bitfield { name, body } => {
-            definition_ass_list.push_back(NameDefinition::Var(name.clone()));
-            get_definition_of_expr(body, definition_ass_list, ident_offset, false)
-        },
-        Expr::ForLoop { var_init, var_test, var_change, body } => {
-            let mut new_scope = definition_ass_list.clone();
-            early_return_get_definition_of_expr!(var_init, &mut new_scope, ident_offset, false);
-            early_return_get_definition_of_expr!(var_test, &mut new_scope, ident_offset, false);
-            early_return_get_definition_of_expr!(var_change, &mut new_scope, ident_offset, false);
-            get_definition_of_expr(body, &mut new_scope, ident_offset, false)
-        },
-        Expr::Union { name, body, template_parameters } => { // TODO: template_parameters
-            definition_ass_list.push_back(NameDefinition::Var(name.clone()));
-            get_definition_of_expr(body, definition_ass_list, ident_offset, false)
-        },
-        Expr::ArrayDefinition { value_type, array_name, size, body } => (true, None), // TODO
-        Expr::Match { parameters, branches } => (true, None), // TODO
-        Expr::TryCatch { try_block, catch_block } => (true, None), // TODO */
     }
 }
 
