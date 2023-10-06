@@ -135,7 +135,7 @@ pub fn get_completion_of_statement(
             );
 
             get_completion_of(body, definition_map, ident_offset)
-        }, // TODO 
+        }, // TODO
         Statement::If { test, consequent } => {
             if !get_completion_of(test, definition_map, ident_offset) {
                 return false
@@ -149,7 +149,7 @@ pub fn get_completion_of_statement(
             }
 
             get_completion_of_statements(&alternative.0, definition_map, ident_offset)
-        }, // TODO 
+        }, // TODO
         Statement::BitFieldEntry { name, length: _ } => {
             definition_map.insert(
                 name.0.clone(),
@@ -157,14 +157,14 @@ pub fn get_completion_of_statement(
             );
 
             true
-        }, // TODO 
+        }, // TODO
         Statement::ForLoop { var_init, var_test, var_change, body } => {
             if !get_completion_of_statement(var_init, definition_map, ident_offset) {
                 return false;
             }
 
             get_completion_of_statements(&body.0, definition_map, ident_offset)
-        }, 
+        },
         Statement::Union { name, body, template_parameters } => {
             definition_map.insert(
                 name.0.clone(),
@@ -172,8 +172,8 @@ pub fn get_completion_of_statement(
             );
 
             get_completion_of(body, definition_map, ident_offset)
-        }, // TODO 
-        Statement::ArrayDefinition { value_type, array_name, size, body } => true, 
+        }, // TODO
+        Statement::ArrayDefinition { value_type, array_name, size, body } => true,
         Statement::Match { parameters, branches  } => {
             for parameter in parameters {
                 if !get_completion_of(parameter, definition_map, ident_offset) {
@@ -219,9 +219,30 @@ pub fn get_completion_of_statement(
                 true
             }
         },
-        Statement::Definition(_) => todo!(),
-        Statement::Padding { padding_body } => todo!(),
-        Statement::Call(_) => todo!(), 
+        Statement::Definition(Definition { value_type: _, name, body }) => {
+            match &name.0 {
+                Expr::Local { name } => {
+                    definition_map.insert(
+                        name.0.clone(),
+                        ImCompleteCompletionItem::Variable(name.0.clone()),
+                    );
+                },
+                _ => return true // TODO
+            }
+            get_completion_of(body, definition_map, ident_offset)
+        },
+        Statement::Padding { padding_body } => get_completion_of(padding_body, definition_map, ident_offset),
+        Statement::Call(FuncCall { func_name, arguments }) => {
+            if !get_completion_of(func_name, definition_map, ident_offset) {
+                return false
+            }
+            for expr in &arguments.0 {
+                if !get_completion_of(&expr, definition_map, ident_offset) {
+                    return false
+                }
+            }
+            true
+        },
     }
 }
 
