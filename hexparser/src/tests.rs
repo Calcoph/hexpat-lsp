@@ -196,10 +196,10 @@ fn stmnt_comparer(stmnt1: &Statement, stmnt2: &Statement) -> Result<(), CompErr>
             false => {println!("Different bitfield names");Err(CompErr)},
         },
         (
-            Statement::Using { new_name: (n1, _), template_parameters: None, old_name: (
+            Statement::Using { new_name: (n1, _), template_parameters: t_p1, old_name: (
                 HexTypeDef { endianness: e1, name: (hn1, _) }, _
             ) },
-            Statement::Using { new_name: (n2, _), template_parameters: None, old_name: (
+            Statement::Using { new_name: (n2, _), template_parameters: t_p2, old_name: (
                 HexTypeDef { endianness: e2, name: (hn2, _) }, _
             ) }
         ) => match n1 == n2 {
@@ -227,8 +227,8 @@ fn stmnt_comparer(stmnt1: &Statement, stmnt2: &Statement) -> Result<(), CompErr>
             },
             Err(e) => Err(e),
         },
-        (Statement::Union { name: (n1, _), body: b1, template_parameters: None },
-            Statement::Union { name: (n2, _), body: b2, template_parameters: None }
+        (Statement::Union { name: (n1, _), body: b1, template_parameters: t_p1 },
+            Statement::Union { name: (n2, _), body: b2, template_parameters: t_p2 }
         ) => match n1 == n2 {
             true => match expr_comparer(&b1.0, &b2.0) {
                 Ok(_) => Ok(()),
@@ -276,8 +276,8 @@ fn stmnt_comparer(stmnt1: &Statement, stmnt2: &Statement) -> Result<(), CompErr>
             Ok(_) => Ok(()),
             Err(e) => Err(e),
         },
-        (Statement::Struct { name: (n1, _), body: b1, template_parameters: None },
-            Statement::Struct { name: (n2, _), body: b2, template_parameters: None }
+        (Statement::Struct { name: (n1, _), body: b1, template_parameters: t_p1 },
+            Statement::Struct { name: (n2, _), body: b2, template_parameters: t_p2 }
         ) => match n1 == n2 {
             true => match expr_comparer(&b1.0, &b2.0) {
                 Ok(_) => Ok(()),
@@ -583,7 +583,7 @@ fn test_pattern_arrays() {
                         }, 0..0)
                     ]
                 }),
-                template_parameters: None
+                template_parameters: vec![]
             }, 0..0),
             (Statement::Definition(Definition {
                 value_type: (HexTypeDef {
@@ -663,7 +663,7 @@ fn test_pattern_attributes() {
                     body: bnull!()
                 }), 0..0)
             ] }),
-            template_parameters: None
+            template_parameters: vec![]
         }, 0..0),
         (Statement::Struct {
             name: (String::from("SealedTest"), 0..0),
@@ -677,7 +677,7 @@ fn test_pattern_attributes() {
                     body: bnull!()
                 }), 0..0)
             ] }),
-            template_parameters: None
+            template_parameters: vec![]
         }, 0..0),
         (Statement::Struct {
             name: (String::from("HiddenTest"), 0..0),
@@ -691,7 +691,7 @@ fn test_pattern_attributes() {
                     body: bnull!()
                 }), 0..0)
             ] }),
-            template_parameters: None
+            template_parameters: vec![]
         }, 0..0),
         (Statement::Struct {
             name: (String::from("ColorTest"), 0..0),
@@ -706,7 +706,7 @@ fn test_pattern_attributes() {
                     body: bnull!()
                 }, 0..0)
             ] }),
-            template_parameters: None
+            template_parameters: vec![]
         }, 0..0),
         (Statement::Struct {
             name: (String::from("NoUniqueAddressTest"), 0..0),
@@ -728,7 +728,7 @@ fn test_pattern_attributes() {
                     body: bnull!()
                 }), 0..0)
             ] }),
-            template_parameters: None
+            template_parameters: vec![]
         }, 0..0),
         (Statement::Func {
             name: (String::from("format_test"), 0..0),
@@ -994,7 +994,7 @@ fn test_pattern_extra_semicolon() {
                     body: bnull!()
                 }), 0..0)
             ] }),
-            template_parameters: None
+            template_parameters: vec![]
         }, 0..0),
         (Statement::Struct {
             name: (String::from("Test2"), 0..0),
@@ -1016,7 +1016,7 @@ fn test_pattern_extra_semicolon() {
                     body: bnull!()
                 }), 0..0)
             ] }),
-            template_parameters: None
+            template_parameters: vec![]
         }, 0..0),
         (Statement::Definition(Definition {
             value_type: (HexTypeDef {
@@ -1083,7 +1083,7 @@ fn test_pattern_namespaces() {
                         body: bnull!()
                     }), 0..0)
                 ] }),
-                template_parameters: None
+                template_parameters: vec![]
                 }, 0..0)
             ] })
         }, 0..0),
@@ -1100,13 +1100,13 @@ fn test_pattern_namespaces() {
                         body: bnull!()
                     }), 0..0)
                 ] }),
-                template_parameters: None
+                template_parameters: vec![]
                 }, 0..0)
             ] })
         }, 0..0),
         (Statement::Using {
             new_name: (String::from("ATest"), 0..0),
-            template_parameters: None,
+            template_parameters: vec![],
             old_name: (HexTypeDef {
                 endianness: Endianness::Unkown,
                 name: (HexType::Path(vec![
@@ -1257,7 +1257,7 @@ fn test_pattern_nested_structs() {
                     body: bnull!()
                 }), 0..0)
             ] }),
-            template_parameters: None
+            template_parameters: vec![]
         }, 0..0),
         (Statement::Struct {
             name: (String::from("Body"), 0..0),
@@ -1281,7 +1281,7 @@ fn test_pattern_nested_structs() {
                     body: bnull!()
                 }, 0..0)
             ] }),
-            template_parameters: None
+            template_parameters: vec![]
         }, 0..0),
         (Statement::Struct {
             name: (String::from("Data"), 0..0),
@@ -1303,7 +1303,7 @@ fn test_pattern_nested_structs() {
                     body: bnull!()
                 }), 0..0)
             ] }),
-            template_parameters: None
+            template_parameters: vec![]
         }, 0..0),
         (Statement::Definition(Definition {
             value_type: (HexTypeDef {
@@ -1363,7 +1363,7 @@ fn test_pattern_padding() {
                     }, 0..0)
                 ]
             }),
-            template_parameters: None
+            template_parameters: vec![]
         }, 0..0),
         (Statement::Definition(Definition {
             value_type: (HexTypeDef {
@@ -1531,7 +1531,7 @@ fn test_pattern_rvalues() {
                     body: bnull!()
                 }, 0..0)
             ] }),
-            template_parameters: None
+            template_parameters: vec![]
         }, 0..0),
         (Statement::Struct {
             name: (String::from("B"), 0..0),
@@ -1547,7 +1547,7 @@ fn test_pattern_rvalues() {
                     }), 0..0)
                 ]
             }),
-            template_parameters: None
+            template_parameters: vec![]
         }, 0..0),
         (Statement::Struct {
             name: (String::from("A"), 0..0),
@@ -1571,7 +1571,7 @@ fn test_pattern_rvalues() {
                     }), 0..0)
                 ]
             }),
-            template_parameters: None
+            template_parameters: vec![]
         }, 0..0),
         (Statement::Definition(Definition {
             value_type: (HexTypeDef {
@@ -1629,7 +1629,7 @@ fn test_pattern_structs() {
                     }, 0..0)
                 ]
             }),
-            template_parameters: None
+            template_parameters: vec![]
         }, 0..0),
         (Statement::Definition(Definition {
             value_type: (HexTypeDef {
@@ -1685,7 +1685,7 @@ fn test_pattern_unions() {
                     body: bnull!()
                 }), 0..0)
             ] }),
-            template_parameters: None
+            template_parameters: vec![]
         }, 0..0),
         (Statement::Definition(Definition {
             value_type: (HexTypeDef {

@@ -86,7 +86,7 @@ pub enum Statement {
     Struct {
         name: Spanned<String>,
         body: Box<Spanned<Expr>>,
-        template_parameters: Option<Box<Spanned<Expr>>>
+        template_parameters: Vec<Spanned<Expr>>
     },
     Namespace {
         name: Box<Spanned<Expr>>,
@@ -103,14 +103,14 @@ pub enum Statement {
     },
     Using {
         new_name: Spanned<String>,
-        template_parameters: Option<Box<Spanned<Expr>>>,
+        template_parameters: Vec<Spanned<Expr>>,
         old_name: Spanned<HexTypeDef>
     },
     Error,
     Union {
         name: Spanned<String>,
         body: Box<Spanned<Expr>>,
-        template_parameters: Option<Box<Spanned<Expr>>>
+        template_parameters: Vec<Spanned<Expr>>
     },
     ArrayDefinition {
         value_type: Spanned<HexTypeDef>,
@@ -293,7 +293,7 @@ fn function_call_expr<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanne
     expression_recovery(map(
         then(
             namespace_resolution,
-            parameters 
+            parameters
         ),
         |(func_name, arguments)| {
             let args_span = if arguments.len() > 0 {
@@ -321,7 +321,7 @@ fn function_call_statement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, S
     statement_recovery(map(
         then(
             namespace_resolution,
-            parameters 
+            parameters
         ),
         |(func_name, arguments)| {
             let args_span = if arguments.len() > 0 {
@@ -741,7 +741,7 @@ fn non_dolar_assignment_statement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a
                 operator: assignment,
                 roperand: Box::new(roperand),
             };
-    
+
             (expr, span)
         }
     ))(input)
@@ -784,7 +784,7 @@ fn assignment_expr<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<S
                 operator: assignment,
                 roperand: Box::new(roperand),
             };
-    
+
             (expr, span)
         }
     ))(input)
@@ -827,7 +827,7 @@ fn assignment_statement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Span
                 operator: assignment,
                 roperand: Box::new(roperand),
             };
-    
+
             (expr, span)
         }
     ))(input)
@@ -1164,7 +1164,7 @@ pub(crate) fn member<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned
     )))(input)
 }
 
-pub(crate) fn template_list<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
+pub(crate) fn template_list<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Vec<Spanned<Expr>>> {
     map_with_span(
         delimited(
             just(Token::Op("<")),
@@ -1179,7 +1179,7 @@ pub(crate) fn template_list<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, 
         ),
         |list, span| {
             let list = list.into_iter().map(|(_, a)| a).collect(); // ignore "auto" for now // TODO: don't ignore it
-            (Expr::ExprList { list }, span)
+            list
         }
     )(input)
 }
@@ -1206,11 +1206,15 @@ pub(crate) fn parse_struct<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, S
             ))
         ),
         |(name, template_parameters, inheritance, (body, body_span)), span| { // TODO: Take into account the inheritance.
+            let template_parameters = match template_parameters {
+                Some(t) => t,
+                None => Vec::new()
+            };
             (
                 Statement::Struct {
                     name,
                     body: Box::new((Expr::StatementList { list: body }, body_span)),
-                    template_parameters: template_parameters.boxed()
+                    template_parameters
                 },
                 span
             )
@@ -1233,11 +1237,15 @@ fn parse_union<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<State
             ))
         ),
         |(name, template_parameters, (body, body_span)), span| {
+            let template_parameters = match template_parameters {
+                Some(t) => t,
+                None => Vec::new()
+            };
             (
                 Statement::Union {
                     name,
                     body: Box::new((Expr::StatementList { list: body }, body_span)),
-                    template_parameters: template_parameters.boxed(),
+                    template_parameters,
                 },
                 span
             )
@@ -1439,7 +1447,7 @@ fn parse_bitfield<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<St
                     0 => span.clone(),
                     _ => body.get(0).unwrap().1.start..body.get(body.len()-1).unwrap().1.end
                 };
-                
+
                 (
                     Expr::StatementList { list: body },
                     span
@@ -1605,7 +1613,7 @@ fn placement<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Stateme
                             },
                             None => (Expr::Value { val: Value::Null }, fake_span.clone()),
                         };
-        
+
                         ((name, fake_span), None, body)
                     }
                 ),
@@ -1699,10 +1707,14 @@ fn using<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Statement>>
                 Some(old_name) => old_name,
                 None => (HexTypeDef{ endianness: Endianness::Unkown, name: (HexType::Null, span.clone()) }, span.clone()),
             };
+            let template_parameters = match template_parameters {
+                Some(t) => t,
+                None => Vec::new()
+            };
             (
                 Statement::Using {
                     new_name,
-                    template_parameters: template_parameters.boxed(),
+                    template_parameters,
                     old_name
                 },
                 span
@@ -1855,7 +1867,7 @@ fn parser<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
                     let input = recover_err(&e);
                     let (rest, input) = input.take_split(1);
                     let span = input.span();
-                    let state = input.tokens[0].extra; 
+                    let state = input.tokens[0].extra;
                     state.0.report_error(RecoveredError(span.clone(), "Unexpected token".to_string()));
                     Ok((rest, (Statement::Error, span)))
                 },

@@ -71,9 +71,7 @@ pub fn semantic_token_from_statement(
                     .position(|item| item.as_str() == SemanticTokenType::TYPE.as_str())
                     .unwrap(),
             });
-            if let Some(template_parameters) = template_parameters {
-                semantic_token_from_expr(template_parameters, semantic_tokens);
-            }
+            semantic_token_from_exprs(template_parameters, semantic_tokens)
         },
         Statement::Continue => semantic_tokens.push(ImCompleteSemanticToken {
             start: stmnt.1.start,
@@ -125,9 +123,7 @@ pub fn semantic_token_from_statement(
                     .unwrap(),
             });
             semantic_token_from_expr(body, semantic_tokens);
-            if let Some(template_parameters) = template_parameters {
-                semantic_token_from_expr(template_parameters, semantic_tokens)
-            }
+            semantic_token_from_exprs(template_parameters, semantic_tokens)
         },
         Statement::Namespace { name, body } => {
             semantic_tokens.push(ImCompleteSemanticToken {
@@ -189,9 +185,7 @@ pub fn semantic_token_from_statement(
                     .unwrap(),
             });
             semantic_token_from_expr(body, semantic_tokens);
-            if let Some(template_parameters) = template_parameters {
-                semantic_token_from_expr(template_parameters, semantic_tokens)
-            }
+            semantic_token_from_exprs(template_parameters, semantic_tokens)
         },
         Statement::ArrayDefinition { value_type: (_, type_span), array_name, size, body } => {
             semantic_token_from_expr(array_name, semantic_tokens);
