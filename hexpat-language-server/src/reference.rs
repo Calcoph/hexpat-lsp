@@ -12,13 +12,13 @@ pub enum ReferenceSymbol {
 use ReferenceSymbol::*;
 
 pub fn get_reference(
-    ast: &Spanned<Expr>,
+    ast: &Spanned<Vec<Spanned<Statement>>>,
     ident_offset: usize,
     include_self: bool,
 ) -> Vec<Spanned<String>> {
     let mut reference_list = vec![];
     let mut reference_symbol = ReferenceSymbol::Finding(ident_offset);
-    get_reference_of_expr(ast, &mut reference_symbol, &mut reference_list, include_self);
+    get_reference_of_statements(&ast.0, &mut reference_symbol, &mut reference_list, include_self);
     reference_list
 }
 
@@ -76,8 +76,8 @@ pub fn get_reference_of_statement(
             );
         }
         Statement::IfBlock { ifs, alternative } => {
-            get_reference_of_expr(
-                ifs,
+            get_reference_of_statements(
+                &ifs.0,
                 reference_symbol,
                 reference_list,
                 include_self,
@@ -131,8 +131,8 @@ pub fn get_reference_of_statement(
             );
         },
         Statement::Union { name, body, template_parameters } => { // TODO: template_parameters
-            get_reference_of_expr(
-                body,
+            get_reference_of_statements(
+                &body.0,
                 reference_symbol,
                 reference_list,
                 include_self,
@@ -159,8 +159,8 @@ pub fn get_reference_of_statement(
                 _ => (),
             }
             // TODO: args
-            get_reference_of_expr(
-                body,
+            get_reference_of_statements(
+                &body.0,
                 reference_symbol,
                 reference_list,
                 include_self,
@@ -178,8 +178,8 @@ pub fn get_reference_of_statement(
                 }
                 _ => {dbg!(name);},
             }
-            get_reference_of_expr(
-                body,
+            get_reference_of_statements(
+                &body.0,
                 reference_symbol,
                 reference_list,
                 include_self,
@@ -192,8 +192,8 @@ pub fn get_reference_of_statement(
                 reference_list,
                 include_self,
             );
-            get_reference_of_expr(
-                body,
+            get_reference_of_statements(
+                &body.0,
                 reference_symbol,
                 reference_list,
                 include_self,
@@ -228,8 +228,8 @@ pub fn get_reference_of_statement(
                 }
                 _ => (),
             }
-            get_reference_of_expr(
-                body,
+            get_reference_of_statements(
+                &body.0,
                 reference_symbol,
                 reference_list,
                 include_self,
@@ -448,7 +448,6 @@ pub fn get_reference_of_expr(
             include_self,
         ),
         Expr::ExprList { list } => get_reference_of_expressions(list, reference_symbol, reference_list, include_self),
-        Expr::StatementList { list } => get_reference_of_statements(list, reference_symbol, reference_list, include_self),
         Expr::UnnamedParameter { type_: _ } => (),
         Expr::Access { item, member } => {
             get_reference_of_expr(

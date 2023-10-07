@@ -23,7 +23,7 @@ fn debug_test() {
         String::from("%programfiles%/imhex")
     ];
 
-    let ((expr, _), errs, _) = parse(test_str, &includeable_folders);
+    let ((stmnts, _), errs, _) = parse(test_str, &includeable_folders);
     for err in errs {
         println!("{}",&test_str[err.0.start..err.0.end-1]);
         dbg!(err.1);
@@ -31,5 +31,7 @@ fn debug_test() {
 
     use simple_debug::SimpleDebug;
 
-    expr.dbg(1);
+    for stmnt in stmnts {
+        stmnt.0.dbg(1);
+    }
 }

@@ -179,7 +179,7 @@ fn stmnt_comparer(stmnt1: &Statement, stmnt2: &Statement) -> Result<(), CompErr>
         },
         (Statement::IfBlock { ifs: if1, alternative: alt1 },
             Statement::IfBlock { ifs: if2, alternative: alt2 }
-        ) => match expr_comparer(&if1.0, &if2.0) {
+        ) => match vec_stmnt_comparer(&if1.0, &if2.0) {
             Ok(_) => match vec_stmnt_comparer(&alt1.0, &alt2.0) {
                 Ok(_) => Ok(()),
                 Err(e) => Err(e),
@@ -230,7 +230,7 @@ fn stmnt_comparer(stmnt1: &Statement, stmnt2: &Statement) -> Result<(), CompErr>
         (Statement::Union { name: (n1, _), body: b1, template_parameters: t_p1 },
             Statement::Union { name: (n2, _), body: b2, template_parameters: t_p2 }
         ) => match n1 == n2 {
-            true => match expr_comparer(&b1.0, &b2.0) {
+            true => match vec_stmnt_comparer(&b1.0, &b2.0) {
                 Ok(_) => Ok(()),
                 Err(e) => Err(e),
             },
@@ -262,7 +262,7 @@ fn stmnt_comparer(stmnt1: &Statement, stmnt2: &Statement) -> Result<(), CompErr>
             Statement::Func { name: (n2, _), args: a2, body: b2 }
         ) => match n1 == n2 {
             true => match func_arguments_comparer(&a1.0, &a2.0) {
-                Ok(_) => match expr_comparer(&b1.0, &b2.0) {
+                Ok(_) => match vec_stmnt_comparer(&b1.0, &b2.0) {
                     Ok(_) => Ok(()),
                     Err(e) => Err(e),
                 },
@@ -279,7 +279,7 @@ fn stmnt_comparer(stmnt1: &Statement, stmnt2: &Statement) -> Result<(), CompErr>
         (Statement::Struct { name: (n1, _), body: b1, template_parameters: t_p1 },
             Statement::Struct { name: (n2, _), body: b2, template_parameters: t_p2 }
         ) => match n1 == n2 {
-            true => match expr_comparer(&b1.0, &b2.0) {
+            true => match vec_stmnt_comparer(&b1.0, &b2.0) {
                 Ok(_) => Ok(()),
                 Err(e) => Err(e),
             },
@@ -288,7 +288,7 @@ fn stmnt_comparer(stmnt1: &Statement, stmnt2: &Statement) -> Result<(), CompErr>
         (Statement::Namespace { name: n1, body: b1 },
             Statement::Namespace { name: n2, body: b2 }
         ) => match expr_comparer(&n1.0, &n2.0) {
-            Ok(_) => match expr_comparer(&b1.0, &b2.0) {
+            Ok(_) => match vec_stmnt_comparer(&b1.0, &b2.0) {
                 Ok(_) => Ok(()),
                 Err(e) => Err(e),
             },
@@ -316,7 +316,7 @@ fn stmnt_comparer(stmnt1: &Statement, stmnt2: &Statement) -> Result<(), CompErr>
         (Statement::Bitfield { name: (n1, _), body: b1 },
             Statement::Bitfield { name: (n2, _), body: b2 }
         ) => match n1 == n2 {
-            true => match expr_comparer(&b1.0, &b2.0) {
+            true => match vec_stmnt_comparer(&b1.0, &b2.0) {
                 Ok(_) => Ok(()),
                 Err(e) => Err(e),
             },
@@ -359,7 +359,6 @@ fn expr_comparer(expr1: &Expr, expr2: &Expr) -> Result<(), CompErr> {
             true => Ok(()),
             false => {println!("Different values |{val1:?} {val2:?}|");Err(CompErr)},
         },
-        (Expr::StatementList { list: list1 }, Expr::StatementList { list: list2 }) => vec_stmnt_comparer(list1, list2),
         (Expr::ExprList { list: list1 }, Expr::ExprList { list: list2 }) => vec_expr_comparer(list1, list2),
         (Expr::UnnamedParameter { type_: (type1, _) }, Expr::UnnamedParameter { type_: (type2, _) }) => match eq_hextype(type1, type2) {
             true => Ok(()),
@@ -533,13 +532,11 @@ fn test_pattern_arrays() {
 
         Signature sign @ 0x0;
     ";
-    let expected_output = Expr::StatementList {
-        list: vec![
+    let expected_output = vec![
             (Statement::Func {
                 name: (String::from("end_of_signature"), 0..0),
                 args: (vec![], 0..0),
-                body: spanbox!(Expr::StatementList {
-                    list: vec![
+                body: (vec![
                         (Statement::Return {
                             value: spanbox!(Expr::Binary {
                                 loperand: blocal!("$"),
@@ -547,13 +544,11 @@ fn test_pattern_arrays() {
                                 roperand: bnum!()
                             })
                         }, 0..0)
-                    ]
-                })
+                    ], 0..0)
             }, 0..0),
             (Statement::Struct {
                 name: (String::from("Signature"), 0..0),
-                body: spanbox!(Expr::StatementList {
-                    list: vec![
+                body: (vec![
                         (Statement::ArrayDefinition {
                             value_type: (HexTypeDef {
                                 endianness: Endianness::Unkown,
@@ -581,8 +576,7 @@ fn test_pattern_arrays() {
                             }),
                             body: bnull!()
                         }, 0..0)
-                    ]
-                }),
+                    ], 0..0),
                 template_parameters: vec![]
             }, 0..0),
             (Statement::Definition(Definition {
@@ -593,8 +587,7 @@ fn test_pattern_arrays() {
                 name: blocal!("sign"),
                 body: bnum!()
             }), 0..0)
-        ]
-    };
+        ];
 
     let includeable_folders = vec![
         String::from("~/.local/share/imhex"),
@@ -604,7 +597,7 @@ fn test_pattern_arrays() {
     ];
 
     let ((ex, _), _, _) = parse(test_str, &includeable_folders);
-    expr_comparer(&ex, &expected_output).unwrap()
+    vec_stmnt_comparer(&ex, &expected_output).unwrap()
 }
 
 #[test]
@@ -646,10 +639,10 @@ fn test_pattern_attributes() {
         NoUniqueAddressTest noUniqueAddressTest @ 0x40;
     ";
 
-    let expected_output = Expr::StatementList { list: vec![
+    let expected_output = vec![
         (Statement::Struct {
             name: (String::from("FormatTransformTest"), 0..0),
-            body: spanbox!(Expr::StatementList { list: vec![
+            body: (vec![
                 (Statement::Definition(Definition {
                     value_type: (HexTypeDef {
                         endianness: Endianness::Unkown,
@@ -662,12 +655,12 @@ fn test_pattern_attributes() {
                     ] }),
                     body: bnull!()
                 }), 0..0)
-            ] }),
+            ], 0..0),
             template_parameters: vec![]
         }, 0..0),
         (Statement::Struct {
             name: (String::from("SealedTest"), 0..0),
-            body: spanbox!(Expr::StatementList { list: vec![
+            body: (vec![
                 (Statement::Definition(Definition {
                     value_type: (HexTypeDef {
                         endianness: Endianness::Unkown,
@@ -676,12 +669,12 @@ fn test_pattern_attributes() {
                     name: blocal!("f"),
                     body: bnull!()
                 }), 0..0)
-            ] }),
+            ], 0..0),
             template_parameters: vec![]
         }, 0..0),
         (Statement::Struct {
             name: (String::from("HiddenTest"), 0..0),
-            body: spanbox!(Expr::StatementList { list: vec![
+            body: (vec![
                 (Statement::Definition(Definition {
                     value_type: (HexTypeDef {
                         endianness: Endianness::Unkown,
@@ -690,12 +683,12 @@ fn test_pattern_attributes() {
                     name: blocal!("f"),
                     body: bnull!()
                 }), 0..0)
-            ] }),
+            ], 0..0),
             template_parameters: vec![]
         }, 0..0),
         (Statement::Struct {
             name: (String::from("ColorTest"), 0..0),
-            body: spanbox!(Expr::StatementList { list: vec![
+            body: (vec![
                 (Statement::ArrayDefinition {
                     value_type: (HexTypeDef {
                         endianness: Endianness::Unkown,
@@ -705,12 +698,12 @@ fn test_pattern_attributes() {
                     size: bnum!(),
                     body: bnull!()
                 }, 0..0)
-            ] }),
+            ], 0..0),
             template_parameters: vec![]
         }, 0..0),
         (Statement::Struct {
             name: (String::from("NoUniqueAddressTest"), 0..0),
-            body: spanbox!(Expr::StatementList { list: vec![
+            body: (vec![
                 (Statement::Definition(Definition {
                     value_type: (HexTypeDef {
                         endianness: Endianness::Unkown,
@@ -727,7 +720,7 @@ fn test_pattern_attributes() {
                     name: blocal!("y"),
                     body: bnull!()
                 }), 0..0)
-            ] }),
+            ], 0..0),
             template_parameters: vec![]
         }, 0..0),
         (Statement::Func {
@@ -737,9 +730,9 @@ fn test_pattern_attributes() {
                 name: blocal!("value"),
                 body: bnull!()
             }))), 0..0)], 0..0),
-            body: spanbox!(Expr::StatementList { list: vec![
+            body: (vec![
                 (Statement::Return { value: spanbox!(Expr::Value { val: Value::Str(String::from("Hello World")) }) }, 0..0)
-            ] })
+            ], 0..0)
         }, 0..0),
         (Statement::Func {
             name: (String::from("transform_test"), 0..0),
@@ -748,9 +741,9 @@ fn test_pattern_attributes() {
                 name: blocal!("value"),
                 body: bnull!()
             }))), 0..0)], 0..0),
-            body: spanbox!(Expr::StatementList { list: vec![
+            body: (vec![
                 (Statement::Return { value: bnum!() }, 0..0)
-            ] })
+            ], 0..0)
         }, 0..0),
         (Statement::Definition(Definition {
             value_type: (HexTypeDef {
@@ -792,7 +785,7 @@ fn test_pattern_attributes() {
             name: blocal!("noUniqueAddressTest"),
             body: bnum!()
         }), 0..0)
-    ] };
+    ];
 
     let includeable_folders = vec![
         String::from("~/.local/share/imhex"),
@@ -802,7 +795,7 @@ fn test_pattern_attributes() {
     ];
 
     let ((ex, _), _, _) = parse(test_str, &includeable_folders);
-    expr_comparer(&ex, &expected_output).unwrap()
+    vec_stmnt_comparer(&ex, &expected_output).unwrap()
 }
 
 #[test]
@@ -818,11 +811,10 @@ fn test_pattern_bitfields() {
         be TestBitfield testBitfield @ 0x12;
     ";
 
-    let expected_output = Expr::StatementList { list: vec![
+    let expected_output = vec![
         (Statement::Bitfield {
             name: (String::from("TestBitfield"), 0..0),
-            body: spanbox!(Expr::StatementList {
-                list: vec![
+            body: (vec![
                     (Statement::BitFieldEntry {
                         name: (String::from("a"), 0..0),
                         length: bnum!()
@@ -839,8 +831,7 @@ fn test_pattern_bitfields() {
                         name: (String::from("d"), 0..0),
                         length: bnum!()
                     }, 0..0)
-                ]
-            })
+                ], 0..0)
         }, 0..0),
         (Statement::Definition(Definition {
             value_type: (HexTypeDef {
@@ -850,7 +841,7 @@ fn test_pattern_bitfields() {
             name: blocal!("testBitfield"),
             body: bnum!()
         }), 0..0)
-    ] };
+    ];
 
     let includeable_folders = vec![
         String::from("~/.local/share/imhex"),
@@ -860,7 +851,7 @@ fn test_pattern_bitfields() {
     ];
 
     let ((ex, _), _, _) = parse(test_str, &includeable_folders);
-    expr_comparer(&ex, &expected_output).unwrap()
+    vec_stmnt_comparer(&ex, &expected_output).unwrap()
 }
 
 #[test]
@@ -883,7 +874,7 @@ fn test_pattern_enums() {
         String::from("%programfiles%/imhex")
     ];
 
-    let expected_output = Expr::StatementList { list: vec![
+    let expected_output = vec![
         (Statement::Enum {
             name: (String::from("TestEnum"), 0..0),
             value_type: (HexTypeDef {
@@ -917,10 +908,10 @@ fn test_pattern_enums() {
             name: blocal!("testEnum"),
             body: bnum!()
         }), 0..0)
-    ] };
+    ];
 
     let ((ex, _), _, _) = parse(test_str, &includeable_folders);
-    expr_comparer(&ex, &expected_output).unwrap()
+    vec_stmnt_comparer(&ex, &expected_output).unwrap()
 }
 
 #[test]
@@ -934,10 +925,10 @@ fn test_pattern_example() {
         String::from("%programfiles%/imhex")
     ];
 
-    let expected_output = Expr::Value { val: Value::Null };
+    let expected_output = vec![];
 
     let ((ex, _), _, _) = parse(test_str, &includeable_folders);
-    expr_comparer(&ex, &expected_output).unwrap()
+    vec_stmnt_comparer(&ex, &expected_output).unwrap()
 }
 
 #[test]
@@ -965,10 +956,10 @@ fn test_pattern_extra_semicolon() {
         String::from("%programfiles%/imhex")
     ];
 
-    let expected_output = Expr::StatementList { list: vec![
+    let expected_output = vec![
         (Statement::Struct {
             name: (String::from("Test"), 0..0),
-            body: spanbox!(Expr::StatementList { list: vec![
+            body: (vec![
                 (Statement::Definition(Definition {
                     value_type: (HexTypeDef {
                         endianness: Endianness::Unkown,
@@ -993,12 +984,12 @@ fn test_pattern_extra_semicolon() {
                     name: blocal!("z"),
                     body: bnull!()
                 }), 0..0)
-            ] }),
+            ], 0..0),
             template_parameters: vec![]
         }, 0..0),
         (Statement::Struct {
             name: (String::from("Test2"), 0..0),
-            body: spanbox!(Expr::StatementList { list: vec![
+            body: (vec![
                 (Statement::Definition(Definition {
                     value_type: (HexTypeDef {
                         endianness: Endianness::Unkown,
@@ -1015,7 +1006,7 @@ fn test_pattern_extra_semicolon() {
                     name: blocal!("y"),
                     body: bnull!()
                 }), 0..0)
-            ] }),
+            ], 0..0),
             template_parameters: vec![]
         }, 0..0),
         (Statement::Definition(Definition {
@@ -1034,10 +1025,10 @@ fn test_pattern_extra_semicolon() {
             name: blocal!("test2"),
             body: bnum!()
         }), 0..0)
-    ] };
+    ];
 
     let ((ex, _), _, _) = parse(test_str, &includeable_folders);
-    expr_comparer(&ex, &expected_output).unwrap()
+    vec_stmnt_comparer(&ex, &expected_output).unwrap()
 }
 
 #[test]
@@ -1069,11 +1060,11 @@ fn test_pattern_namespaces() {
         String::from("%programfiles%/imhex")
     ];
 
-    let expected_output = Expr::StatementList { list: vec![
+    let expected_output = vec![
         (Statement::Namespace {
             name: blocal!("A"),
-            body: spanbox!(Expr::StatementList { list: vec![
-                (Statement::Struct { name: (String::from("Test"), 0..0), body: spanbox!(Expr::StatementList { list: vec![
+            body: (vec![
+                (Statement::Struct { name: (String::from("Test"), 0..0), body: (vec![
                      (Statement::Definition(Definition {
                         value_type: (HexTypeDef {
                             endianness: Endianness::Unkown,
@@ -1082,15 +1073,15 @@ fn test_pattern_namespaces() {
                         name: blocal!("x"),
                         body: bnull!()
                     }), 0..0)
-                ] }),
+                ], 0..0),
                 template_parameters: vec![]
                 }, 0..0)
-            ] })
+            ], 0..0)
         }, 0..0),
         (Statement::Namespace {
             name: blocal!("B"),
-            body: spanbox!(Expr::StatementList { list: vec![
-                (Statement::Struct { name: (String::from("Test"), 0..0), body: spanbox!(Expr::StatementList { list: vec![
+            body: (vec![
+                (Statement::Struct { name: (String::from("Test"), 0..0), body: (vec![
                      (Statement::Definition(Definition {
                         value_type: (HexTypeDef {
                             endianness: Endianness::Unkown,
@@ -1099,10 +1090,10 @@ fn test_pattern_namespaces() {
                         name: blocal!("x"),
                         body: bnull!()
                     }), 0..0)
-                ] }),
+                ], 0..0),
                 template_parameters: vec![]
                 }, 0..0)
-            ] })
+            ], 0..0)
         }, 0..0),
         (Statement::Using {
             new_name: (String::from("ATest"), 0..0),
@@ -1145,10 +1136,10 @@ fn test_pattern_namespaces() {
             name: blocal!("test3"),
             body: bnum!()
         }), 0..0)
-    ] };
+    ];
 
     let ((ex, _), _, _) = parse(test_str, &includeable_folders);
-    expr_comparer(&ex, &expected_output).unwrap()
+    vec_stmnt_comparer(&ex, &expected_output).unwrap()
 }
 
 #[test]
@@ -1185,11 +1176,11 @@ fn test_pattern_nested_structs() {
         String::from("%programfiles%/imhex")
     ];
 
-    let expected_output = Expr::StatementList { list: vec![
+    let expected_output = vec![
         (Statement::Func {
             name: (String::from("end_of_body"), 0..0),
             args: (vec![], 0..0),
-            body: spanbox!(Expr::StatementList { list: vec![
+            body: (vec![
                 (Statement::Definition(Definition {
                     value_type: (HexTypeDef {
                         endianness: Endianness::Unkown,
@@ -1243,11 +1234,11 @@ fn test_pattern_nested_structs() {
                     operator: BinaryOp::GreaterEqual,
                     roperand: blocal!("end"),
                 }) }, 0..0)
-            ] })
+            ], 0..0)
         }, 0..0),
         (Statement::Struct {
             name: (String::from("Header"), 0..0),
-            body: spanbox!(Expr::StatementList { list: vec![
+            body: (vec![
                 (Statement::Definition(Definition {
                     value_type: (HexTypeDef {
                         endianness: Endianness::Unkown,
@@ -1256,12 +1247,12 @@ fn test_pattern_nested_structs() {
                     name: blocal!("len"),
                     body: bnull!()
                 }), 0..0)
-            ] }),
+            ], 0..0),
             template_parameters: vec![]
         }, 0..0),
         (Statement::Struct {
             name: (String::from("Body"), 0..0),
-            body: spanbox!(Expr::StatementList { list: vec![
+            body: (vec![
                 (Statement::ArrayDefinition {
                     value_type: (HexTypeDef {
                         endianness: Endianness::Unkown,
@@ -1280,12 +1271,12 @@ fn test_pattern_nested_structs() {
                     }),
                     body: bnull!()
                 }, 0..0)
-            ] }),
+            ], 0..0),
             template_parameters: vec![]
         }, 0..0),
         (Statement::Struct {
             name: (String::from("Data"), 0..0),
-            body: spanbox!(Expr::StatementList { list: vec![
+            body: (vec![
                 (Statement::Definition(Definition {
                     value_type: (HexTypeDef {
                         endianness: Endianness::Unkown,
@@ -1302,7 +1293,7 @@ fn test_pattern_nested_structs() {
                     name: blocal!("body"),
                     body: bnull!()
                 }), 0..0)
-            ] }),
+            ], 0..0),
             template_parameters: vec![]
         }, 0..0),
         (Statement::Definition(Definition {
@@ -1313,10 +1304,10 @@ fn test_pattern_nested_structs() {
             name: blocal!("data"),
             body: bnum!()
         }), 0..0)
-    ] };
+    ];
 
     let ((ex, _), _, _) = parse(test_str, &includeable_folders);
-    expr_comparer(&ex, &expected_output).unwrap()
+    vec_stmnt_comparer(&ex, &expected_output).unwrap()
 }
 
 #[test]
@@ -1338,11 +1329,10 @@ fn test_pattern_padding() {
         String::from("%programfiles%/imhex")
     ];
 
-    let expected_output = Expr::StatementList { list: vec![
+    let expected_output = vec![
         (Statement::Struct {
             name: (String::from("TestStruct"), 0..0),
-            body: spanbox!(Expr::StatementList {
-                list: vec![
+            body: (vec![
                     (Statement::Definition(Definition {
                         value_type: (HexTypeDef {
                             endianness: Endianness::Unkown,
@@ -1361,8 +1351,7 @@ fn test_pattern_padding() {
                         size: bnum!(),
                         body: bnull!()
                     }, 0..0)
-                ]
-            }),
+                ], 0..0),
             template_parameters: vec![]
         }, 0..0),
         (Statement::Definition(Definition {
@@ -1373,10 +1362,10 @@ fn test_pattern_padding() {
             name: blocal!("testStruct"),
             body: bnum!()
         }), 0..0)
-    ] };
+    ];
 
     let ((ex, _), _, _) = parse(test_str, &includeable_folders);
-    expr_comparer(&ex, &expected_output).unwrap()
+    vec_stmnt_comparer(&ex, &expected_output).unwrap()
 }
 
 #[test]
@@ -1393,7 +1382,7 @@ fn test_pattern_placement() {
         String::from("%programfiles%/imhex")
     ];
 
-    let expected_output = Expr::StatementList { list: vec![
+    let expected_output =vec![
         (Statement::Definition(Definition {
             value_type: (HexTypeDef {
                 endianness: Endianness::Unkown,
@@ -1411,10 +1400,10 @@ fn test_pattern_placement() {
             size: bnum!(),
             body: bnum!()
         }, 0..0)
-    ] };
+    ];
 
     let ((ex, _), _, _) = parse(test_str, &includeable_folders);
-    expr_comparer(&ex, &expected_output).unwrap()
+    vec_stmnt_comparer(&ex, &expected_output).unwrap()
 }
 
 #[test]
@@ -1434,7 +1423,7 @@ fn test_pattern_pointers() {
         String::from("%programfiles%/imhex")
     ];
 
-    let expected_output = Expr::StatementList { list: vec![
+    let expected_output =vec![
         (Statement::Definition(Definition {
             value_type: (HexTypeDef {
                 endianness: Endianness::Unkown,
@@ -1454,13 +1443,11 @@ fn test_pattern_pointers() {
         (Statement::Func {
             name: (String::from("Rel"), 0..0),
             args: (vec![(FuncArgument::Parameter(spanbox!(Expr::UnnamedParameter { type_: (HexType::V(ValueType::U128), 0..0) })), 0..0)], 0..0),
-            body: spanbox!(Expr::StatementList {
-                list: vec![
+            body: (vec![
                     (Statement::Return {
                         value: bnum!()
                     }, 0..0)
-                ]
-            })
+                ], 0..0)
         }, 0..0),
         (Statement::Definition(Definition {
             value_type: (HexTypeDef {
@@ -1470,10 +1457,10 @@ fn test_pattern_pointers() {
             name: blocal!("pointerRelativeSigned"),
             body: bnum!()
         }), 0..0)
-    ] };
+    ];
 
     let ((ex, _), _, _) = parse(test_str, &includeable_folders);
-    expr_comparer(&ex, &expected_output).unwrap()
+    vec_stmnt_comparer(&ex, &expected_output).unwrap()
 }
 
 #[test]
@@ -1503,10 +1490,10 @@ fn test_pattern_rvalues() {
         String::from("%programfiles%/imhex")
     ];
 
-    let expected_output = Expr::StatementList { list: vec![
+    let expected_output = vec![
         (Statement::Union {
             name: (String::from("C"), 0..0),
-            body: spanbox!(Expr::StatementList { list: vec![
+            body: (vec![
                 (Statement::Definition(Definition {
                     value_type: (HexTypeDef {
                         endianness: Endianness::Unkown,
@@ -1530,13 +1517,12 @@ fn test_pattern_rvalues() {
                     }),
                     body: bnull!()
                 }, 0..0)
-            ] }),
+            ], 0..0),
             template_parameters: vec![]
         }, 0..0),
         (Statement::Struct {
             name: (String::from("B"), 0..0),
-            body: spanbox!(Expr::StatementList {
-                list: vec![
+            body: (vec![
                     (Statement::Definition(Definition {
                         value_type: (HexTypeDef {
                             endianness: Endianness::Unkown,
@@ -1545,14 +1531,12 @@ fn test_pattern_rvalues() {
                         name: blocal!("c"),
                         body: bnull!()
                     }), 0..0)
-                ]
-            }),
+                ], 0..0),
             template_parameters: vec![]
         }, 0..0),
         (Statement::Struct {
             name: (String::from("A"), 0..0),
-            body: spanbox!(Expr::StatementList {
-                list: vec![
+            body: (vec![
                     (Statement::Definition(Definition {
                         value_type: (HexTypeDef {
                             endianness: Endianness::Unkown,
@@ -1569,8 +1553,7 @@ fn test_pattern_rvalues() {
                         name: blocal!("b"),
                         body: bnull!()
                     }), 0..0)
-                ]
-            }),
+                ], 0..0),
             template_parameters: vec![]
         }, 0..0),
         (Statement::Definition(Definition {
@@ -1581,10 +1564,10 @@ fn test_pattern_rvalues() {
             name: blocal!("a"),
             body: bnum!()
         }), 0..0)
-    ] };
+    ];
 
     let ((ex, _), _, _) = parse(test_str, &includeable_folders);
-    expr_comparer(&ex, &expected_output).unwrap()
+    vec_stmnt_comparer(&ex, &expected_output).unwrap()
 }
 
 #[test]
@@ -1605,11 +1588,10 @@ fn test_pattern_structs() {
         String::from("%programfiles%/imhex")
     ];
 
-    let expected_output = Expr::StatementList { list: vec![
+    let expected_output = vec![
         (Statement::Struct {
             name: (String::from("TestStruct"), 0..0),
-            body: spanbox!(Expr::StatementList {
-                list: vec![
+            body: (vec![
                     (Statement::Definition(Definition {
                         value_type: (HexTypeDef {
                             endianness: Endianness::Unkown,
@@ -1627,8 +1609,7 @@ fn test_pattern_structs() {
                         size: bnum!(),
                         body: bnull!()
                     }, 0..0)
-                ]
-            }),
+                ], 0..0),
             template_parameters: vec![]
         }, 0..0),
         (Statement::Definition(Definition {
@@ -1639,10 +1620,10 @@ fn test_pattern_structs() {
             name: blocal!("testStruct"),
             body: bnum!()
         }), 0..0)
-    ] };
+    ];
 
     let ((ex, _), _, _) = parse(test_str, &includeable_folders);
-    expr_comparer(&ex, &expected_output).unwrap()
+    vec_stmnt_comparer(&ex, &expected_output).unwrap()
 }
 
 #[test]
@@ -1663,10 +1644,10 @@ fn test_pattern_unions() {
         String::from("%programfiles%/imhex")
     ];
 
-    let expected_output = Expr::StatementList { list: vec![
+    let expected_output = vec![
         (Statement::Union {
             name: (String::from("TestUnion"), 0..0),
-            body: spanbox!(Expr::StatementList { list: vec![
+            body: (vec![
                 (Statement::ArrayDefinition {
                     value_type: (HexTypeDef {
                         endianness: Endianness::Unkown,
@@ -1684,7 +1665,7 @@ fn test_pattern_unions() {
                     name: blocal!("variable"),
                     body: bnull!()
                 }), 0..0)
-            ] }),
+            ], 0..0),
             template_parameters: vec![]
         }, 0..0),
         (Statement::Definition(Definition {
@@ -1695,10 +1676,10 @@ fn test_pattern_unions() {
             name: blocal!("testUnion"),
             body: bnum!()
         }), 0..0)
-    ] };
+    ];
 
     let ((ex, _), _, _) = parse(test_str, &includeable_folders);
-    expr_comparer(&ex, &expected_output).unwrap()
+    vec_stmnt_comparer(&ex, &expected_output).unwrap()
 }
 
 #[test]
@@ -1709,14 +1690,12 @@ fn test_pattern_at_in_function() {
         }
     ";
 
-    let expected_output = Expr::StatementList {
-        list: vec![
+    let expected_output = vec![
             (
                 Statement::Func {
                     name: (String::from("func_with_at"), 0..0),
                     args: (vec![], 0..0),
-                    body: spanbox!(Expr::StatementList {
-                        list: vec![(
+                    body: (vec![(
                             Statement::Definition(Definition {
                                 value_type: (
                                     HexTypeDef {
@@ -1729,13 +1708,11 @@ fn test_pattern_at_in_function() {
                                 body: bnum!(),
                             }),
                             0..0,
-                        )]
-                    })
+                        )], 0..0)
                 },
                 0..0,
             )
-        ],
-    };
+        ];
 
     let includeable_folders = vec![
         String::from("~/.local/share/imhex"),
@@ -1745,5 +1722,5 @@ fn test_pattern_at_in_function() {
     ];
 
     let ((ex, _), _, _) = parse(test_str, &includeable_folders);
-    expr_comparer(&ex, &expected_output).unwrap()
+    vec_stmnt_comparer(&ex, &expected_output).unwrap()
 }

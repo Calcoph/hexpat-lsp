@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::{collections::HashMap, ops::Range};
 use std::path::Path;
+use m_parser::Statement;
 use nom::IResult;
 use nom::bytes::complete::{tag as just, take_until};
 use nom::character::complete::{multispace1, alpha1, alphanumeric1, not_line_ending};
@@ -37,7 +38,11 @@ pub struct ImCompleteSemanticToken {
     pub token_type: usize,
 }
 
-pub fn type_inference(expr: &Spanned<Expr>, symbol_type_table: &mut HashMap<Range<usize>, Value>) {
+pub fn type_inference(expr: &Spanned<Vec<Spanned<Statement>>>, symbol_type_table: &mut HashMap<Range<usize>, Value>) {
+    // TODO
+}
+
+fn type_inference_expr(expr: &Spanned<Expr>, symbol_type_table: &mut HashMap<Range<usize>, Value>) {
     match &expr.0 {
         Expr::Error => {}
         Expr::Value {..} => {}
@@ -48,7 +53,6 @@ pub fn type_inference(expr: &Spanned<Expr>, symbol_type_table: &mut HashMap<Rang
         Expr::Ternary {..} => (), // TODO
         Expr::NamespaceAccess {..} => (), // TODO
         Expr::Unary {..} => (), // TODO
-        Expr::StatementList {..} => (), // TODO
         Expr::Access {..} => (), // TODO
         Expr::Attribute {..} => (), // TODO
         Expr::AttributeArgument {..} => (), // TODO
@@ -66,7 +70,7 @@ pub fn parse(
     src: &str,
     includeable_folders: &Vec<String>
 ) -> (
-    Spanned<Expr>,
+    Spanned<Vec<Spanned<Statement>>>,
     Vec<RecoveredError>,
     Vec<ImCompleteSemanticToken>,
 ) {

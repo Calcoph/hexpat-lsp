@@ -3,10 +3,10 @@ use tower_lsp::lsp_types::SemanticTokenType;
 
 use hexparser::{ImCompleteSemanticToken, m_parser::{Expr, MatchBranch, MatchCaseItem, MatchCaseElement, FuncCall, Definition, Statement}, token::Spanned};
 
-pub fn semantic_token_from_ast(ast: &Spanned<Expr>) -> Vec<ImCompleteSemanticToken> {
+pub fn semantic_token_from_ast(ast: &Spanned<Vec<Spanned<Statement>>>) -> Vec<ImCompleteSemanticToken> {
     let mut semantic_tokens = vec![];
 
-    semantic_token_from_expr(ast, &mut semantic_tokens);
+    semantic_token_from_statements(&ast.0, &mut semantic_tokens);
 
     semantic_tokens
 }
@@ -39,7 +39,7 @@ pub fn semantic_token_from_statement(
             semantic_token_from_statements(&consequent.0, semantic_tokens);
         }
         Statement::IfBlock { ifs, alternative } => {
-            semantic_token_from_expr(ifs, semantic_tokens);
+            semantic_token_from_statements(&ifs.0, semantic_tokens);
             semantic_token_from_statements(&alternative.0, semantic_tokens);
         },
         Statement::BitFieldEntry { name: (_, name_span), length } => {
@@ -111,7 +111,7 @@ pub fn semantic_token_from_statement(
                     }),
                 }
             }
-            semantic_token_from_expr(body, semantic_tokens)
+            semantic_token_from_statements(&body.0, semantic_tokens)
         },
         Statement::Struct { name: (_, name_span), body, template_parameters } => {
             semantic_tokens.push(ImCompleteSemanticToken {
@@ -122,7 +122,7 @@ pub fn semantic_token_from_statement(
                     .position(|item| item.as_str() == SemanticTokenType::STRUCT.as_str())
                     .unwrap(),
             });
-            semantic_token_from_expr(body, semantic_tokens);
+            semantic_token_from_statements(&body.0, semantic_tokens);
             semantic_token_from_exprs(template_parameters, semantic_tokens)
         },
         Statement::Namespace { name, body } => {
@@ -134,7 +134,7 @@ pub fn semantic_token_from_statement(
                     .position(|item| item.as_str() == SemanticTokenType::NAMESPACE.as_str())
                     .unwrap(),
             });
-            semantic_token_from_expr(body, semantic_tokens)
+            semantic_token_from_statements(&body.0, semantic_tokens)
         },
         Statement::Enum { name: (_, name_span), value_type: (_, type_span), body } => {
             semantic_tokens.push(ImCompleteSemanticToken {
@@ -164,7 +164,7 @@ pub fn semantic_token_from_statement(
                     .position(|item| item.as_str() == SemanticTokenType::new("bitfield").as_str())
                     .unwrap(),
             });
-            semantic_token_from_expr(body, semantic_tokens)
+            semantic_token_from_statements(&body.0, semantic_tokens)
         },
         Statement::Return { value } => {
             semantic_token_from_expr(value, semantic_tokens);
@@ -184,7 +184,7 @@ pub fn semantic_token_from_statement(
                     .position(|item| item.as_str() == SemanticTokenType::new("union").as_str())
                     .unwrap(),
             });
-            semantic_token_from_expr(body, semantic_tokens);
+            semantic_token_from_statements(&body.0, semantic_tokens);
             semantic_token_from_exprs(template_parameters, semantic_tokens)
         },
         Statement::ArrayDefinition { value_type: (_, type_span), array_name, size, body } => {
@@ -234,10 +234,8 @@ pub fn semantic_token_from_statement(
             }
         },
         Statement::TryCatch { try_block, catch_block } => {
-            semantic_token_from_expr(&try_block, semantic_tokens);
-            if let Some(catch_block) = catch_block {
-                semantic_token_from_expr(&catch_block, semantic_tokens)
-            }
+            semantic_token_from_statements(&try_block.0, semantic_tokens);
+            semantic_token_from_statements(&catch_block.0, semantic_tokens)
         },
         Statement::Assignment { loperand, operator, roperand } => {
             semantic_token_from_expr(loperand, semantic_tokens);
@@ -340,7 +338,6 @@ pub fn semantic_token_from_expr(
             semantic_token_from_expr(operand, semantic_tokens)
         },
         Expr::ExprList { list } => semantic_token_from_exprs(list, semantic_tokens),
-        Expr::StatementList { list } => semantic_token_from_statements(list, semantic_tokens),
         Expr::UnnamedParameter { type_: (_, span) } => semantic_tokens.push(ImCompleteSemanticToken {
             start: span.start,
             length: span.len(),

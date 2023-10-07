@@ -81,16 +81,16 @@ pub enum Statement {
     Func {
         name: Spanned<String>,
         args: Spanned<Vec<Spanned<FuncArgument>>>,
-        body: Box<Spanned<Expr>>
+        body: Spanned<Vec<Spanned<Statement>>>
     },
     Struct {
         name: Spanned<String>,
-        body: Box<Spanned<Expr>>,
+        body: Spanned<Vec<Spanned<Statement>>>,
         template_parameters: Vec<Spanned<Expr>>
     },
     Namespace {
         name: Box<Spanned<Expr>>,
-        body: Box<Spanned<Expr>>
+        body: Spanned<Vec<Spanned<Statement>>>
     },
     Enum {
         name: Spanned<String>,
@@ -99,7 +99,7 @@ pub enum Statement {
     },
     Bitfield {
         name: Spanned<String>,
-        body: Box<Spanned<Expr>>
+        body: Spanned<Vec<Spanned<Statement>>>
     },
     Using {
         new_name: Spanned<String>,
@@ -109,7 +109,7 @@ pub enum Statement {
     Error,
     Union {
         name: Spanned<String>,
-        body: Box<Spanned<Expr>>,
+        body: Spanned<Vec<Spanned<Statement>>>,
         template_parameters: Vec<Spanned<Expr>>
     },
     ArrayDefinition {
@@ -140,15 +140,15 @@ pub enum Statement {
         branches: Vec<MatchBranch>
     },
     TryCatch {
-        try_block: Box<Spanned<Expr>>,
-        catch_block: Option<Box<Spanned<Expr>>>
+        try_block: Spanned<Vec<Spanned<Statement>>>,
+        catch_block: Spanned<Vec<Spanned<Statement>>>
     },
     If {
         test: Box<Spanned<Expr>>,
         consequent: Spanned<Vec<Spanned<Statement>>>,
     },
     IfBlock {
-        ifs: Box<Spanned<Expr>>,
+        ifs: Spanned<Vec<Spanned<Statement>>>,
         alternative: Spanned<Vec<Spanned<Statement>>>
     },
 }
@@ -172,7 +172,6 @@ pub enum Expr {
     Error,
     Value{ val: Value },
     ExprList { list: Vec<Spanned<Self>> },
-    StatementList { list: Vec<Spanned<Statement>> },
     UnnamedParameter { type_: Spanned<HexType> },
     Local { name: Spanned<String> },
     Unary {
@@ -1205,7 +1204,7 @@ pub(crate) fn parse_struct<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, S
                 )
             ))
         ),
-        |(name, template_parameters, inheritance, (body, body_span)), span| { // TODO: Take into account the inheritance.
+        |(name, template_parameters, inheritance, body), span| { // TODO: Take into account the inheritance.
             let template_parameters = match template_parameters {
                 Some(t) => t,
                 None => Vec::new()
@@ -1213,7 +1212,7 @@ pub(crate) fn parse_struct<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, S
             (
                 Statement::Struct {
                     name,
-                    body: Box::new((Expr::StatementList { list: body }, body_span)),
+                    body,
                     template_parameters
                 },
                 span
@@ -1236,7 +1235,7 @@ fn parse_union<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<State
                 )
             ))
         ),
-        |(name, template_parameters, (body, body_span)), span| {
+        |(name, template_parameters, body), span| {
             let template_parameters = match template_parameters {
                 Some(t) => t,
                 None => Vec::new()
@@ -1244,7 +1243,7 @@ fn parse_union<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<State
             (
                 Statement::Union {
                     name,
-                    body: Box::new((Expr::StatementList { list: body }, body_span)),
+                    body,
                     template_parameters,
                 },
                 span
@@ -1442,17 +1441,17 @@ fn parse_bitfield<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<St
             )
         ),
         |(name, body), span| {
-            let body = Box::new({
+            let body = {
                 let span = match body.len() {
                     0 => span.clone(),
                     _ => body.get(0).unwrap().1.start..body.get(body.len()-1).unwrap().1.end
                 };
 
                 (
-                    Expr::StatementList { list: body },
+                    body,
                     span
                 )
-            });
+            };
             (
                 Statement::Bitfield {
                     name,
@@ -1541,7 +1540,7 @@ pub(crate) fn parse_namespace<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b
                 )
             )
         ),
-        |(name, (body, body_span)), span| {
+        |(name, body), span| {
             let name = Box::new(name.into_iter()
                 .fold((Expr::Value { val: Value::Null }, 0..1), |(accum, acc_span), (next, next_span)| {
                     match accum {
@@ -1563,7 +1562,7 @@ pub(crate) fn parse_namespace<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b
             (
                 Statement::Namespace {
                     name,
-                    body: Box::new((Expr::StatementList { list: body }, body_span))
+                    body
                 },
                 span
             )
@@ -1858,7 +1857,7 @@ fn numeric<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
     )(input)
 }
 
-fn parser<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
+fn parser<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Vec<Spanned<Statement>>>> {
     map_with_span(
         many_until(
             |input: Tokens<'a, 'b>| match statements(input) {
@@ -1875,7 +1874,7 @@ fn parser<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
             },
             eof
         ),
-        |(list, _), span| (Expr::StatementList { list }, span)
+        |(list, _), span| (list, span)
     )(input)
 }
 
@@ -1888,9 +1887,9 @@ fn recover_err<'a, 'b>(e: &TokError<'a, 'b>) -> Tokens<'a, 'b> {
 }
 
 // Hashmap contains the names of named expressions and their clones
-pub(crate) fn token_parse(tokens: Vec<TokSpan>) -> Spanned<Expr> {
+pub(crate) fn token_parse(tokens: Vec<TokSpan>) -> Spanned<Vec<Spanned<Statement>>> {
     let ex = match tokens.len() {
-        0 => (Expr::Value { val: Value::Null }, 0..0),
+        0 => (vec![], 0..0),
         _ => parser(Tokens::new(&tokens, tokens[0].extra.0)).expect("Unrecovered error happened in parser").1
     };
     //let ex = (Expr::Dollar, 0..1);

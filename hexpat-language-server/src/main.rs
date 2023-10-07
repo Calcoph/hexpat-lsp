@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::str::FromStr;
 
 use dashmap::DashMap;
+use hexparser::m_parser::Statement;
 use hexparser::recovery_err::RecoveredError;
 use hexparser::token::Spanned;
 use hexparser::{parse, type_inference, ImCompleteSemanticToken, Value, Expr};
@@ -35,7 +36,7 @@ enum ConfigurationEntry {
 #[derive(Debug)]
 struct Backend {
     client: Client,
-    ast_map: DashMap<String, Spanned<Expr>>,
+    ast_map: DashMap<String, Spanned<Vec<Spanned<Statement>>>>,
     document_map: DashMap<String, Rope>,
     semantic_token_map: DashMap<String, Vec<ImCompleteSemanticToken>>,
     configuration: DashMap<String, ConfigurationEntry>
@@ -529,7 +530,7 @@ impl Backend {
                         jValue::String(s) => s,
                         _ => unreachable!(),
                     }).collect();
-                
+
                 ConfigurationEntry::ImHexPaths(paths)
             },
             _ => unreachable!(),

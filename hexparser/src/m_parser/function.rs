@@ -99,11 +99,11 @@ pub(crate) fn function_definition<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a
                 )
             )
         ),
-        |(name, (args, (list, body_span))), span| (
+        |(name, (args, body)), span| (
             Statement::Func {
                 name,
                 args,
-                body: Box::new((Expr::StatementList { list }, body_span))
+                body
             },
             span
         )

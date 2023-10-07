@@ -76,7 +76,7 @@ where
             };
             (
                 Statement::IfBlock {
-                    ifs: Box::new((Expr::StatementList { list: v }, ifs.1)),
+                    ifs: (v, ifs.1),
                     alternative
                 },
                 span
@@ -160,13 +160,14 @@ where
                 )))
             )
         ),
-        |((try_block, try_span), catch_block), span| {
-            let catch_block = catch_block.map(|(catch_block, catch_span)| {
-                Box::new((Expr::StatementList { list: catch_block }, catch_span))
-            });
+        |(try_block, catch_block), span| {
+            let catch_block = match catch_block {
+                Some(a) => a,
+                None => (vec![], span.clone())
+            };
 
             (Statement::TryCatch {
-                try_block: Box::new((Expr::StatementList { list: try_block }, try_span)),
+                try_block,
                 catch_block,
             }, span) // TODO
         }

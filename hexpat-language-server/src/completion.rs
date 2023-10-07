@@ -16,11 +16,11 @@ pub enum ImCompleteCompletionItem {
     BitField(String)
 }
 pub fn completion(
-    ast: &Spanned<Expr>,
+    ast: &Spanned<Vec<Spanned<Statement>>>,
     ident_offset: usize,
 ) -> HashMap<String, ImCompleteCompletionItem> {
     let mut map = HashMap::new();
-    get_completion_of(ast, &mut map, ident_offset);
+    get_completion_of_statements(&ast.0, &mut map, ident_offset);
     map
 }
 
@@ -90,7 +90,7 @@ pub fn get_completion_of_statement(
             }
 
             if ident_offset < body.1.end {
-                get_completion_of(body, definition_map, ident_offset);
+                get_completion_of_statements(&body.0, definition_map, ident_offset);
             }
 
             true
@@ -100,7 +100,7 @@ pub fn get_completion_of_statement(
                 name.0.clone(),
                 ImCompleteCompletionItem::Struct(name.0.clone())
             );
-            get_completion_of(body, definition_map, ident_offset)
+            get_completion_of_statements(&body.0, definition_map, ident_offset)
         }, // TODO
         Statement::Namespace { name, body } => {
             if !get_completion_of(name, definition_map, ident_offset) {
@@ -109,7 +109,7 @@ pub fn get_completion_of_statement(
 
             let mut namespace_hm = HashMap::new();
 
-            let ret = get_completion_of(body, &mut namespace_hm, ident_offset);
+            let ret = get_completion_of_statements(&body.0, &mut namespace_hm, ident_offset);
 
             definition_map.extend(
                 namespace_hm.into_iter().map(|(v, item)| (v, ImCompleteCompletionItem::NamespacedItem {
@@ -134,7 +134,7 @@ pub fn get_completion_of_statement(
                 ImCompleteCompletionItem::BitField(name.0.clone())
             );
 
-            get_completion_of(body, definition_map, ident_offset)
+            get_completion_of_statements(&body.0, definition_map, ident_offset)
         }, // TODO
         Statement::If { test, consequent } => {
             if !get_completion_of(test, definition_map, ident_offset) {
@@ -144,7 +144,7 @@ pub fn get_completion_of_statement(
             get_completion_of_statements(&consequent.0, definition_map, ident_offset)
         }
         Statement::IfBlock { ifs, alternative } => {
-            if !get_completion_of(ifs, definition_map, ident_offset) {
+            if !get_completion_of_statements(&ifs.0, definition_map, ident_offset) {
                 return false;
             }
 
@@ -171,7 +171,7 @@ pub fn get_completion_of_statement(
                 ImCompleteCompletionItem::Struct(name.0.clone())
             );
 
-            get_completion_of(body, definition_map, ident_offset)
+            get_completion_of_statements(&body.0, definition_map, ident_offset)
         }, // TODO
         Statement::ArrayDefinition { value_type, array_name, size, body } => true,
         Statement::Match { parameters, branches  } => {
@@ -190,14 +190,10 @@ pub fn get_completion_of_statement(
             true
         },
         Statement::TryCatch { try_block, catch_block } => {
-            if let Some(catch_block) = catch_block {
-                if !get_completion_of(try_block, definition_map, ident_offset) {
-                    return false;
-                }
-                get_completion_of(catch_block, definition_map, ident_offset)
-            } else {
-                get_completion_of(try_block, definition_map, ident_offset)
+            if !get_completion_of_statements(&try_block.0, definition_map, ident_offset) {
+                return false;
             }
+            get_completion_of_statements(&catch_block.0, definition_map, ident_offset)
         },
         Statement::Assignment { loperand, operator, roperand } => {
             /*
@@ -307,7 +303,6 @@ pub fn get_completion_of(
             }
             true
         }, // TODO
-        Expr::StatementList { list } => get_completion_of_statements(list, definition_map, ident_offset), // TODO
         Expr::UnnamedParameter { type_: _ } => true, // TODO
         Expr::Unary { operation: _, operand: _ } => true, // TODO
         Expr::Ternary { loperand: _, moperand: _, roperand: _ } => true, // TODO

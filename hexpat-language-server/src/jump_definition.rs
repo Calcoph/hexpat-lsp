@@ -21,9 +21,19 @@ macro_rules! early_return_get_definition_of_statement {
     };
 }
 
-pub fn get_definition(ast: &Spanned<Expr>, ident_offset: usize) -> Option<Spanned<String>> {
+macro_rules! early_return_get_definition_of_statements {
+    ($stmnt:expr, $definition_ass_list:expr, $ident_offset:expr, $is_defining:expr) => {
+        match get_definition_of_statements($stmnt, $definition_ass_list, $ident_offset, $is_defining) {
+            (true, None) => {}
+            (false, None) => return (false, None),
+            (_, Some(value)) => return (false, Some(value)),
+        }
+    };
+}
+
+pub fn get_definition(ast: &Spanned<Vec<Spanned<Statement>>>, ident_offset: usize) -> Option<Spanned<String>> {
     let mut definition_ass_list = Vector::new();
-    let (_, name) = get_definition_of_expr(&ast, &mut definition_ass_list, ident_offset, false);
+    let (_, name) = get_definition_of_statements(&ast.0, &mut definition_ass_list, ident_offset, false);
     name
 }
 
@@ -77,7 +87,7 @@ fn get_definition_of_statement(
             get_definition_of_statements(&consequent.0, &mut definition_ass_list.clone(), ident_offset, false)
         }
         Statement::IfBlock { ifs, alternative } => {
-            early_return_get_definition_of_expr!(ifs, definition_ass_list, ident_offset, false);
+            early_return_get_definition_of_statements!(&ifs.0, definition_ass_list, ident_offset, false);
             get_definition_of_statements(&alternative.0, &mut definition_ass_list.clone(), ident_offset, false)
         },
         Statement::Using { new_name, template_parameters, old_name } => { // TODO: template_parameters
@@ -96,11 +106,11 @@ fn get_definition_of_statement(
                     FuncArgument::ParameterPack(_) => (),
                 }
             }
-            get_definition_of_expr(body, &mut new_scope, ident_offset, false)
+            get_definition_of_statements(&body.0, &mut new_scope, ident_offset, false)
         },
         Statement::Struct { name, body, template_parameters } => { // TODO: template_parameters
             let mut new_scope = definition_ass_list.clone();
-            let ret = get_definition_of_expr(body, &mut new_scope, ident_offset, false);
+            let ret = get_definition_of_statements(&body.0, &mut new_scope, ident_offset, false);
             definition_ass_list.push_back(NameDefinition::Struct {
                 name: name.clone(),
                 items: new_scope
@@ -111,7 +121,7 @@ fn get_definition_of_statement(
         Statement::Namespace { name, body } => {
             early_return_get_definition_of_expr!(name, definition_ass_list, ident_offset, true);
             // TODO: retain the scope but with a prefix of the namespace name
-            get_definition_of_expr(body, &mut definition_ass_list.clone(), ident_offset, false)
+            get_definition_of_statements(&body.0, &mut definition_ass_list.clone(), ident_offset, false)
         },
         Statement::Enum { name, value_type, body } => {
             definition_ass_list.push_back(NameDefinition::Var(name.clone()));
@@ -124,7 +134,7 @@ fn get_definition_of_statement(
         },
         Statement::Bitfield { name, body } => {
             definition_ass_list.push_back(NameDefinition::Var(name.clone()));
-            get_definition_of_expr(body, definition_ass_list, ident_offset, false)
+            get_definition_of_statements(&body.0, definition_ass_list, ident_offset, false)
         },
         Statement::ForLoop { var_init, var_test, var_change, body } => {
             let mut new_scope = definition_ass_list.clone();
@@ -135,7 +145,7 @@ fn get_definition_of_statement(
         },
         Statement::Union { name, body, template_parameters } => { // TODO: template_parameters
             definition_ass_list.push_back(NameDefinition::Var(name.clone()));
-            get_definition_of_expr(body, definition_ass_list, ident_offset, false)
+            get_definition_of_statements(&body.0, definition_ass_list, ident_offset, false)
         },
         Statement::ArrayDefinition { value_type, array_name, size, body } => (true, None), // TODO
         Statement::Match { parameters, branches } => (true, None), // TODO
@@ -207,7 +217,6 @@ fn get_definition_of_expr(
             }
         }
         Expr::ExprList { list } => get_definition_of_exprs(list, definition_ass_list, ident_offset, is_defining),
-        Expr::StatementList { list } => get_definition_of_statements(list, definition_ass_list, ident_offset, is_defining),
         Expr::UnnamedParameter { type_ } => get_definition_of_type(type_, definition_ass_list, ident_offset),
         Expr::Unary { operation: _, operand } => get_definition_of_expr(operand, definition_ass_list, ident_offset, false),
         Expr::Ternary { loperand, moperand, roperand } => {

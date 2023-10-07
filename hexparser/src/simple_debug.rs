@@ -537,14 +537,6 @@ impl SimpleDebug for Expr {
                 };
                 print!(")")
             },
-            Expr::StatementList { list } => {
-                print!("E::StatementList(");
-                for (i, _) in list {
-                    i.dbg(0);
-                    print!(", ");
-                };
-                print!(")")
-            },
             Expr::UnnamedParameter { .. } => print!("E::UnnamedParameter"),
             Expr::Local { .. } => print!("E::Local"),
             Expr::Unary { .. } => print!("E::Unary"),
@@ -573,17 +565,6 @@ impl SimpleDebug for Expr {
             Expr::Value { .. } => println!("E::Value"),
             Expr::ExprList { list } => {
                 println!("E::ExprList(");
-                for (i, _) in list {
-                    i.dbg(indentation+1);
-                    println!(",")
-                };
-                for _ in 0..indentation {
-                    print!("  ");
-                };
-                println!(")")
-            },
-            Expr::StatementList { list } => {
-                println!("E::StatementList(");
                 for (i, _) in list {
                     i.dbg(indentation+1);
                     println!(",")
