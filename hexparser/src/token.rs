@@ -2,13 +2,33 @@ use std::{ops::Range, iter::{Enumerate, Copied}, slice::Iter, fmt::{self, Displa
 
 use nom::{Compare, CompareResult, InputLength, InputIter, InputTake, Needed};
 use nom_locate::LocatedSpan;
+use serde::{Deserialize, Serialize};
 
 use crate::recovery_err::{ParseState, ToRange};
 
-#[derive(Clone, Debug, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum HexNum {
+    Float(f32),
+    Double(f64),
+    Signed(i128),
+    Unsigned(u128)
+}
+
+impl Display for HexNum {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            HexNum::Float(fl) => write!(f, "{}", fl),
+            HexNum::Double(d) => write!(f, "{}", d),
+            HexNum::Signed(s) => write!(f, "{}", s),
+            HexNum::Unsigned(u) => write!(f, "{}", u),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Copy, PartialEq)]
 pub enum Token<'a> {
     K(Keyword),
-    Num(&'a str),
+    Num(HexNum),
     Char(char),
     Str(&'a str),
     Op(&'a str),
