@@ -1,4 +1,4 @@
-use std::{cell::RefCell, slice, ops::{Range, RangeFrom, RangeTo}};
+use std::{cell::RefCell, slice, ops::{Range, RangeFrom, RangeTo}, num::{ParseFloatError, ParseIntError}, error::Error as StdError, fmt::Display};
 
 use nom::{
     character::complete::{
@@ -8,7 +8,7 @@ use nom::{
         oct_digit1,
         digit1,
         multispace1,
-        not_line_ending, oct_digit0, hex_digit0, digit0
+        not_line_ending, oct_digit0, hex_digit0, digit0, one_of
     },
     branch::alt as choice,
     bytes::complete::{
@@ -21,7 +21,7 @@ use nom::{
         recognize,
         eof,
         map,
-        map_opt, opt
+        map_opt, opt, map_res
     },
     sequence::{pair as then, delimited, preceded, tuple},
     multi::{
@@ -32,7 +32,7 @@ use nom::{
 };
 use nom_supreme::error::{GenericErrorTree, ErrorTree};
 
-use crate::{recovery_err::{StrResult, StrSpan, RecoveredError, ParseState, ToRange}, token::{TokSpan, FromStrSpan, Token, PreProc, Keyword, BuiltFunc, ValueType}, combinators::{ignore, map_with_span}};
+use crate::{recovery_err::{StrResult, StrSpan, RecoveredError, ParseState, ToRange}, token::{TokSpan, FromStrSpan, Token, PreProc, Keyword, BuiltFunc, ValueType, HexNum}, combinators::{ignore, map_with_span}};
 
 pub fn anything_until_multicomment_end<T, E: ParseError<T>>(input: T) -> IResult<T, T, E>
 where
@@ -100,151 +100,6 @@ where
         }
     }
   }
-}
-
-fn hex_num<'a, 'b>(input: StrSpan<'a, 'b>) -> StrResult<StrSpan<'a, 'b>, TokSpan<'a, 'b>> {
-    map(
-        tuple((
-            just_no_case("0x"),
-            |input: StrSpan<'a, 'b>| match hex_digit1(input) {
-                Ok((p, s)) => {
-                    let state = s.extra;
-                    Ok((p, (Token::Num(s.fragment()), state, s.span())))
-                },
-                Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => {
-                    let input = match e {
-                        GenericErrorTree::Base { location, kind } => match kind {
-                            nom_supreme::error::BaseErrorKind::Expected(ex) => match ex {
-                                nom_supreme::error::Expectation::HexDigit => {
-                                    location.extra.report_error(RecoveredError(location.span(), "Expected hexadecimal number after \"0x\"".to_string()));
-                                    location
-                                },
-                                _ => unreachable!(),
-                            },
-                            _ => unreachable!(),
-                        },
-                        _ => unreachable!(),
-                    };
-                    let span = input.span();
-                    let state = input.extra;
-                    Ok((input, (Token::Err, state, span)))
-                },
-                Err(e) => Err(e)
-            },
-            ignore(opt( // TODO: don't ignore
-                tuple((
-                    just("."),
-                    hex_digit0,
-                    opt(is_a("dDfF"))
-                ))
-            ))
-        )),
-        |(head, t, _)| TokSpan::from_strspan(t.0, t.1, head.span().start..t.2.end)
-    )(input)
-}
-
-fn oct_num<'a, 'b>(input: StrSpan<'a, 'b>) -> StrResult<StrSpan<'a, 'b>, TokSpan<'a, 'b>> {
-    map(
-        tuple((
-            just_no_case("0o"),
-            |input: StrSpan<'a, 'b>| match oct_digit1(input) {
-                Ok((p, s)) => {
-                    let state = s.extra;
-                    Ok((p, (Token::Num(s.fragment()), state, s.span())))
-                },
-                Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => {
-                    let input = match e {
-                        GenericErrorTree::Base { location, kind } => match kind {
-                            nom_supreme::error::BaseErrorKind::Expected(ex) => match ex {
-                                nom_supreme::error::Expectation::OctDigit => {
-                                    location.extra.report_error(RecoveredError(location.span(), "Expected octal number after \"0o\"".to_string()));
-                                    location
-                                },
-                                _ => unreachable!(),
-                            },
-                            _ => unreachable!(),
-                        },
-                        _ => unreachable!(),
-                    };
-                    let span = input.span();
-                    let state = input.extra;
-                    Ok((input, (Token::Err, state, span)))
-                },
-                Err(e) => Err(e)
-            },
-            ignore(opt( // TODO: don't ignore
-                tuple((
-                    just("."),
-                    oct_digit0,
-                    opt(is_a("dDfF"))
-                ))
-            ))
-        )),
-        |(head, t, _)| TokSpan::from_strspan(t.0, t.1, head.span().start..t.2.end)
-    )(input)
-}
-
-fn bin_num<'a, 'b>(input: StrSpan<'a, 'b>) -> StrResult<StrSpan<'a, 'b>, TokSpan<'a, 'b>> {
-    map(
-        tuple((
-            just_no_case("0b"),
-            |input: StrSpan<'a, 'b>| match is_a("01")(input) {
-                Ok((p, s)) => {
-                    let state = s.extra;
-                    Ok((p, (Token::Num(s.fragment()), state, s.span())))
-                },
-                Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => {
-                    let input = match e {
-                        GenericErrorTree::Base { location, kind } => match kind {
-                            nom_supreme::error::BaseErrorKind::Kind(k) => match k {
-                                nom::error::ErrorKind::IsA => {
-                                    location.extra.report_error(RecoveredError(location.span(), "Expected binary number after \"0b\"".to_string()));
-                                    location
-                                },
-                                _ => unreachable!()
-                            },
-                            _ => unreachable!()
-                        },
-                        _ => unreachable!()
-                    };
-                    let span = input.span();
-                    let state = input.extra;
-                    Ok((input, (Token::Err, state, span)))
-                },
-                Err(e) => Err(e)
-            },
-            ignore(opt( // TODO: don't ignore
-                tuple((
-                    just("."),
-                    is_a("01"),
-                    opt(is_a("dDfF"))
-                ))
-            ))
-        )),
-        |(head, t, _)| TokSpan::from_strspan(t.0, t.1, head.span().start..t.2.end)
-    )(input)
-}
-
-fn dec_num<'a, 'b>(input: StrSpan<'a, 'b>) -> StrResult<StrSpan<'a, 'b>, TokSpan<'a, 'b>> {
-    map(
-        then(
-            |input: StrSpan<'a, 'b>| match digit1(input) {
-                Ok((p, s)) => {
-                    let state = s.extra;
-                    Ok((p, TokSpan::from_strspan(Token::Num(s.fragment()), state, s.span())))
-                },
-                Err(e) => Err(e),
-            },
-            ignore(opt( // TODO: don't ignore
-                tuple((
-                    just("."),
-                    digit0,
-                    opt(is_a("dDfF"))
-                ))
-            ))
-        ),
-        |(a, _)| a
-    )(input)
 }
 
 fn escape_char(c: char) -> char {
@@ -425,15 +280,102 @@ fn str_<'a, 'b>(input: StrSpan<'a, 'b>) -> StrResult<StrSpan<'a, 'b>, TokSpan<'a
     )(input)
 }
 
+#[derive(Debug)]
+enum NumLexError {
+    ParseFloatError,
+    ParseIntError
+}
+
+impl Display for NumLexError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NumLexError::ParseFloatError => write!(f, "ParseFloatError"),
+            NumLexError::ParseIntError => write!(f, "ParseIntError"),
+        }
+    }
+}
+
+impl StdError for NumLexError {}
+
+impl From<hexponent::ParseError> for NumLexError {
+    fn from(value: hexponent::ParseError) -> Self {
+        Self::ParseFloatError
+    }
+}
+
+impl From<ParseIntError> for NumLexError {
+    fn from(value: ParseIntError) -> Self {
+        Self::ParseIntError
+    }
+}
+
+fn num_lexer<'a, 'b>(input: StrSpan<'a, 'b>) -> StrResult<StrSpan<'a, 'b>, TokSpan<'a, 'b>> {
+    map_res(recognize(then(
+            one_of("0123456789ABCDEFabcdefxXoOpP.uU"),
+            many0(one_of("0123456789ABCDEFabcdef'xXoOpP.uU"))
+        )),
+        |s: StrSpan| -> Result<TokSpan, NumLexError>{
+            let string = s.fragment().to_string();
+            let mut string = string.replace('\'', "");
+            let has_float_suffix = string.ends_with('D') || string.ends_with('F') || string.ends_with('d') || string.ends_with('f');
+            let is_float = string.contains('.') || (!string.starts_with("0x") && has_float_suffix);
+
+            let hex_num = if is_float {
+                let mut suffix = None;
+                if has_float_suffix {
+                    suffix = Some(string.split_off(string.len()-1));
+                }
+
+                let value: hexponent::FloatLiteral = string.parse()?;
+                let first_char = |suf: Option<String>| match suf {
+                    Some(s) => {
+                        let mut chars = s.chars();
+                        chars.next()
+                    },
+                    None => None
+                };
+
+                match first_char(suffix) {
+                    Some('d') | Some('D') | None => HexNum::Double(value.into()),
+                    Some('F') | Some('f') => HexNum::Float(value.into()),
+                    _ => unreachable!()
+                }
+            } else {
+                let mut is_unsigned = false;
+                if string.ends_with('U') || string.ends_with('u') {
+                    is_unsigned = true;
+                    string.truncate(string.len()-1);
+                }
+
+                let (prefix_offset, base) = if string.starts_with("0x") || string.starts_with("0X") {
+                    (2, 16)
+                } else if string.starts_with("0o") || string.starts_with("0O") {
+                    (2, 8)
+                } else if string.starts_with("0b") || string.starts_with("0B") {
+                    (2, 2)
+                } else {
+                    (0, 10)
+                };
+
+                let string = string.split_off(prefix_offset);
+
+                if is_unsigned {
+                    HexNum::Unsigned(u128::from_str_radix(&string, base)?)
+                } else {
+                    HexNum::Signed(i128::from_str_radix(&string, base)?)
+                }
+            };
+
+            let token = Token::Num(hex_num);
+            let state = s.extra;
+            Ok(TokSpan::from_strspan(token, state, s.span()))
+        }
+    )(input) // dec_num can return an error
+}
+
 fn lexer<'a, 'b>(input: StrSpan<'a, 'b>) -> StrResult<StrSpan<'a, 'b>, Vec<TokSpan<'a, 'b>>> {
-    // Integer parser
-    // TODO: Floats
-    let num = choice((
-        hex_num,
-        oct_num,
-        bin_num,
-        dec_num
-    )); // dec_num can return an error
+    // Number parser
+    let num = num_lexer;
 
     // A parser for operators
     let op = map(

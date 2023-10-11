@@ -4,6 +4,7 @@ use std::{cell::RefCell, collections::HashMap, env::args};
 
 use nom::{multi::separated_list1, Err};
 use nom::bytes::complete::tag as just;
+use crate::token::HexNum;
 use crate::{m_lexer, m_parser::{self, token_parse, parse_namespace, ident, parse_struct, BinaryOp, HexTypeDef, Endianness, HexType, FuncArgument, UnaryOp, Statement, FuncCall, Definition}, simple_debug::SimpleDebug, token::{Token, Tokens, ValueType, Spanned}, expand_preprocessor_tokens, Expr, Value, parse};
 
 macro_rules! get_tokens {
@@ -40,8 +41,8 @@ macro_rules! bnull {
 }
 
 macro_rules! bnum {
-    () => {
-        Box::new((Expr::Value { val: Value::Num(0.0) }, 0..0))
+    ($hex_num:expr) => {
+        Box::new((Expr::Value { val: Value::Num($hex_num) }, 0..0))
     };
 }
 
@@ -541,7 +542,7 @@ fn test_pattern_arrays() {
                             value: spanbox!(Expr::Binary {
                                 loperand: blocal!("$"),
                                 operator: BinaryOp::GreaterEqual,
-                                roperand: bnum!()
+                                roperand: bnum!(HexNum::Signed(8))
                             })
                         }, 0..0)
                     ], 0..0)
@@ -555,7 +556,7 @@ fn test_pattern_arrays() {
                                 name: (HexType::V(ValueType::U8), 0..0)
                             }, 0..0),
                             array_name: blocal!("first"),
-                            size: bnum!(),
+                            size: bnum!(HexNum::Signed(4)),
                             body: bnull!()
                         }, 0..0),
                         (Statement::ArrayDefinition {
@@ -585,7 +586,7 @@ fn test_pattern_arrays() {
                     name: (HexType::Custom(String::from("Signature")), 0..0)
                 }, 0..0),
                 name: blocal!("sign"),
-                body: bnum!()
+                body: bnum!(HexNum::Signed(0x00))
             }), 0..0)
         ];
 
@@ -695,7 +696,7 @@ fn test_pattern_attributes() {
                         name: (HexType::V(ValueType::Character), 0..0)
                     }, 0..0),
                     array_name: blocal!("s"),
-                    size: bnum!(),
+                    size: bnum!(HexNum::Signed(5)),
                     body: bnull!()
                 }, 0..0)
             ], 0..0),
@@ -742,7 +743,7 @@ fn test_pattern_attributes() {
                 body: bnull!()
             }))), 0..0)], 0..0),
             body: (vec![
-                (Statement::Return { value: bnum!() }, 0..0)
+                (Statement::Return { value: bnum!(HexNum::Signed(1337)) }, 0..0)
             ], 0..0)
         }, 0..0),
         (Statement::Definition(Definition {
@@ -751,7 +752,7 @@ fn test_pattern_attributes() {
                 name: (HexType::Custom(String::from("FormatTransformTest")), 0..0)
             }, 0..0),
             name: blocal!("formatTransformTest"),
-            body: bnum!()
+            body: bnum!(HexNum::Signed(0x00))
         }), 0..0),
         (Statement::Definition(Definition {
             value_type: (HexTypeDef {
@@ -759,7 +760,7 @@ fn test_pattern_attributes() {
                 name: (HexType::Custom(String::from("SealedTest")), 0..0)
             }, 0..0),
             name: blocal!("sealedTest"),
-            body: bnum!()
+            body: bnum!(HexNum::Signed(0x10))
         }), 0..0),
         (Statement::Definition(Definition {
             value_type: (HexTypeDef {
@@ -767,7 +768,7 @@ fn test_pattern_attributes() {
                 name: (HexType::Custom(String::from("HiddenTest")), 0..0)
             }, 0..0),
             name: blocal!("hiddenTest"),
-            body: bnum!()
+            body: bnum!(HexNum::Signed(0x20))
         }), 0..0),
         (Statement::Definition(Definition {
             value_type: (HexTypeDef {
@@ -775,7 +776,7 @@ fn test_pattern_attributes() {
                 name: (HexType::Custom(String::from("ColorTest")), 0..0)
             }, 0..0),
             name: blocal!("colorTest"),
-            body: bnum!()
+            body: bnum!(HexNum::Signed(0x30))
         }), 0..0),
         (Statement::Definition(Definition {
             value_type: (HexTypeDef {
@@ -783,7 +784,7 @@ fn test_pattern_attributes() {
                 name: (HexType::Custom(String::from("NoUniqueAddressTest")), 0..0)
             }, 0..0),
             name: blocal!("noUniqueAddressTest"),
-            body: bnum!()
+            body: bnum!(HexNum::Signed(0x40))
         }), 0..0)
     ];
 
@@ -817,19 +818,19 @@ fn test_pattern_bitfields() {
             body: (vec![
                     (Statement::BitFieldEntry {
                         name: (String::from("a"), 0..0),
-                        length: bnum!()
+                        length: bnum!(HexNum::Signed(4))
                     }, 0..0),
                     (Statement::BitFieldEntry {
                         name: (String::from("b"), 0..0),
-                        length: bnum!()
+                        length: bnum!(HexNum::Signed(4))
                     }, 0..0),
                     (Statement::BitFieldEntry {
                         name: (String::from("c"), 0..0),
-                        length: bnum!()
+                        length: bnum!(HexNum::Signed(4))
                     }, 0..0),
                     (Statement::BitFieldEntry {
                         name: (String::from("d"), 0..0),
-                        length: bnum!()
+                        length: bnum!(HexNum::Signed(4))
                     }, 0..0)
                 ], 0..0)
         }, 0..0),
@@ -839,7 +840,7 @@ fn test_pattern_bitfields() {
                 name: (HexType::Custom(String::from("TestBitfield")), 0..0)
             }, 0..0),
             name: blocal!("testBitfield"),
-            body: bnum!()
+            body: bnum!(HexNum::Signed(0x12))
         }), 0..0)
     ];
 
@@ -888,7 +889,7 @@ fn test_pattern_enums() {
                 }, 0..0),
                 (Expr::EnumEntry {
                     name: (String::from("B"), 0..0),
-                    value: bnum!()
+                    value: bnum!(HexNum::Signed(0x0C))
                 }, 0..0),
                 (Expr::EnumEntry {
                     name: (String::from("C"), 0..0),
@@ -906,7 +907,7 @@ fn test_pattern_enums() {
                 name: (HexType::Custom(String::from("TestEnum")), 0..0)
             }, 0..0),
             name: blocal!("testEnum"),
-            body: bnum!()
+            body: bnum!(HexNum::Signed(0x08))
         }), 0..0)
     ];
 
@@ -1015,7 +1016,7 @@ fn test_pattern_extra_semicolon() {
                 name: (HexType::Custom(String::from("Test")), 0..0)
             }, 0..0),
             name: blocal!("test"),
-            body: bnum!()
+            body: bnum!(HexNum::Signed(0x00))
         }), 0..0),
         (Statement::Definition(Definition {
             value_type: (HexTypeDef {
@@ -1023,7 +1024,7 @@ fn test_pattern_extra_semicolon() {
                 name: (HexType::Custom(String::from("Test")), 0..0)
             }, 0..0),
             name: blocal!("test2"),
-            body: bnum!()
+            body: bnum!(HexNum::Signed(0x10))
         }), 0..0)
     ];
 
@@ -1115,7 +1116,7 @@ fn test_pattern_namespaces() {
                 ]), 0..0)
             }, 0..0),
             name: blocal!("test1"),
-            body: bnum!()
+            body: bnum!(HexNum::Signed(0x10))
         }), 0..0),
         (Statement::Definition(Definition {
             value_type: (HexTypeDef {
@@ -1123,7 +1124,7 @@ fn test_pattern_namespaces() {
                 name: (HexType::Custom(String::from("ATest")), 0..0)
             }, 0..0),
             name: blocal!("test2"),
-            body: bnum!()
+            body: bnum!(HexNum::Signed(0x20))
         }), 0..0),
         (Statement::Definition(Definition {
             value_type: (HexTypeDef {
@@ -1134,7 +1135,7 @@ fn test_pattern_namespaces() {
                 ]), 0..0)
             }, 0..0),
             name: blocal!("test3"),
-            body: bnum!()
+            body: bnum!(HexNum::Signed(0x20))
         }), 0..0)
     ];
 
@@ -1302,7 +1303,7 @@ fn test_pattern_nested_structs() {
                 name: (HexType::Custom(String::from("Data")), 0..0)
             }, 0..0),
             name: blocal!("data"),
-            body: bnum!()
+            body: bnum!(HexNum::Signed(0x00))
         }), 0..0)
     ];
 
@@ -1341,14 +1342,14 @@ fn test_pattern_padding() {
                         name: blocal!("variable"),
                         body: bnull!()
                     }), 0..0),
-                    (Statement::Padding { padding_body: (Expr::Value { val: Value::Num(0.0) }, 0..0) }, 0..0),
+                    (Statement::Padding { padding_body: (Expr::Value { val: Value::Num(HexNum::Signed(20)) }, 0..0) }, 0..0),
                     (Statement::ArrayDefinition {
                         value_type: (HexTypeDef {
                             endianness: Endianness::Unkown,
                             name: (HexType::V(ValueType::U8), 0..0)
                         }, 0..0),
                         array_name: blocal!("array"),
-                        size: bnum!(),
+                        size: bnum!(HexNum::Signed(0x10)),
                         body: bnull!()
                     }, 0..0)
                 ], 0..0),
@@ -1360,7 +1361,7 @@ fn test_pattern_padding() {
                 name: (HexType::Custom(String::from("TestStruct")), 0..0)
             }, 0..0),
             name: blocal!("testStruct"),
-            body: bnum!()
+            body: bnum!(HexNum::Signed(0x100))
         }), 0..0)
     ];
 
@@ -1389,7 +1390,7 @@ fn test_pattern_placement() {
                 name: (HexType::V(ValueType::U32), 0..0)
             }, 0..0),
             name: blocal!("placementVar"),
-            body: bnum!()
+            body: bnum!(HexNum::Signed(0x00))
         }), 0..0),
         (Statement::ArrayDefinition {
             value_type: (HexTypeDef {
@@ -1397,8 +1398,8 @@ fn test_pattern_placement() {
                 name: (HexType::V(ValueType::U8), 0..0)
             }, 0..0),
             array_name: blocal!("placementArray"),
-            size: bnum!(),
-            body: bnum!()
+            size: bnum!(HexNum::Signed(10)),
+            body: bnum!(HexNum::Signed(0x10))
         }, 0..0)
     ];
 
@@ -1430,7 +1431,7 @@ fn test_pattern_pointers() {
                 name: (HexType::V(ValueType::U32), 0..0)
             }, 0..0),
             name: blocal!("placementPointer"),
-            body: bnum!()
+            body: bnum!(HexNum::Signed(0x0C))
         }), 0..0),
         (Statement::Definition(Definition {
             value_type: (HexTypeDef {
@@ -1445,7 +1446,7 @@ fn test_pattern_pointers() {
             args: (vec![(FuncArgument::Parameter(spanbox!(Expr::UnnamedParameter { type_: (HexType::V(ValueType::U128), 0..0) })), 0..0)], 0..0),
             body: (vec![
                     (Statement::Return {
-                        value: bnum!()
+                        value: bnum!(HexNum::Signed(0x1D))
                     }, 0..0)
                 ], 0..0)
         }, 0..0),
@@ -1455,7 +1456,7 @@ fn test_pattern_pointers() {
                 name: (HexType::V(ValueType::U32), 0..0)
             }, 0..0),
             name: blocal!("pointerRelativeSigned"),
-            body: bnum!()
+            body: bnum!(HexNum::Signed(0x1D))
         }), 0..0)
     ];
 
@@ -1562,7 +1563,7 @@ fn test_pattern_rvalues() {
                 name: (HexType::Custom(String::from("A")), 0..0)
             }, 0..0),
             name: blocal!("a"),
-            body: bnum!()
+            body: bnum!(HexNum::Signed(0x00))
         }), 0..0)
     ];
 
@@ -1606,7 +1607,7 @@ fn test_pattern_structs() {
                             name: (HexType::V(ValueType::U8), 0..0)
                         }, 0..0),
                         array_name: blocal!("array"),
-                        size: bnum!(),
+                        size: bnum!(HexNum::Signed(0x10)),
                         body: bnull!()
                     }, 0..0)
                 ], 0..0),
@@ -1618,7 +1619,7 @@ fn test_pattern_structs() {
                 name: (HexType::Custom(String::from("TestStruct")), 0..0)
             }, 0..0),
             name: blocal!("testStruct"),
-            body: bnum!()
+            body: bnum!(HexNum::Signed(0x100))
         }), 0..0)
     ];
 
@@ -1654,7 +1655,7 @@ fn test_pattern_unions() {
                         name: (HexType::V(ValueType::S32), 0..0)
                     }, 0..0),
                     array_name: blocal!("array"),
-                    size: bnum!(),
+                    size: bnum!(HexNum::Signed(2)),
                     body: bnull!()
                 }, 0..0),
                 (Statement::Definition(Definition {
@@ -1674,7 +1675,7 @@ fn test_pattern_unions() {
                 name: (HexType::Custom(String::from("TestUnion")), 0..0)
             }, 0..0),
             name: blocal!("testUnion"),
-            body: bnum!()
+            body: bnum!(HexNum::Signed(0x200))
         }), 0..0)
     ];
 
@@ -1705,7 +1706,7 @@ fn test_pattern_at_in_function() {
                                     0..0,
                                 ),
                                 name: blocal!("contents"),
-                                body: bnum!(),
+                                body: bnum!(HexNum::Signed(0x00)),
                             }),
                             0..0,
                         )], 0..0)

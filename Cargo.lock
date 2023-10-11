@@ -294,6 +294,7 @@ name = "hexparser"
 version = "1.2.3"
 dependencies = [
  "expand_str",
+ "hexponent",
  "nom",
  "nom-locate",
  "nom-supreme",
@@ -323,6 +324,12 @@ dependencies = [
  "url",
  "urlencoding",
 ]
+
+[[package]]
+name = "hexponent"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "07482eb12527cb107ba354de9717dbce361ce82ec553fe9e70a98db29fd00d3d"
 
 [[package]]
 name = "httparse"

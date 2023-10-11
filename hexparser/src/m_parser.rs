@@ -24,7 +24,7 @@ use nom::{
 use nom_supreme::{error::{ErrorTree, BaseErrorKind, GenericErrorTree}, ParserExt};
 use serde::{Deserialize, Serialize};
 
-use crate::{token::{Spanned, TokSpan, Tokens, Token, Keyword, ValueType}, combinators::{spanned, ignore, to, map_with_span, fold_many0_once}, m_parser::{function::{function_statement, function_definition}, operations::mathematical_expression}, recovery_err::{TokResult, ToRange, RecoveredError, TokError, expression_recovery, non_opt, statement_recovery}};
+use crate::{token::{Spanned, TokSpan, Tokens, Token, Keyword, ValueType, HexNum}, combinators::{spanned, ignore, to, map_with_span, fold_many0_once}, m_parser::{function::{function_statement, function_definition}, operations::mathematical_expression}, recovery_err::{TokResult, ToRange, RecoveredError, TokError, expression_recovery, non_opt, statement_recovery}};
 
 pub use operations::UnaryOp;
 
@@ -49,7 +49,7 @@ impl<T> Boxable<T> for Option<T> {
 pub enum Value {
     Null,
     Bool(bool),
-    Num(f64),
+    Num(HexNum),
     Str(String),
     Char(char),
     Func(String),
@@ -1846,7 +1846,7 @@ fn numeric<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
         spanned(take(1 as usize)),
         |(consumed, span): (Tokens<'a, 'b>, Range<usize>)|{
             match consumed.tokens[0].fragment() {
-                Token::Num(_) => Ok((Expr::Value { val: Value::Num(0.0) }, span)), // TODO: Parse the number instead of always being 0.0
+                Token::Num(num) => Ok((Expr::Value { val: Value::Num(*num) }, span)),
                 Token::Bool(b) => Ok((Expr::Value { val: Value::Bool(*b) }, span)),
                 _ => Err(ErrorTree::Base {
                     location: consumed,

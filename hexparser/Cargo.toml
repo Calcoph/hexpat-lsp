@@ -13,6 +13,7 @@ tower-lsp = { version = "0.17.0"}
 shellexpand = "2.1.2"
 expand_str = "0.1.1"
 tokio = { version = "1.17.0", features = ["full"] }
+hexponent = "0.3.1"
 
 [dependencies.parserlib]
 path = "../parserlib"
