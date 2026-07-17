@@ -185,7 +185,7 @@ pub fn get_reference_of_statement(
                 include_self,
             );
         },
-        Statement::Namespace { name, body } => {
+        Statement::Namespace { name, body, .. } => {
             get_reference_of_expr(
                 name,
                 reference_symbol,

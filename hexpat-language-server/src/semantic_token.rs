@@ -125,7 +125,7 @@ pub fn semantic_token_from_statement(
             semantic_token_from_statements(&body.0, semantic_tokens);
             semantic_token_from_exprs(template_parameters, semantic_tokens)
         },
-        Statement::Namespace { name, body } => {
+        Statement::Namespace { name, body, .. } => {
             semantic_tokens.push(ImCompleteSemanticToken {
                 start: name.1.start,
                 length: name.1.len(),

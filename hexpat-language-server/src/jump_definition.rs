@@ -118,7 +118,7 @@ fn get_definition_of_statement(
 
             ret
         },
-        Statement::Namespace { name, body } => {
+        Statement::Namespace { name, body, .. } => {
             early_return_get_definition_of_expr!(name, definition_ass_list, ident_offset, true);
             // TODO: retain the scope but with a prefix of the namespace name
             get_definition_of_statements(&body.0, &mut definition_ass_list.clone(), ident_offset, false)
