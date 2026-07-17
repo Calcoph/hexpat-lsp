@@ -267,3 +267,10 @@ fn ternary_conditional<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spann
 pub(crate) fn mathematical_expression<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
     ternary_conditional(input)
 }
+
+// Same as mathematical_expression, but excludes the `|` operator
+// so it can be used where `|` needs to be free to mean something else,
+// like separating alternatives in a match case item (e.g. `(1 | 2): ...`).
+pub(crate) fn match_case_expression<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<Expr>> {
+    binary_xor_expression(input)
+}

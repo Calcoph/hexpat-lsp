@@ -5,7 +5,7 @@ use std::{cell::RefCell, collections::HashMap, env::args};
 use nom::{multi::separated_list1, Err};
 use nom::bytes::complete::tag as just;
 use crate::token::HexNum;
-use crate::{m_lexer, m_parser::{self, token_parse, parse_namespace, ident, parse_struct, BinaryOp, HexTypeDef, Endianness, HexType, FuncArgument, UnaryOp, Statement, FuncCall, Definition}, simple_debug::SimpleDebug, token::{Token, Tokens, ValueType, Spanned}, expand_preprocessor_tokens, Expr, Value, parse};
+use crate::{m_lexer, m_parser::{self, token_parse, parse_namespace, ident, parse_struct, BinaryOp, HexTypeDef, Endianness, HexType, FuncArgument, UnaryOp, Statement, FuncCall, Definition, MatchCase, MatchCaseItem, MatchCaseElement, MatchBranch}, simple_debug::SimpleDebug, token::{Token, Tokens, ValueType, Spanned}, expand_preprocessor_tokens, recovery_err::RecoveredError, Expr, Value, parse};
 
 macro_rules! get_tokens {
     ( $test_str:expr, $var:ident ) => {
@@ -349,7 +349,49 @@ fn stmnt_comparer(stmnt1: &Statement, stmnt2: &Statement) -> Result<(), CompErr>
             Ok(_) => Ok(()),
             Err(e) => Err(e),
         },
+        (Statement::Match { parameters: p1, branches: br1 },
+            Statement::Match { parameters: p2, branches: br2 }
+        ) => match vec_expr_comparer(p1, p2) {
+            Ok(_) => match br1.len() == br2.len() {
+                true => br1.iter().zip(br2.iter()).try_for_each(|(b1, b2)| {
+                    match_case_comparer(&b1.case.0, &b2.case.0)?;
+                    vec_stmnt_comparer(&b1.body.0, &b2.body.0)
+                }),
+                false => {println!("Different amount of match branches");Err(CompErr)},
+            },
+            Err(e) => Err(e),
+        },
         (e1, e2) => {println!("Expected {e1:?}.\nGot {e2:?}");Err(CompErr)}
+    }
+}
+
+fn match_case_element_comparer(e1: &MatchCaseElement, e2: &MatchCaseElement) -> Result<(), CompErr> {
+    match (e1, e2) {
+        (MatchCaseElement::Expr(a1), MatchCaseElement::Expr(a2)) => expr_comparer(&a1.0, &a2.0),
+        (MatchCaseElement::Range(s1, e1), MatchCaseElement::Range(s2, e2)) => {
+            expr_comparer(&s1.0, &s2.0)?;
+            expr_comparer(&e1.0, &e2.0)
+        },
+        (e1, e2) => {println!("Expected {e1:?}.\nGot {e2:?}");Err(CompErr)}
+    }
+}
+
+fn match_case_item_comparer(i1: &MatchCaseItem, i2: &MatchCaseItem) -> Result<(), CompErr> {
+    match (i1, i2) {
+        (MatchCaseItem::Anything, MatchCaseItem::Anything) => Ok(()),
+        (MatchCaseItem::Element(e1), MatchCaseItem::Element(e2)) => match_case_element_comparer(e1, e2),
+        (MatchCaseItem::OrList(l1), MatchCaseItem::OrList(l2)) => match l1.len() == l2.len() {
+            true => l1.iter().zip(l2.iter()).try_for_each(|(a, b)| match_case_element_comparer(a, b)),
+            false => {println!("Different amount of or-list elements");Err(CompErr)},
+        },
+        (i1, i2) => {println!("Expected {i1:?}.\nGot {i2:?}");Err(CompErr)}
+    }
+}
+
+fn match_case_comparer(c1: &MatchCase, c2: &MatchCase) -> Result<(), CompErr> {
+    match c1.case.len() == c2.case.len() {
+        true => c1.case.iter().zip(c2.case.iter()).try_for_each(|(a, b)| match_case_item_comparer(&a.0, &b.0)),
+        false => {println!("Different amount of match case items");Err(CompErr)},
     }
 }
 
@@ -1680,6 +1722,113 @@ fn test_pattern_unions() {
     ];
 
     let ((ex, _), _, _) = parse(test_str, &includeable_folders);
+    vec_stmnt_comparer(&ex, &expected_output).unwrap()
+}
+
+#[test]
+fn test_pattern_match() {
+    let test_str = "
+        struct Test {
+            u8 value;
+            match (value) {
+                (0): u8 zero;
+                (1 | 2): u16 small;
+                (3 ... 10): u32 mid;
+                (_): u64 other;
+            }
+        };
+    ";
+
+    let expected_output = vec![
+        (Statement::Struct {
+            name: (String::from("Test"), 0..0),
+            template_parameters: vec![],
+            body: (vec![
+                (Statement::Definition(Definition {
+                    value_type: (HexTypeDef {
+                        endianness: Endianness::Unkown,
+                        name: (HexType::V(ValueType::U8), 0..0)
+                    }, 0..0),
+                    name: blocal!("value"),
+                    body: bnull!()
+                }), 0..0),
+                (Statement::Match {
+                    parameters: vec![*blocal!("value")],
+                    branches: vec![
+                        MatchBranch {
+                            case: (MatchCase { case: vec![
+                                (MatchCaseItem::Element(MatchCaseElement::Expr(*bnum!(HexNum::Signed(0)))), 0..0)
+                            ] }, 0..0),
+                            body: (vec![
+                                (Statement::Definition(Definition {
+                                    value_type: (HexTypeDef {
+                                        endianness: Endianness::Unkown,
+                                        name: (HexType::V(ValueType::U8), 0..0)
+                                    }, 0..0),
+                                    name: blocal!("zero"),
+                                    body: bnull!()
+                                }), 0..0)
+                            ], 0..0)
+                        },
+                        MatchBranch {
+                            case: (MatchCase { case: vec![
+                                (MatchCaseItem::OrList(vec![
+                                    MatchCaseElement::Expr(*bnum!(HexNum::Signed(1))),
+                                    MatchCaseElement::Expr(*bnum!(HexNum::Signed(2))),
+                                ]), 0..0)
+                            ] }, 0..0),
+                            body: (vec![
+                                (Statement::Definition(Definition {
+                                    value_type: (HexTypeDef {
+                                        endianness: Endianness::Unkown,
+                                        name: (HexType::V(ValueType::U16), 0..0)
+                                    }, 0..0),
+                                    name: blocal!("small"),
+                                    body: bnull!()
+                                }), 0..0)
+                            ], 0..0)
+                        },
+                        MatchBranch {
+                            case: (MatchCase { case: vec![
+                                (MatchCaseItem::Element(MatchCaseElement::Range(
+                                    *bnum!(HexNum::Signed(3)),
+                                    *bnum!(HexNum::Signed(10)),
+                                )), 0..0)
+                            ] }, 0..0),
+                            body: (vec![
+                                (Statement::Definition(Definition {
+                                    value_type: (HexTypeDef {
+                                        endianness: Endianness::Unkown,
+                                        name: (HexType::V(ValueType::U32), 0..0)
+                                    }, 0..0),
+                                    name: blocal!("mid"),
+                                    body: bnull!()
+                                }), 0..0)
+                            ], 0..0)
+                        },
+                        MatchBranch {
+                            case: (MatchCase { case: vec![
+                                (MatchCaseItem::Anything, 0..0)
+                            ] }, 0..0),
+                            body: (vec![
+                                (Statement::Definition(Definition {
+                                    value_type: (HexTypeDef {
+                                        endianness: Endianness::Unkown,
+                                        name: (HexType::V(ValueType::U64), 0..0)
+                                    }, 0..0),
+                                    name: blocal!("other"),
+                                    body: bnull!()
+                                }), 0..0)
+                            ], 0..0)
+                        },
+                    ]
+                }, 0..0)
+            ], 0..0)
+        }, 0..0)
+    ];
+
+    let ((ex, _), errors, _) = parse(test_str, &vec![]);
+    assert!(errors.is_empty(), "Unexpected errors: {:?}", errors);
     vec_stmnt_comparer(&ex, &expected_output).unwrap()
 }
 

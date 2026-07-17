@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use im_rc::Vector;
-use hexparser::{m_parser::{Expr, HexTypeDef, HexType, Definition, FuncCall, Statement}, token::Spanned};
+use hexparser::{m_parser::{Expr, HexTypeDef, HexType, Definition, FuncCall, Statement, MatchBranch, MatchCaseItem, MatchCaseElement}, token::Spanned};
 
 #[derive(Debug, Clone)]
 pub enum ReferenceSymbol {
@@ -139,7 +139,22 @@ pub fn get_reference_of_statement(
             );
         },
         Statement::ArrayDefinition { value_type, array_name, size: index, body } => {}, // TODO
-        Statement::Match { parameters, branches  } => (), // TODO
+        Statement::Match { parameters, branches } => {
+            get_reference_of_expressions(
+                parameters,
+                reference_symbol,
+                reference_list,
+                include_self,
+            );
+            for branch in branches {
+                get_reference_of_match_branch(
+                    branch,
+                    reference_symbol,
+                    reference_list,
+                    include_self,
+                );
+            }
+        },
         Statement::TryCatch { try_block, catch_block } => (), // TODO
         Statement::Return { value } => get_reference_of_expr(
             value,
@@ -514,6 +529,61 @@ pub fn get_reference_of_expr(
         },
         Expr::ArrayAccess { array: item, index: member } => {}, // TODO
         Expr::Type { val } => (), // TODO
+    }
+}
+
+pub fn get_reference_of_match_branch(
+    branch: &MatchBranch,
+    reference_symbol: &mut ReferenceSymbol,
+    reference_list: &mut Vec<Spanned<String>>,
+    include_self: bool,
+) {
+    let MatchBranch { case, body } = branch;
+
+    for (case, _) in case.0.case.iter() {
+        match case {
+            MatchCaseItem::Anything => (),
+            MatchCaseItem::Element(element) => {
+                get_reference_of_match_case_element(
+                    element,
+                    reference_symbol,
+                    reference_list,
+                    include_self,
+                );
+            },
+            MatchCaseItem::OrList(elements) => {
+                for element in elements {
+                    get_reference_of_match_case_element(
+                        element,
+                        reference_symbol,
+                        reference_list,
+                        include_self,
+                    );
+                }
+            },
+        }
+    }
+
+    get_reference_of_statements(
+        &body.0,
+        reference_symbol,
+        reference_list,
+        include_self,
+    );
+}
+
+pub fn get_reference_of_match_case_element(
+    element: &MatchCaseElement,
+    reference_symbol: &mut ReferenceSymbol,
+    reference_list: &mut Vec<Spanned<String>>,
+    include_self: bool,
+) {
+    match element {
+        MatchCaseElement::Expr(expr) => get_reference_of_expr(expr, reference_symbol, reference_list, include_self),
+        MatchCaseElement::Range(start, end) => {
+            get_reference_of_expr(start, reference_symbol, reference_list, include_self);
+            get_reference_of_expr(end, reference_symbol, reference_list, include_self);
+        },
     }
 }
 

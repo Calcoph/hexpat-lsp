@@ -24,7 +24,7 @@ use nom::{
 use nom_supreme::{error::{ErrorTree, BaseErrorKind, GenericErrorTree}, ParserExt};
 use serde::{Deserialize, Serialize};
 
-use crate::{token::{Spanned, TokSpan, Tokens, Token, Keyword, ValueType, HexNum}, combinators::{spanned, ignore, to, map_with_span, fold_many0_once}, m_parser::{function::{function_statement, function_definition}, operations::mathematical_expression}, recovery_err::{TokResult, ToRange, RecoveredError, TokError, expression_recovery, non_opt, statement_recovery}};
+use crate::{token::{Spanned, TokSpan, Tokens, Token, Keyword, ValueType, HexNum}, combinators::{spanned, ignore, to, map_with_span, fold_many0_once}, m_parser::{function::{function_statement, function_definition}, operations::{mathematical_expression, match_case_expression}}, recovery_err::{TokResult, ToRange, RecoveredError, TokError, expression_recovery, non_opt, statement_recovery}};
 
 pub use operations::UnaryOp;
 
@@ -546,13 +546,13 @@ fn case_parameters<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b, Spanned<M
             choice((
                 to(just(Token::K(Keyword::Underscore)), MatchCaseItem::Anything),
                 map_with_span(separated_list1(
-                    just(Token::Separator('|')),
+                    just(Token::Op("|")),
                     map(
                         then(
-                            mathematical_expression,
+                            match_case_expression,
                             opt(preceded(
                                 tuple((just(Token::Separator('.')),just(Token::Separator('.')),just(Token::Separator('.')))),
-                                mathematical_expression
+                                match_case_expression
                             ))
                         ),
                         |(expr, range_end)| {
