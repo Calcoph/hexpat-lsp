@@ -504,6 +504,7 @@ fn lexer<'a, 'b>(input: StrSpan<'a, 'b>) -> StrResult<StrSpan<'a, 'b>, Vec<TokSp
                 "_" => Token::K(Keyword::Underscore),
                 "try" => Token::K(Keyword::Try),
                 "catch" => Token::K(Keyword::Catch),
+                "import" => Token::K(Keyword::Import),
                 "in" => Token::K(Keyword::In),
                 "out" => Token::K(Keyword::Out),
                 "return" => Token::K(Keyword::Return),
