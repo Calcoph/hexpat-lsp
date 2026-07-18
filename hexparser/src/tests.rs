@@ -639,7 +639,7 @@ fn test_pattern_arrays() {
         String::from("%programfiles%/imhex")
     ];
 
-    let ((ex, _), _, _) = parse(test_str, &includeable_folders);
+    let ((ex, _), _, _, _) = parse(test_str, &includeable_folders);
     vec_stmnt_comparer(&ex, &expected_output).unwrap()
 }
 
@@ -837,7 +837,7 @@ fn test_pattern_attributes() {
         String::from("%programfiles%/imhex")
     ];
 
-    let ((ex, _), _, _) = parse(test_str, &includeable_folders);
+    let ((ex, _), _, _, _) = parse(test_str, &includeable_folders);
     vec_stmnt_comparer(&ex, &expected_output).unwrap()
 }
 
@@ -893,7 +893,7 @@ fn test_pattern_bitfields() {
         String::from("%programfiles%/imhex")
     ];
 
-    let ((ex, _), _, _) = parse(test_str, &includeable_folders);
+    let ((ex, _), _, _, _) = parse(test_str, &includeable_folders);
     vec_stmnt_comparer(&ex, &expected_output).unwrap()
 }
 
@@ -953,7 +953,7 @@ fn test_pattern_enums() {
         }), 0..0)
     ];
 
-    let ((ex, _), _, _) = parse(test_str, &includeable_folders);
+    let ((ex, _), _, _, _) = parse(test_str, &includeable_folders);
     vec_stmnt_comparer(&ex, &expected_output).unwrap()
 }
 
@@ -970,7 +970,7 @@ fn test_pattern_example() {
 
     let expected_output = vec![];
 
-    let ((ex, _), _, _) = parse(test_str, &includeable_folders);
+    let ((ex, _), _, _, _) = parse(test_str, &includeable_folders);
     vec_stmnt_comparer(&ex, &expected_output).unwrap()
 }
 
@@ -1070,7 +1070,7 @@ fn test_pattern_extra_semicolon() {
         }), 0..0)
     ];
 
-    let ((ex, _), _, _) = parse(test_str, &includeable_folders);
+    let ((ex, _), _, _, _) = parse(test_str, &includeable_folders);
     vec_stmnt_comparer(&ex, &expected_output).unwrap()
 }
 
@@ -1183,7 +1183,7 @@ fn test_pattern_namespaces() {
         }), 0..0)
     ];
 
-    let ((ex, _), _, _) = parse(test_str, &includeable_folders);
+    let ((ex, _), _, _, _) = parse(test_str, &includeable_folders);
     vec_stmnt_comparer(&ex, &expected_output).unwrap()
 }
 
@@ -1351,7 +1351,7 @@ fn test_pattern_nested_structs() {
         }), 0..0)
     ];
 
-    let ((ex, _), _, _) = parse(test_str, &includeable_folders);
+    let ((ex, _), _, _, _) = parse(test_str, &includeable_folders);
     vec_stmnt_comparer(&ex, &expected_output).unwrap()
 }
 
@@ -1409,7 +1409,7 @@ fn test_pattern_padding() {
         }), 0..0)
     ];
 
-    let ((ex, _), _, _) = parse(test_str, &includeable_folders);
+    let ((ex, _), _, _, _) = parse(test_str, &includeable_folders);
     vec_stmnt_comparer(&ex, &expected_output).unwrap()
 }
 
@@ -1447,7 +1447,7 @@ fn test_pattern_placement() {
         }, 0..0)
     ];
 
-    let ((ex, _), _, _) = parse(test_str, &includeable_folders);
+    let ((ex, _), _, _, _) = parse(test_str, &includeable_folders);
     vec_stmnt_comparer(&ex, &expected_output).unwrap()
 }
 
@@ -1504,7 +1504,7 @@ fn test_pattern_pointers() {
         }), 0..0)
     ];
 
-    let ((ex, _), _, _) = parse(test_str, &includeable_folders);
+    let ((ex, _), _, _, _) = parse(test_str, &includeable_folders);
     vec_stmnt_comparer(&ex, &expected_output).unwrap()
 }
 
@@ -1611,7 +1611,7 @@ fn test_pattern_rvalues() {
         }), 0..0)
     ];
 
-    let ((ex, _), _, _) = parse(test_str, &includeable_folders);
+    let ((ex, _), _, _, _) = parse(test_str, &includeable_folders);
     vec_stmnt_comparer(&ex, &expected_output).unwrap()
 }
 
@@ -1667,7 +1667,7 @@ fn test_pattern_structs() {
         }), 0..0)
     ];
 
-    let ((ex, _), _, _) = parse(test_str, &includeable_folders);
+    let ((ex, _), _, _, _) = parse(test_str, &includeable_folders);
     vec_stmnt_comparer(&ex, &expected_output).unwrap()
 }
 
@@ -1723,7 +1723,7 @@ fn test_pattern_unions() {
         }), 0..0)
     ];
 
-    let ((ex, _), _, _) = parse(test_str, &includeable_folders);
+    let ((ex, _), _, _, _) = parse(test_str, &includeable_folders);
     vec_stmnt_comparer(&ex, &expected_output).unwrap()
 }
 
@@ -1873,6 +1873,6 @@ fn test_pattern_at_in_function() {
         String::from("%programfiles%/imhex"),
     ];
 
-    let ((ex, _), _, _) = parse(test_str, &includeable_folders);
+    let ((ex, _), _, _, _) = parse(test_str, &includeable_folders);
     vec_stmnt_comparer(&ex, &expected_output).unwrap()
 }

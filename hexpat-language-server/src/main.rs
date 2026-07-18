@@ -5,7 +5,7 @@ use dashmap::DashMap;
 use hexparser::m_parser::Statement;
 use hexparser::recovery_err::RecoveredError;
 use hexparser::token::Spanned;
-use hexparser::{parse, type_inference, ImCompleteSemanticToken, Value, Expr};
+use hexparser::{parse, type_inference, ImCompleteSemanticToken, Value, Expr, DefineUses};
 use hexpat_language_server::completion::{completion, ImCompleteCompletionItem, add_completion};
 use hexpat_language_server::jump_definition::get_definition;
 use hexpat_language_server::reference::get_reference;
@@ -39,6 +39,7 @@ struct Backend {
     ast_map: DashMap<String, Spanned<Vec<Spanned<Statement>>>>,
     document_map: DashMap<String, Rope>,
     semantic_token_map: DashMap<String, Vec<ImCompleteSemanticToken>>,
+    define_uses_map: DashMap<String, DefineUses>,
     configuration: DashMap<String, ConfigurationEntry>
 }
 
@@ -258,7 +259,18 @@ impl LanguageServer for Backend {
             let position = params.text_document_position_params.position;
             let char = rope.try_line_to_char(position.line as usize).ok()?;
             let offset = char + position.character as usize;
-            let span = get_definition(&ast, offset);
+
+            let define_use_target = self.define_uses_map.get(&uri.to_string())
+                .and_then(|define_uses| {
+                    define_uses.uses.iter()
+                        .find(|(use_span, _)| offset >= use_span.start && offset <= use_span.end)
+                        .map(|(_, def_span)| def_span.clone())
+                });
+
+            let span = match define_use_target {
+                Some(def_span) => Some((String::new(), def_span)),
+                None => get_definition(&ast, offset),
+            };
             span.and_then(|(_, range)| {
                 let start_position = offset_to_position(range.start, &rope)?;
                 let end_position = offset_to_position(range.end, &rope)?;
@@ -466,7 +478,7 @@ impl Backend {
             },
             None => (),
         };
-        let (ast, errors, semantic_tokens) = parse(text, &paths_v);
+        let (ast, errors, semantic_tokens, define_uses) = parse(text, &paths_v);
         self.client
             .log_message(MessageType::INFO, format!("{:?}", errors))
             .await;
@@ -500,6 +512,8 @@ impl Backend {
             .await;
         self.semantic_token_map
             .insert(uri.to_string(), semantic_tokens);
+        self.define_uses_map
+            .insert(uri.to_string(), define_uses);
     }
 
     async fn update_configuration(&self) {
@@ -635,6 +649,7 @@ async fn main() {
         ast_map: DashMap::new(),
         document_map: DashMap::new(),
         semantic_token_map: DashMap::new(),
+        define_uses_map: DashMap::new(),
         configuration: DashMap::new()
     })
     .custom_method("custom/inlay_hint", Backend::inlay_hint)

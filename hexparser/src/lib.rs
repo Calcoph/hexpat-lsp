@@ -66,6 +66,12 @@ fn type_inference_expr(expr: &Spanned<Expr>, symbol_type_table: &mut HashMap<Ran
     }
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct DefineUses {
+    pub definitions: HashMap<String, Range<usize>>,
+    pub uses: Vec<(Range<usize>, Range<usize>)>,
+}
+
 pub fn parse(
     src: &str,
     includeable_folders: &Vec<String>
@@ -73,12 +79,15 @@ pub fn parse(
     Spanned<Vec<Spanned<Statement>>>,
     Vec<RecoveredError>,
     Vec<ImCompleteSemanticToken>,
+    DefineUses,
 ) {
     let errs = RefCell::new(Vec::new());
     let tokens = lex(src, &errs);
     let included_files = RefCell::new(vec![]); // This vec is only so references are valid
     let defines = RefCell::new(HashMap::new());
-    let tokens = expand_preprocessor_tokens(tokens, &defines, includeable_folders, &included_files, &errs);
+    let mut define_uses = DefineUses::default();
+    let mut preproc_semantic_tokens = Vec::new();
+    let tokens = expand_preprocessor_tokens(tokens, &defines, &mut define_uses, &mut preproc_semantic_tokens, includeable_folders, &included_files, &errs);
 
     let (ast, semantic_tokens) = { // TODO: Do it without a code block
         // info!("Tokens = {:?}", tokens);
@@ -454,12 +463,17 @@ pub fn parse(
         (ast, semantic_tokens)
     };
 
-    (ast, errs.into_inner(), semantic_tokens)
+    let mut semantic_tokens = semantic_tokens;
+    semantic_tokens.extend(preproc_semantic_tokens);
+
+    (ast, errs.into_inner(), semantic_tokens, define_uses)
 }
 
 fn expand_preprocessor_tokens<'a, 'b>(
         tokens: Vec<TokSpan<'a, 'b>>,
         defines: &'a RefCell<HashMap<String, Vec<Token<'a>>>>,
+        define_uses: &mut DefineUses,
+        preproc_tokens: &mut Vec<ImCompleteSemanticToken>,
         includeable_folders: &Vec<String>,
         included_files: &'a RefCell<Vec<String>>,
         errors: &'b RefCell<Vec<RecoveredError>>
@@ -469,18 +483,34 @@ fn expand_preprocessor_tokens<'a, 'b>(
     while let Some(token) = iter.next() {
         match token.fragment() {
             Token::Ident(i) => {
+                if let Some(def_span) = define_uses.definitions.get(*i) {
+                    define_uses.uses.push((token.span(), def_span.clone()));
+                }
                 v.extend(try_define(i, defines).into_iter().map(|tok| TokSpan::from_strspan(tok, token.extra.0, token.span())))
             },
-            Token::Pre(p) => match p {
-                token::PreProc::Include(i) => {
-                    let new_errors = RefCell::new(Vec::new());
-                    let tokens = add_include(i, includeable_folders, included_files, &new_errors, ParseState(errors));
-                    let res = expand_preprocessor_tokens(tokens, defines, includeable_folders, included_files, &new_errors);
-                    v.extend(res.into_iter().map(|tok| TokSpan::from_strspan(*tok.fragment(), token.extra.0, token.span())));
-                    errors.borrow_mut().extend(new_errors.into_inner().into_iter().map(|RecoveredError(_, err)| RecoveredError(token.span(), err)));
-                },
-                token::PreProc::Define(d) => add_define(&mut defines.borrow_mut(), d, errors),
-                token::PreProc::Pragma(_) => (),
+            Token::Pre(p) => {
+                let span = token.span();
+                preproc_tokens.push(ImCompleteSemanticToken {
+                    start: span.start,
+                    length: span.len(),
+                    token_type: LEGEND_TYPE
+                        .iter()
+                        .position(|item| item.as_str() == SemanticTokenType::KEYWORD.as_str())
+                        .unwrap(),
+                });
+                match p {
+                    token::PreProc::Include(i) => {
+                        let new_errors = RefCell::new(Vec::new());
+                        let tokens = add_include(i, includeable_folders, included_files, &new_errors, ParseState(errors));
+                        let res = expand_preprocessor_tokens(tokens, defines, define_uses, preproc_tokens, includeable_folders, included_files, &new_errors);
+                        v.extend(res.into_iter().map(|tok| TokSpan::from_strspan(*tok.fragment(), token.extra.0, token.span())));
+                        errors.borrow_mut().extend(new_errors.into_inner().into_iter().map(|RecoveredError(_, err)| RecoveredError(token.span(), err)));
+                    },
+                    token::PreProc::Define(d) => {
+                        add_define(&mut defines.borrow_mut(), &mut define_uses.definitions, d, token.span(), errors);
+                    },
+                    token::PreProc::Pragma(_) => (),
+                }
             },
             Token::K(Keyword::Import) => {
                 let mut path_parts = vec![];
@@ -627,7 +657,13 @@ fn get_path_tokens<'a, 'b>(path: std::path::PathBuf, errors: &RefCell<Vec<Recove
     tokens.into_iter().map(|token| TokSpan::from_strspan(*token.fragment(), state, token.span())).collect()
 }
 
-fn add_define<'a>(defines: &mut HashMap<String, Vec<Token<'a>>>, new_define: &'a str, errors: &RefCell<Vec<RecoveredError>>) {
+fn add_define<'a>(
+    defines: &mut HashMap<String, Vec<Token<'a>>>,
+    define_spans: &mut HashMap<String, Range<usize>>,
+    new_define: &'a str,
+    directive_span: Range<usize>,
+    errors: &RefCell<Vec<RecoveredError>>
+) -> Option<Range<usize>> {
     let ident = map(
         recognize(
             then(
@@ -635,22 +671,39 @@ fn add_define<'a>(defines: &mut HashMap<String, Vec<Token<'a>>>, new_define: &'a
                 many0(choice((alphanumeric1, just("_"))))
             )
         ),
-        |s| String::from(s)
+        |s: &str| String::from(s)
     );
+
+    let prefix_len = directive_span.len().saturating_sub(new_define.len());
 
     let mut define_lexer = delimited(
         many0(padding),
         then(
             ident,
-            |input| Ok(("", lex_tokens(input, errors)))
+            |input: &'a str| Ok(("", lex_tokens(input, errors).into_iter()
+                .filter(|tok| !matches!(tok, Token::Comment(_)))
+                .collect()))
         ),
         many0(padding)
     );
 
-    let res = define_lexer(new_define);
-    if let Ok((_, (name, tokens))) = res {
-        defines.insert(name, tokens);
-    };
+    let res = many0(padding)(new_define)
+        .and_then(|(after_padding, _)| {
+            let consumed_before = new_define.len() - after_padding.len();
+            define_lexer(new_define).map(|r| (r, consumed_before))
+        });
+
+    match res {
+        Ok(((_, (name, tokens)), consumed_before)) => {
+            let name_start = directive_span.start + prefix_len + consumed_before;
+            let name_end = name_start + name.len();
+            let name_span = name_start..name_end;
+            define_spans.insert(name.clone(), name_span.clone());
+            defines.insert(name, tokens);
+            Some(name_span)
+        },
+        Err(_) => None,
+    }
 }
 
 /* pub enum DefinedToken {
