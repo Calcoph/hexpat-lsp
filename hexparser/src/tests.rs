@@ -1,9 +1,11 @@
 #![allow(unused)]
 
+use std::fmt::Display;
 use std::{cell::RefCell, collections::HashMap, env::args};
 
 use nom::{multi::separated_list1, Err};
 use nom::bytes::complete::tag as just;
+use crate::ImCompleteSemanticToken;
 use crate::token::HexNum;
 use crate::{m_lexer, m_parser::{self, token_parse, parse_namespace, ident, parse_struct, BinaryOp, HexTypeDef, Endianness, HexType, FuncArgument, UnaryOp, Statement, FuncCall, Definition, MatchCase, MatchCaseItem, MatchCaseElement, MatchBranch}, simple_debug::SimpleDebug, token::{Token, Tokens, ValueType, Spanned}, expand_preprocessor_tokens, recovery_err::RecoveredError, Expr, Value, parse};
 
@@ -22,9 +24,9 @@ macro_rules! get_tokens {
 
 macro_rules! local {
     ($name:tt) => {
-        (Expr::Local {
-            name: (String::from($name), 0..0)
-        }, 0..0)
+        spanned!(Expr::Local {
+            name: spanned!(String::from($name))
+        })
     };
 }
 
@@ -36,19 +38,59 @@ macro_rules! blocal {
 
 macro_rules! bnull {
     () => {
-        Box::new((Expr::Value { val: Value::Null }, 0..0))
+        Box::new(spanned!(Expr::Value { val: Value::Null }))
+    };
+}
+
+macro_rules! num {
+    ($hex_num:expr) => {
+        spanned!(Expr::Value { val: Value::Num($hex_num) })
     };
 }
 
 macro_rules! bnum {
     ($hex_num:expr) => {
-        Box::new((Expr::Value { val: Value::Num($hex_num) }, 0..0))
+        Box::new(num!($hex_num))
     };
 }
 
 macro_rules! spanbox {
     ($tokens: expr) => {
-        Box::new(($tokens, 0..0))
+        Box::new(spanned!($tokens))
+    };
+}
+
+macro_rules! spanned {
+    ($tokens:expr) => {
+        ($tokens, 0..0)
+    };
+}
+
+macro_rules! hex_type_def {
+    ($value_type:expr) => {
+        spanned!(HexTypeDef {
+            endianness: Endianness::Unkown,
+            name: spanned!(HexType::V($value_type))
+        })
+    };
+
+    ($endianness:expr, $value_type:expr) => {
+        spanned!(HexTypeDef {
+            endianness: $endianness,
+            name: spanned!(HexType::V($value_type))
+        })
+    };
+}
+
+macro_rules! match_branch_body {
+    ($value_type:expr, $name:expr) => {
+        spanned!(vec![
+            spanned!(Statement::Definition(Definition {
+                value_type: hex_type_def!($value_type),
+                name: blocal!($name),
+                body: bnull!()
+            }))
+        ])
     };
 }
 
@@ -1727,6 +1769,31 @@ fn test_pattern_unions() {
     vec_stmnt_comparer(&ex, &expected_output).unwrap()
 }
 
+struct PrettyErrors<'a> {
+    source_str: &'a str,
+    errors: Vec<ImCompleteSemanticToken>,
+}
+
+impl<'a> PrettyErrors<'a> {
+    fn new(
+        source_str: &'a str,
+        errors: Vec<ImCompleteSemanticToken>,
+    ) -> Self {
+        Self { source_str, errors }
+    }
+}
+
+impl<'a> Display for PrettyErrors<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for err in &self.errors {
+            let invalid_token = &self.source_str[err.start..(err.start+err.length)];
+            f.write_fmt(format_args!("failed_token: \"{invalid_token}\", err: {err:?}\n"));
+        }
+
+        Ok(())
+    }
+}
+
 #[test]
 fn test_pattern_match() {
     let test_str = "
@@ -1742,95 +1809,56 @@ fn test_pattern_match() {
     ";
 
     let expected_output = vec![
-        (Statement::Struct {
-            name: (String::from("Test"), 0..0),
+        spanned!(Statement::Struct {
+            name: spanned!(String::from("Test")),
             template_parameters: vec![],
-            body: (vec![
-                (Statement::Definition(Definition {
-                    value_type: (HexTypeDef {
-                        endianness: Endianness::Unkown,
-                        name: (HexType::V(ValueType::U8), 0..0)
-                    }, 0..0),
+            body: spanned!(vec![
+                spanned!(Statement::Definition(Definition {
+                    value_type: hex_type_def!(ValueType::U8),
                     name: blocal!("value"),
                     body: bnull!()
-                }), 0..0),
-                (Statement::Match {
-                    parameters: vec![*blocal!("value")],
+                })),
+                spanned!(Statement::Match {
+                    parameters: vec![local!("value")],
                     branches: vec![
                         MatchBranch {
-                            case: (MatchCase { case: vec![
-                                (MatchCaseItem::Element(MatchCaseElement::Expr(*bnum!(HexNum::Signed(0)))), 0..0)
-                            ] }, 0..0),
-                            body: (vec![
-                                (Statement::Definition(Definition {
-                                    value_type: (HexTypeDef {
-                                        endianness: Endianness::Unkown,
-                                        name: (HexType::V(ValueType::U8), 0..0)
-                                    }, 0..0),
-                                    name: blocal!("zero"),
-                                    body: bnull!()
-                                }), 0..0)
-                            ], 0..0)
+                            case: spanned!(MatchCase { case: vec![
+                                spanned!(MatchCaseItem::Element(MatchCaseElement::Expr(*bnum!(HexNum::Signed(0)))))
+                            ] }),
+                            body: match_branch_body!(ValueType::U8, "zero"),
                         },
                         MatchBranch {
-                            case: (MatchCase { case: vec![
-                                (MatchCaseItem::OrList(vec![
+                            case: spanned!(MatchCase { case: vec![
+                                spanned!(MatchCaseItem::OrList(vec![
                                     MatchCaseElement::Expr(*bnum!(HexNum::Signed(1))),
                                     MatchCaseElement::Expr(*bnum!(HexNum::Signed(2))),
-                                ]), 0..0)
-                            ] }, 0..0),
-                            body: (vec![
-                                (Statement::Definition(Definition {
-                                    value_type: (HexTypeDef {
-                                        endianness: Endianness::Unkown,
-                                        name: (HexType::V(ValueType::U16), 0..0)
-                                    }, 0..0),
-                                    name: blocal!("small"),
-                                    body: bnull!()
-                                }), 0..0)
-                            ], 0..0)
+                                ]))
+                            ] }),
+                            body: match_branch_body!(ValueType::U16, "small"),
                         },
                         MatchBranch {
-                            case: (MatchCase { case: vec![
-                                (MatchCaseItem::Element(MatchCaseElement::Range(
-                                    *bnum!(HexNum::Signed(3)),
-                                    *bnum!(HexNum::Signed(10)),
-                                )), 0..0)
-                            ] }, 0..0),
-                            body: (vec![
-                                (Statement::Definition(Definition {
-                                    value_type: (HexTypeDef {
-                                        endianness: Endianness::Unkown,
-                                        name: (HexType::V(ValueType::U32), 0..0)
-                                    }, 0..0),
-                                    name: blocal!("mid"),
-                                    body: bnull!()
-                                }), 0..0)
-                            ], 0..0)
+                            case: spanned!(MatchCase { case: vec![
+                                spanned!(MatchCaseItem::Element(MatchCaseElement::Range(
+                                    num!(HexNum::Signed(3)),
+                                    num!(HexNum::Signed(10)),
+                                )))
+                            ] }),
+                            body: match_branch_body!(ValueType::U32, "mid"),
                         },
                         MatchBranch {
-                            case: (MatchCase { case: vec![
-                                (MatchCaseItem::Anything, 0..0)
-                            ] }, 0..0),
-                            body: (vec![
-                                (Statement::Definition(Definition {
-                                    value_type: (HexTypeDef {
-                                        endianness: Endianness::Unkown,
-                                        name: (HexType::V(ValueType::U64), 0..0)
-                                    }, 0..0),
-                                    name: blocal!("other"),
-                                    body: bnull!()
-                                }), 0..0)
-                            ], 0..0)
+                            case: spanned!(MatchCase { case: vec![
+                                spanned!(MatchCaseItem::Anything)
+                            ] }),
+                            body: match_branch_body!(ValueType::U64, "other"),
                         },
                     ]
-                }, 0..0)
-            ], 0..0)
-        }, 0..0)
+                })
+            ])
+        })
     ];
 
-    let ((ex, _), errors, _) = parse(test_str, &vec![]);
-    assert!(errors.is_empty(), "Unexpected errors: {:?}", errors);
+    let ((ex, _), _, errors, _) = parse(test_str, &vec![]);
+    assert!(errors.is_empty(), "Unexpected errors: {}", PrettyErrors::new(test_str, errors));
     vec_stmnt_comparer(&ex, &expected_output).unwrap()
 }
 
