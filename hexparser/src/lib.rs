@@ -551,7 +551,7 @@ fn expand_preprocessor_tokens<'a, 'b>(
                     let import_path = format!("<{}.pat>", path_parts.join("/"));
                     let new_errors = RefCell::new(Vec::new());
                     let included_tokens = add_include(&import_path, includeable_folders, included_files, &new_errors, ParseState(errors));
-                    let res = expand_preprocessor_tokens(included_tokens, defines, includeable_folders, included_files, &new_errors);
+                    let res = expand_preprocessor_tokens(included_tokens, defines, define_uses, preproc_tokens, includeable_folders, included_files, &new_errors);
                     let span = token.span().start..end_span.end;
                     v.extend(res.into_iter().map(|tok| TokSpan::from_strspan(*tok.fragment(), token.extra.0, span.clone())));
                     errors.borrow_mut().extend(new_errors.into_inner().into_iter().map(|RecoveredError(_, err)| RecoveredError(span.clone(), err)));
