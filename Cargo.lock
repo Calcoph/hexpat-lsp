@@ -375,7 +375,7 @@ dependencies = [
 
 [[package]]
 name = "hexparser"
-version = "1.2.3"
+version = "1.2.4"
 dependencies = [
  "expand_str",
  "hexponent",
@@ -391,7 +391,7 @@ dependencies = [
 
 [[package]]
 name = "hexpat-language-server"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "dashmap 6.2.1",
  "env_logger",
@@ -644,7 +644,7 @@ dependencies = [
 
 [[package]]
 name = "parserlib"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "tower-lsp",
 ]

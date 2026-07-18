@@ -20,7 +20,7 @@ use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
 
 const LSP_NAME: &str = "hexpat-language-server";
-const LSP_VERSION: &str = "v0.2.4 (pre-release)";
+const LSP_VERSION: &str = "v0.3.0 (pre-release)";
 const COMMAND_RUN_ON_IMHEX: &str = "hexpat-language-server.runOnImHex";
 const DEFAULT_IMHEX_PORT: u16 = 31337;
 
