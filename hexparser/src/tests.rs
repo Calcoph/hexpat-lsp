@@ -286,8 +286,8 @@ fn stmnt_comparer(stmnt1: &Statement, stmnt2: &Statement) -> Result<(), CompErr>
             },
             false => {println!("Different names |{n1:?}, {n2:?}|");Err(CompErr)},
         },
-        (Statement::Namespace { name: n1, body: b1 },
-            Statement::Namespace { name: n2, body: b2 }
+        (Statement::Namespace { name: n1, body: b1, .. },
+            Statement::Namespace { name: n2, body: b2, .. }
         ) => match expr_comparer(&n1.0, &n2.0) {
             Ok(_) => match vec_stmnt_comparer(&b1.0, &b2.0) {
                 Ok(_) => Ok(()),
@@ -1077,7 +1077,8 @@ fn test_pattern_namespaces() {
                 ], 0..0),
                 template_parameters: vec![]
                 }, 0..0)
-            ], 0..0)
+            ], 0..0),
+            is_auto: false
         }, 0..0),
         (Statement::Namespace {
             name: blocal!("B"),
@@ -1094,7 +1095,8 @@ fn test_pattern_namespaces() {
                 ], 0..0),
                 template_parameters: vec![]
                 }, 0..0)
-            ], 0..0)
+            ], 0..0),
+            is_auto: false
         }, 0..0),
         (Statement::Using {
             new_name: (String::from("ATest"), 0..0),

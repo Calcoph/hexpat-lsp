@@ -89,6 +89,7 @@ impl<'a> fmt::Display for Token<'a> {
                 Keyword::Underscore => write!(f, "_"),
                 Keyword::Try => write!(f, "try"),
                 Keyword::Catch => write!(f, "catch"),
+                Keyword::Import => write!(f, "import"),
             },
             Token::B(b) => match b {
                 BuiltFunc::AddressOf => write!(f, "addressof"),
@@ -136,6 +137,7 @@ pub enum Keyword {
     Underscore,
     Try,
     Catch,
+    Import,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

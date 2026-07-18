@@ -90,7 +90,8 @@ pub enum Statement {
     },
     Namespace {
         name: Box<Spanned<Expr>>,
-        body: Spanned<Vec<Spanned<Statement>>>
+        body: Spanned<Vec<Spanned<Statement>>>,
+        is_auto: bool
     },
     Enum {
         name: Spanned<String>,
@@ -1529,18 +1530,21 @@ pub(crate) fn parse_namespace<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b
         preceded(
             just(Token::K(Keyword::Namespace)),
             then(
-                separated_list1(
-                    just(Token::Op("::")),
-                    ident
-                ),
-                delimited(
-                    just(Token::Separator('{')).context("Missing {"),
-                    spanned(many0(statements)),
-                    just(Token::Separator('}')).context("Expected } or valid expression")
+                opt(just(Token::V(ValueType::Auto))),
+                then(
+                    separated_list1(
+                        just(Token::Op("::")),
+                        ident
+                    ),
+                    delimited(
+                        just(Token::Separator('{')).context("Missing {"),
+                        spanned(many0(statements)),
+                        just(Token::Separator('}')).context("Expected } or valid expression")
+                    )
                 )
             )
         ),
-        |(name, body), span| {
+        |(is_auto, (name, body)), span| {
             let name = Box::new(name.into_iter()
                 .fold((Expr::Value { val: Value::Null }, 0..1), |(accum, acc_span), (next, next_span)| {
                     match accum {
@@ -1562,7 +1566,8 @@ pub(crate) fn parse_namespace<'a, 'b>(input: Tokens<'a, 'b>) -> TokResult<'a, 'b
             (
                 Statement::Namespace {
                     name,
-                    body
+                    body,
+                    is_auto: is_auto.is_some()
                 },
                 span
             )

@@ -102,7 +102,7 @@ pub fn get_completion_of_statement(
             );
             get_completion_of_statements(&body.0, definition_map, ident_offset)
         }, // TODO
-        Statement::Namespace { name, body } => {
+        Statement::Namespace { name, body, .. } => {
             if !get_completion_of(name, definition_map, ident_offset) {
                 return false;
             }

@@ -389,6 +389,14 @@ pub fn parse(
                             .position(|item| item.as_str() == SemanticTokenType::KEYWORD.as_str())
                             .unwrap(),
                     }),
+                    Keyword::Import => Some(ImCompleteSemanticToken {
+                        start: span.start,
+                        length: span.len(),
+                        token_type: LEGEND_TYPE
+                            .iter()
+                            .position(|item| item.as_str() == SemanticTokenType::KEYWORD.as_str())
+                            .unwrap(),
+                    }),
                 }
                 Token::V(_) => Some(ImCompleteSemanticToken {
                     start: span.start,
@@ -457,7 +465,8 @@ fn expand_preprocessor_tokens<'a, 'b>(
         errors: &'b RefCell<Vec<RecoveredError>>
     ) -> Vec<TokSpan<'a, 'b>> {
     let mut v = vec![];
-    for token in tokens.into_iter() {
+    let mut iter = tokens.into_iter().peekable();
+    while let Some(token) = iter.next() {
         match token.fragment() {
             Token::Ident(i) => {
                 v.extend(try_define(i, defines).into_iter().map(|tok| TokSpan::from_strspan(tok, token.extra.0, token.span())))
@@ -472,6 +481,53 @@ fn expand_preprocessor_tokens<'a, 'b>(
                 },
                 token::PreProc::Define(d) => add_define(&mut defines.borrow_mut(), d, errors),
                 token::PreProc::Pragma(_) => (),
+            },
+            Token::K(Keyword::Import) => {
+                let mut path_parts = vec![];
+                let mut end_span = token.span();
+                let mut valid = false;
+
+                let next_significant = |iter: &mut std::iter::Peekable<_>| -> Option<TokSpan<'a, 'b>> {
+                    loop {
+                        match iter.peek().map(|t: &TokSpan| *t.fragment()) {
+                            Some(Token::Comment(_)) => { iter.next(); },
+                            _ => return iter.next(),
+                        }
+                    }
+                };
+
+                let mut expect_ident = true;
+                while let Some(t) = next_significant(&mut iter) {
+                    match (expect_ident, t.fragment()) {
+                        (true, Token::Ident(part)) => {
+                            path_parts.push(*part);
+                            end_span = t.span();
+                            expect_ident = false;
+                        },
+                        (false, Token::Separator('.')) => {
+                            end_span = t.span();
+                            expect_ident = true;
+                        },
+                        (false, Token::Separator(';')) => {
+                            end_span = t.span();
+                            valid = true;
+                            break
+                        },
+                        _ => break,
+                    }
+                }
+
+                if valid && !path_parts.is_empty() {
+                    let import_path = format!("<{}.pat>", path_parts.join("/"));
+                    let new_errors = RefCell::new(Vec::new());
+                    let included_tokens = add_include(&import_path, includeable_folders, included_files, &new_errors, ParseState(errors));
+                    let res = expand_preprocessor_tokens(included_tokens, defines, includeable_folders, included_files, &new_errors);
+                    let span = token.span().start..end_span.end;
+                    v.extend(res.into_iter().map(|tok| TokSpan::from_strspan(*tok.fragment(), token.extra.0, span.clone())));
+                    errors.borrow_mut().extend(new_errors.into_inner().into_iter().map(|RecoveredError(_, err)| RecoveredError(span.clone(), err)));
+                } else {
+                    errors.borrow_mut().push(RecoveredError(token.span(), "Invalid import syntax".to_string()));
+                }
             },
             _ => v.push(token),
         }
