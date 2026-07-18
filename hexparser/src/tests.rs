@@ -1774,6 +1774,53 @@ struct PrettyErrors<'a> {
     errors: Vec<ImCompleteSemanticToken>,
 }
 
+fn get_token_type_name(token_type: usize) -> &'static str {
+    /*
+    pub const LEGEND_TYPE: &[SemanticTokenType] = &[
+        SemanticTokenType::FUNCTION, // 0
+        SemanticTokenType::VARIABLE, // 1
+        SemanticTokenType::STRING, // 2
+        SemanticTokenType::COMMENT, // 3
+        SemanticTokenType::NUMBER, // 4
+        SemanticTokenType::KEYWORD, // 5
+        SemanticTokenType::OPERATOR, // 6
+        SemanticTokenType::PARAMETER, // 7
+        SemanticTokenType::STRUCT, // 8
+        SemanticTokenType::new("bitfield"), // 9
+        SemanticTokenType::ENUM, // 10
+        SemanticTokenType::NAMESPACE, // 11
+        SemanticTokenType::TYPE, // 12
+        SemanticTokenType::new("dollar"), // 13
+        SemanticTokenType::ENUM_MEMBER, // 14
+        SemanticTokenType::new("union"), // 15
+        SemanticTokenType::new("boolean"), // 16
+        SemanticTokenType::new("punctuation"), // 17
+    ];
+     */
+
+    match token_type {
+        0 => "FUNCTION",
+        1 => "VARIABLE",
+        2 => "STRING",
+        3 => "COMMENT",
+        4 => "NUMBER",
+        5 => "KEYWORD",
+        6 => "OPERATOR",
+        7 => "PARAMETER",
+        8 => "STRUCT",
+        9 => "bitfield",
+        10 => "ENUM",
+        11 => "NAMESPACE",
+        12 => "TYPE",
+        13 => "dollar",
+        14 => "ENUM_MEMBER",
+        15 => "union",
+        16 => "boolean",
+        17 => "punctuation",
+        _ => "__UNKNOWN__",
+    }
+}
+
 impl<'a> PrettyErrors<'a> {
     fn new(
         source_str: &'a str,
@@ -1785,9 +1832,28 @@ impl<'a> PrettyErrors<'a> {
 
 impl<'a> Display for PrettyErrors<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        const CONTEXT_LEN: usize = 25;
+
         for err in &self.errors {
-            let invalid_token = &self.source_str[err.start..(err.start+err.length)];
-            f.write_fmt(format_args!("failed_token: \"{invalid_token}\", err: {err:?}\n"));
+            let start = err.start;
+            let end = err.start+err.length;
+            let invalid_token = &self.source_str[start..end];
+
+            let context_start = if start < CONTEXT_LEN {
+                0
+            } else {
+                start - CONTEXT_LEN
+            };
+
+            let context_end = if end + CONTEXT_LEN > self.source_str.len() {
+                self.source_str.len()
+            } else {
+                end + CONTEXT_LEN
+            };
+
+            let context = &self.source_str[context_start..context_end];
+
+            f.write_fmt(format_args!("ERROR:\ncontext: \"{context}\"\nfailed_token: \"{invalid_token}\"\ntoken_type: {}\nerr: {err:?}\n\n", get_token_type_name(err.token_type)));
         }
 
         Ok(())
